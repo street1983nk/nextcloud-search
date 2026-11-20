@@ -282,6 +282,39 @@ L10N_PT_PT_JS = REPO_ROOT / "php" / "l10n" / "pt_PT.js"
 L10N_PT_BR_JSON = REPO_ROOT / "php" / "l10n" / "pt_BR.json"
 L10N_PT_BR_JS = REPO_ROOT / "php" / "l10n" / "pt_BR.js"
 
+# The ninth language code, Traditional Chinese as written in Taiwan (issue #53).
+# Two files and not eight, and each of the three codes it leaves out is a
+# decision rather than a forgotten file:
+#
+#   * **``zh_TW`` and not ``zh``.** The core of Nextcloud 34 and 35 ships
+#     ``zh_CN``, ``zh_HK`` and ``zh_TW`` and no plain ``zh``, read on 15.11.2026
+#     out of ``core/l10n/`` of 34.0.5 and 35.0.2. By the mechanism section 1 of
+#     docs/l10n-catalogues.md measured for ``pt``, a ``zh.json`` would be a file
+#     nobody can stand on.
+#   * **No ``zh_HK``.** Hong Kong writes Traditional characters too, but with
+#     its own vocabulary in exactly the words of this page (``檔案`` and
+#     ``文件`` are used differently, and so are ``伺服器``, ``設定`` and
+#     ``使用者`` in places). Shipping the Taiwanese words under the Hong Kong
+#     code would be the copy that the Portuguese paragraph above refuses.
+#   * **No ``zh_CN``.** Simplified Chinese is a different script and a
+#     different vocabulary, not a spelling variant: a conversion would be a
+#     second translation that nobody has read.
+#
+# Chinese has no grammatical plural, so ``FORM_COUNT_OF["zh_TW"]`` is 1 and the
+# five plural values carry one form each. That is the rule the core itself
+# ships for this code, ``nplurals=1; plural=0;``, and PHP and the browser both
+# return that one form for every count; both are measured, the rule in section
+# 3 and the forms in the addendum at the end of section 5 of
+# docs/l10n-catalogues.md.
+#
+# The wordings are cast from the table in docs/l10n-chinese.md. Unlike the four
+# languages of milestone v1.3 they are not left to the community review alone:
+# the contributor who proposed them is a native speaker and reads every row
+# before the pull request is opened. The document carries the state of that
+# review with its date.
+L10N_ZH_TW_JSON = REPO_ROOT / "php" / "l10n" / "zh_TW.json"
+L10N_ZH_TW_JS = REPO_ROOT / "php" / "l10n" / "zh_TW.js"
+
 # All catalogues in the order the gates below name them. Held as one tuple so
 # that the next file is added in one place and every gate sees it.
 L10N_CATALOGUES = (
@@ -301,6 +334,8 @@ L10N_CATALOGUES = (
     L10N_PT_PT_JS,
     L10N_PT_BR_JSON,
     L10N_PT_BR_JS,
+    L10N_ZH_TW_JSON,
+    L10N_ZH_TW_JS,
 )
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
@@ -536,6 +571,9 @@ PLURAL_FORM_OF = {
     "nl": GERMAN_PLURAL_FORM,
     "pt_PT": "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
     "pt_BR": "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
+    # Read on 15.11.2026 out of core/l10n/zh_TW.json of 34.0.5 and 35.0.2, the
+    # same string in both; docs/l10n-catalogues.md, section 3.
+    "zh_TW": "nplurals=1; plural=0;",
 }
 
 # How many forms a plural value of each catalogue has to carry. Written down and
@@ -553,6 +591,9 @@ FORM_COUNT_OF = {
     "nl": 2,
     "pt_PT": 3,
     "pt_BR": 3,
+    # One form: Chinese marks number with a counter word and not with an
+    # ending, so ``%n 天`` is the whole plural of ``%n day``.
+    "zh_TW": 1,
 }
 
 # The plural rule of a ``.js`` catalogue is the fourth argument of
@@ -706,6 +747,20 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
+    },
+    # Traditional Chinese (Taiwan), read off the file on 15.11.2026 rather than
+    # guessed: the gate was run once without an entry, which names the code,
+    # and once with an empty mapping, which reported sixteen findings, eight
+    # keys over two files. They are the name of the app, the name of a format
+    # and the six unit symbols, the same as for Spanish. ``%1$s (ID %2$s)`` is
+    # not among them although every other language of this tree lists it:
+    # Chinese prose takes the full width parentheses (U+FF08 and U+FF09), so
+    # the value differs from its key by those two characters. Every other value
+    # of zh_TW.json carries Han characters.
+    "zh_TW": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     "fr": {
@@ -2798,7 +2853,7 @@ def test_a_silent_content_gateway_has_a_sentence_on_the_page() -> None:
     assert view.count("'gatewayUnavailableSince' => ") == 1
     assert "'gatewayUnavailableSince' => $this->optionalCounter($answer, 'gatewayUnavailableSince')," in view
 
-    assert len(L10N_CATALOGUES) == 16
+    assert len(L10N_CATALOGUES) == 18
     for catalogue in L10N_CATALOGUES:
         assert GATEWAY_UNAVAILABLE_SENTENCE in catalogue_of(catalogue), catalogue.name
     assert str(catalogue_of(L10N_JSON)[GATEWAY_UNAVAILABLE_SENTENCE]).startswith("Das Content-Gateway hat")
@@ -2839,7 +2894,7 @@ def test_the_remedy_of_a_gateway_error_says_when_it_is_tried_again() -> None:
     english, german = RETRIES_IN_WORDS[reconcile.GATEWAY_ERROR_RETRIES]
     assert f"up to {english}" in GATEWAY_ERROR_REMEDY
 
-    assert len(L10N_CATALOGUES) == 16
+    assert len(L10N_CATALOGUES) == 18
     for catalogue in L10N_CATALOGUES:
         assert GATEWAY_ERROR_REMEDY in catalogue_of(catalogue), catalogue.name
     translated = str(catalogue_of(L10N_JSON)[GATEWAY_ERROR_REMEDY])
@@ -2885,22 +2940,22 @@ REASON_SENTENCES_31_02: dict[str, tuple[str, str | None]] = {
     ),
 }
 
-# The sixteen files by name, so that no catalogue drops out of L10N_CATALOGUES
-# without a red line: eight language codes, each as the JSON PHP reads and the
-# script the browser reads.
+# The eighteen files by name, so that no catalogue drops out of L10N_CATALOGUES
+# without a red line: nine language codes, each as the JSON PHP reads and the
+# script the browser reads. Sixteen over eight until zh_TW joined (issue #53).
 EXPECTED_CATALOGUE_NAMES = frozenset(
     f"{code}.{suffix}"
-    for code in ("de", "de_DE", "es", "fr", "it", "nl", "pt_BR", "pt_PT")
+    for code in ("de", "de_DE", "es", "fr", "it", "nl", "pt_BR", "pt_PT", "zh_TW")
     for suffix in ("js", "json")
 )
 
 BLOCKED_STEM = "arch" + "iv"
 
 
-def test_the_catalogue_list_holds_all_sixteen_files() -> None:
+def test_the_catalogue_list_holds_all_eighteen_files() -> None:
     names = [path.name for path in L10N_CATALOGUES]
 
-    assert len(names) == 16
+    assert len(names) == 18
     assert set(names) == EXPECTED_CATALOGUE_NAMES
 
 
@@ -3347,8 +3402,8 @@ def test_no_sentence_of_the_page_says_box_any_more() -> None:
 
     A replaced key that stays in a catalogue is an orphan nobody reads, and one
     that stays in a language table is a row the owner approves while the page
-    says something else. The search runs over the sixteen catalogues, the
-    template, the script and the five language documents, and asks in addition
+    says something else. The search runs over the eighteen catalogues, the
+    template, the script and the six language documents, and asks in addition
     that no key of de.json carries the word box at all.
     """
     places = [*L10N_CATALOGUES, TEMPLATE, SCRIPT, *(document for document, _ in LANGUAGE_TABLES)]
@@ -3361,9 +3416,10 @@ def test_no_sentence_of_the_page_says_box_any_more() -> None:
 
     assert findings == []
     assert [key for key in catalogue_of(L10N_JSON) if BOX_KEY.search(key)] == []
-    # The anti vacuity clause: the places are the twenty three files, and the
+    # The anti vacuity clause: the places are the twenty six files (twenty three
+    # until zh_TW brought two catalogues and a language document), and the
     # search finds a former sentence where one stands.
-    assert len(places) == 23
+    assert len(places) == 26
     assert any(sentence in "x " + BOX_SENTENCES_BEFORE[2] + " y" for sentence in BOX_SENTENCES_BEFORE)
 
 
@@ -4538,7 +4594,7 @@ def test_the_stall_verdict_asks_both_halves_and_reads_the_counter_before_it_writ
     assert overview.index("lastIndexedCount()") < overview.index("rememberIndexedCount(")
 
 
-# The five language documents whose tables the catalogues were cast from, each
+# The six language documents whose tables the catalogues were cast from, each
 # with the catalogues of its value columns in column order. The DE column is
 # always de.json. Review WR-05/WR-11 of phase 27: nothing tied these tables to
 # the catalogues, so 72 keys of phase 27 and 10 older ones went a whole phase
@@ -4550,6 +4606,7 @@ LANGUAGE_TABLES = (
     (REPO_ROOT / "docs" / "l10n-italian.md", (L10N_IT_JSON,)),
     (REPO_ROOT / "docs" / "l10n-dutch.md", (L10N_NL_JSON,)),
     (REPO_ROOT / "docs" / "l10n-portuguese.md", (L10N_PT_PT_JSON, L10N_PT_BR_JSON)),
+    (REPO_ROOT / "docs" / "l10n-chinese.md", (L10N_ZH_TW_JSON,)),
 )
 
 # The one key a table may leave out: the name of the app, which every document
@@ -5324,7 +5381,8 @@ def test_the_pause_sentences_are_in_every_catalogue() -> None:
     """D-41-01, D-41-06: the six sentences of the pause in all sixteen files and five tables.
 
     Each one is used in admin.js through t('findling', ...), and each one has a
-    row in exactly the five language documents, none in the catalogue overview.
+    row in exactly the six language documents (five until zh_TW joined), none in
+    the catalogue overview.
     """
     script = SCRIPT.read_text(encoding="utf-8")
     for sentence in PAUSE_SENTENCES:
@@ -5337,6 +5395,7 @@ def test_the_pause_sentences_are_in_every_catalogue() -> None:
             if f"`{sentence}`" in path.read_text(encoding="utf-8")
         ]
         assert tables == [
+            "l10n-chinese.md",
             "l10n-dutch.md",
             "l10n-french.md",
             "l10n-italian.md",

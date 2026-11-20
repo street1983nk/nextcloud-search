@@ -515,7 +515,8 @@ def test_the_markup_scan_of_the_catalogues_sees_a_planted_value() -> None:
 
 def test_no_catalogue_value_of_the_two_banner_keys_carries_markup_or_a_url() -> None:
     catalogues = _catalogues()
-    assert len(catalogues) == 16
+    # Eighteen since zh_TW joined (issue #53), sixteen in phase 34.
+    assert len(catalogues) == 18
     findings: list[str] = []
     for path in catalogues:
         translations = _catalogue(path)

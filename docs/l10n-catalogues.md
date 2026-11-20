@@ -115,6 +115,21 @@ gefunden. Und weil `php/` in den Container gebunden ist, liegt die Probedatei im
 danach weg, auf beiden Seiten. Das abschließende `git status --short` ist kein Schmuck, sondern
 die Abnahme.
 
+**Nachtrag 15.11.2026, Issue #53 (Chinesisch).** Dieselbe Sonde, gefragt an einem frischen
+Container `nextcloud:34.0.5-apache` mit `php/` als `custom_apps/findling`, für die chinesischen
+Codes. Der Kern führt in 34.0.5 und in 35.0.2 `zh_CN`, `zh_HK` und `zh_TW` und **kein** `zh`.
+Mit `php/l10n/zh_TW.json` im Baum:
+
+| angefragte Sprache | `languageExists('findling', code)` | `getLanguageCode()` | `t('Search your file contents')` |
+|---|---|---|---|
+| `zh_TW` | yes | `zh_TW` | 搜尋您的檔案內容 |
+| `zh_HK` | no | `en` | Search your file contents |
+| `zh_CN` | no | `en` | Search your file contents |
+| `zh` | no | `en` | Search your file contents |
+
+Ausgeliefert wird nur `zh_TW`; warum weder `zh_HK` noch `zh_CN`, steht in
+`docs/l10n-chinese.md`, Abschnitt "The language code".
+
 ## 2. Die benannte Grenze: es_EC und es_MX werden nicht ausgeliefert
 
 Der Kern liefert neben `es` auch `es_EC` und `es_MX`, siehe die Dateiliste oben. Findling
@@ -169,6 +184,21 @@ for c in findling-nextcloud nc35-nc; do
 done
 ```
 
+**Nachtrag 15.11.2026, Issue #53.** Gelesen aus `core/l10n/zh_TW.json` der Abbilder
+`nextcloud:34.0.5-apache` und `nextcloud:35.0.2-apache`, in beiden dieselbe Zeichenkette:
+
+```
+Sprachcode  nplurals  NC 34.0.5 == NC 35.0.2  pluralForm, woertlich aus core/l10n/<code>.json
+zh_TW       1         ja                      nplurals=1; plural=0;
+```
+
+```bash
+for img in nextcloud:34.0.5-apache nextcloud:35.0.2-apache; do
+  docker run --rm --entrypoint php "$img" -r \
+    'echo json_decode(file_get_contents("/usr/src/nextcloud/core/l10n/zh_TW.json"), true)["pluralForm"], PHP_EOL;'
+done
+```
+
 **Eine Zeile fällt auf: `fr`.** Der Kern führt Französisch mit `nplurals=3`, Findlings
 ausgelieferte `fr.json` steht seit Plan 11-08 auf `nplurals=2; plural=(n > 1);`. Das ist **kein
 Fehler, der hier zu beheben wäre**: die französische Zwei-Formen-Variante ist in beiden Hälften
@@ -179,8 +209,8 @@ Formen wäre eine Wortlautänderung ohne Nutzen. Die Zeile ist aber der Grund, w
 während `es` auf drei geht.
 
 Was die Konstante `PLURAL_FORM_OF` in `backend/tests/test_admin_ui_contract.py` deshalb trägt,
-ist **die Regel, die Findling ausliefert**, und die ist für sieben von acht Codes die Kernregel
-und für `fr` die eigene:
+ist **die Regel, die Findling ausliefert**, und die ist für acht von neun Codes die Kernregel
+und für `fr` die eigene (neun seit `zh_TW`, Issue #53):
 
 ```
 de     nplurals=2; plural=(n != 1);
@@ -191,6 +221,7 @@ it     nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
 nl     nplurals=2; plural=(n != 1);
 pt_PT  nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
 pt_BR  nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
+zh_TW  nplurals=1; plural=0;
 ```
 
 Dieser Block ist die Vorlage für die Konstante, und die Konstante ist zeichengleich mit ihm. Er
@@ -296,6 +327,14 @@ in dieser einen Zeile in dieser einen Sekunde eine andere Endung.
 Das ist der Preis der Entscheidung aus Abschnitt 4, er ist bekannt, und er ist kleiner als die
 Alternative: eine Seite, die bei jeder Anzahl außer 1 zwischen Server und Browser
 auseinanderläuft.
+
+**Nachtrag 15.11.2026, Issue #53: `zh_TW` kennt weder die Falle aus Abschnitt 4 noch diese
+Abweichung.** Die Regel `nplurals=1; plural=0;` liefert nur den Index 0, und jeder der fünf
+Pluralwerte trägt genau eine Form. Gemessen am Container aus dem Nachtrag zu Abschnitt 1, PHP
+über `IFactory` und der Browser über das globale `n('findling', ...)` auf der Ergebnisseite
+eines Kontos mit der Sprache `zh_TW`: bei n gleich 0, 1, 2, 5 und 1000000 antworten beide Seiten
+mit derselben Form (`0 天` bis `1000000 天`, `以及另外 0 個` bis `以及另外 2 個`). Die
+Tabelle steht in `docs/l10n-chinese.md`, Abschnitt "Plural forms".
 
 ## 6. Der zusammengesetzte Pluralschlüssel
 
@@ -412,6 +451,11 @@ die Prüfung selbst geladen und wieder entfernt hat. Alle 16 Dateien und die fü
 tragen den Schlüssel; die Wortlaute außerhalb von Deutsch und Englisch sind maschinell übersetzt
 und vom Owner noch nicht gelesen.
 
+**Nachgezählt am 15.11.2026, Issue #53:** **366** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Die Zahl hat sich durch den chinesischen Katalog nicht bewegt: `zh_TW.json` und
+`zh_TW.js` führen dieselben 366 Schlüssel in derselben Reihenfolge, und `php/l10n/` trägt damit
+**18** Dateien über **neun** Sprachcodes.
+
 ---
 
 ## Stand nach Phase 20
@@ -433,12 +477,18 @@ Unter `php/l10n/` liegen **16** Dateien: **acht** Sprachcodes, je eine `.json` f
 | `nl` | `nl.json`, `nl.js` | `docs/l10n-dutch.md` | Plan 20-06 |
 | `pt_PT` | `pt_PT.json`, `pt_PT.js` | `docs/l10n-portuguese.md` | Plan 20-07 |
 | `pt_BR` | `pt_BR.json`, `pt_BR.js` | `docs/l10n-portuguese.md` | Plan 20-08 |
+| `zh_TW` | `zh_TW.json`, `zh_TW.js` | `docs/l10n-chinese.md` | Issue #53 |
 
 Deutsch hat kein eigenes Sprachdokument, weil es die Sprache ist, gegen die jede andere
 Tabelle geschrieben wird: die Schlüsselmenge von `de.json` ist die Menge, die alle anderen
 Kataloge führen müssen. Die beiden portugiesischen Codes teilen sich ein Dokument mit vier
 Spalten, weil ihre Unterschiede an einer Stelle nebeneinander lesbar sein sollen. Eine
 `php/l10n/pt.json` gibt es nicht und wird es nicht geben, der Grund steht in Abschnitt 1.
+
+**Nachtrag 15.11.2026, Issue #53:** die Zeile `zh_TW` ist nach Phase 20 dazugekommen. Seitdem
+liegen unter `php/l10n/` **18** Dateien über **neun** Sprachcodes, jede mit denselben 366
+Schlüsseln. Das Sprachdokument `docs/l10n-chinese.md` ist als einziges englisch geschrieben;
+der Grund steht in seinem ersten Abschnitt.
 
 ### 2. Die Gates, die die Kataloge halten
 
@@ -488,6 +538,11 @@ und benutzt wird, also Dateiname, Sprachauflösung und Einbindung stimmen. Das i
 den kein Schlüsselgate sehen kann. Der Erwartungswert kommt aus dem Katalog, also veraltet der
 Schritt nicht, wenn ein Wortlaut berichtigt wird.
 
+**Nachtrag 15.11.2026, Issue #53:** die Schleife führt seitdem sechs Codes, `zh_TW` am Ende.
+Lokal vorab gefahren gegen den Container aus dem Nachtrag zu Abschnitt 1 (Anmeldung über Basic
+Auth statt über die Sitzung der CI): HTTP 200, der übersetzte Titel `搜尋您的檔案內容` steht in
+der Antwort, der englische nicht mehr, `<html lang="zh-TW">`.
+
 **Was er nicht beweist:** er fragt einen Satz je Sprache, auf einer Seite, serverseitig
 gerendert. Die Adminseite, die Ergebnisseite mit Treffern, die Sätze, die erst das Skript im
 Browser schreibt, und die Pluralformen sieht er nicht. Das bleibt die Aufgabe der Gates und der
@@ -500,6 +555,11 @@ worden.** Das ist der gesperrte Entscheid E-17-5, Option a: Korrektur über das 
 Community-Review, das jede App im Nextcloud App Store hat, und die Auslieferung wartet nicht
 darauf. Jedes der vier Sprachdokumente trägt den Vorbehalt datiert in seinem eigenen Abschnitt;
 Französisch ist davon ausgenommen, weil es vom Owner abgenommen ist.
+
+**Nachtrag 15.11.2026, Issue #53:** `zh_TW` fällt nicht unter E-17-5. Der Katalog ist
+maschinell entworfen, wird aber vor dem Pull Request von dem Beitragenden gelesen, der ihn
+vorgeschlagen hat und Muttersprachler ist; der Stand dieser Durchsicht steht datiert in
+`docs/l10n-chinese.md`, Abschnitt "Review".
 
 Die benannten Grenzen, an einer Stelle gesammelt:
 
