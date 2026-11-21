@@ -133,7 +133,7 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 Plans:
 **Wave 1**
 
-- [ ] 44-01-PLAN.md: Owner-Entscheidungen E-01 bis E-08 und Paketfreigabe (Checkpoint)
+- [x] 44-01-PLAN.md: Owner-Entscheidungen E-01 bis E-08 und Paketfreigabe (Checkpoint)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -198,7 +198,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 0/10 | Not started | - |
+| 44. PHP-Sicherheits-Gates | v1.7 | 1/10 | In Progress | - |
 | 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)

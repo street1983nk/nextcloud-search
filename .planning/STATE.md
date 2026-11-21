@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Phase 44 geplant, nächster Schritt /gsd:execute-phase 44"
-last_updated: "2026-11-21T04:28:44.998Z"
-last_activity: 2026-11-21, Phase 44 geplant (10 Pläne)
+stopped_at: "44-01 erledigt (Owner-Entscheidungen E-01 bis E-08), nächster Plan 44-02"
+last_updated: "2026-11-21T04:40:32.997Z"
+last_activity: 2026-11-21, 44-01 erledigt, Pläne 44-05 bis 44-08 an E-03/E-04 angepasst
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 10
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-01 als nächster (10 Pläne, 0 erledigt)
-Status: Ready to execute
-Last activity: 2026-11-21, Phase 44 geplant (10 Pläne in 10 Wellen, Plan-Checker bestanden)
+Plan: 44-02 als nächster (10 Pläne, 1 erledigt)
+Status: Executing, Stopp nach 44-01 (Owner-Vorgabe)
+Last activity: 2026-11-21, 44-01 erledigt (E-01 bis E-08), Pläne 44-05 bis 44-08 an E-03/E-04 angepasst
 
 ## Performance Metrics
 
@@ -108,6 +108,7 @@ Last activity: 2026-11-21, Phase 44 geplant (10 Pläne in 10 Wellen, Plan-Checke
 - Genau zwei Phasen nach Owner-Vorgabe 21.11.2026 (Granularität coarse): erst die offenen PHP-Gates aus Phase 42 Kriterium 3 (Phase 44), dann das Release 1.7.0 (Phase 45).
 - Phase 45: Store-Text-Entwurf vor dem Einbau vom Owner freigegeben; Launch-Härtung und Volltest DE/EN/FR vor der Abgabe; Tag, Signatur und Store-Abgabe je Einzelfreigabe; Antworten in #45, #56, #57 erst nach dem Store-Release; beide Apps Version 1.7.0.
 - Phasenordner 37 bis 43 bleiben unter .planning/phases/ (Verweise aus Code und Doku).
+- 44-01 (21.11.2026): Owner-Entscheide E-01 bis E-08 in 44-OWNER-DECISIONS.md, strenger als die Empfehlung: zizmor-Persona auditor und shellcheck inkl. info/style als Gate ohne Abschwächung; secrets-outside-env (10) geht in 44-05 Task 2 an den Owner; 44-06 jetzt mit bedingtem Checkpoint.
 
 ### Decisions (Roadmap v1.6)
 
@@ -288,8 +289,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-21T13:00:00.000Z
-Stopped at: Roadmap v1.7 erstellt, nächster Schritt /gsd:plan-phase 44
+Last session: 2026-11-21T04:40:32.977Z
+Stopped at: 44-01 erledigt, nächster Plan 44-02 (nicht gestartet)
 Resume file: None
 
 ## Operator Next Steps
