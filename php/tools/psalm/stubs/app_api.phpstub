@@ -1,0 +1,66 @@
+<?php
+
+// Signatures only, for Psalm. The classes below belong to other apps (app_api
+// and files_trashbin) and are absent from both nextcloud/ocp and this app, so
+// Psalm needs them declared to follow a taint across the boundary. Template:
+// build/stubs/app_api.php of nextcloud/server.
+//
+// The extension is .phpstub and the file lives under php/tools, outside the
+// autoload and autoload-dev roots of php/composer.json, on purpose: the unit
+// suite relies on OCA\AppAPI\PublicFunctions being absent from its autoload
+// space (see ExAppService::proxyRequest), and this file must never change that.
+//
+// Signature check of exAppRequest and getExApp: compared on 2026-11-21 against
+// lib/PublicFunctions.php of nextcloud/app_api, default branch main, last commit
+// touching that file aeb217aa1b7d707e711920adc1c95a13b6954478. Both signatures
+// below are identical to it. php/lib calls exAppRequest only; getExApp is kept
+// because the server stub carries it.
+//
+// Extra sink: $route of exAppRequest is the path of the request to the ExApp,
+// so user input reaching it would be a server side request forgery into the
+// container. $params is NOT a sink: it is the intended request body, and marking
+// it would only report the admin endpoint ProfileSettingsController::startCheck,
+// a wanted flow (44-RESEARCH.md, Psalm findings).
+
+namespace OCA\AppAPI {
+	use OCP\Http\Client\IResponse;
+	use OCP\IRequest;
+
+	class PublicFunctions {
+		/**
+		 * @psalm-taint-sink ssrf $route
+		 * @return array|IResponse
+		 */
+		public function exAppRequest(
+			string $appId,
+			string $route,
+			?string $userId = null,
+			string $method = 'POST',
+			array $params = [],
+			array $options = [],
+			?IRequest $request = null,
+		): array|IResponse {
+		}
+
+		public function getExApp(string $appId): ?array {
+		}
+	}
+}
+
+namespace OCA\Files_Trashbin\Events {
+	use OCP\EventDispatcher\Event;
+	use OCP\Files\Node;
+
+	class MoveToTrashEvent extends Event {
+		public function getNode(): Node {
+		}
+	}
+
+	class NodeRestoredEvent extends Event {
+		public function getSource(): Node {
+		}
+
+		public function getTarget(): Node {
+		}
+	}
+}

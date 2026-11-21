@@ -1299,8 +1299,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # crawl of the mount, and tests/Unit/StorageCrawlJobTest.php follows. No file came or went, so
 # PHP_FILES_TODAY stays at 129. The recipe over git archive of 9bf7dddf, the last commit before the
 # step, gave ea247ffd (positive control).
-PHP_FILES_TODAY = 130
-PHP_TREE_HASH_TODAY = "3577bd320b901cb68fced37bcc004893da66cf85cd35dbbce5a037d21061e5ce"
+# Moved on 2026-11-21 by plan 44-02 (the Psalm taint gate): two files came, the plugin
+# tools/psalm/AppFrameworkTainter.php and the probe tools/psalm/taint-probe/ProbeController.php of
+# the positive control. Neither ships (the store archive takes appinfo lib templates js css img l10n
+# only) and no file of the app changed its bytes, so PHP_FILES_TODAY moves to 132. The recipe over
+# the CRLF normalised tree of git ls-files php gave ab283cdd; the same recipe over git archive of
+# b5b202e3, the last commit before the plan, gave 3577bd32 with 130 files (positive control). The
+# vendor directory of tools/psalm is ignored by git and absent on a runner; where it exists in a
+# local working tree, the recipe counts it and this test is red there until it is removed.
+PHP_FILES_TODAY = 132
+PHP_TREE_HASH_TODAY = "ab283cdda82c8a358a47cc395efc0f3752624b75e9ef634b94fc1253068e1cf7"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

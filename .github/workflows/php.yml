@@ -31,6 +31,7 @@ on:
       - 'scripts/dev/validate_info_xml.sh'
       - 'scripts/ci/update_in_process_proof.sh'
       - 'scripts/ci/update_in_process_driver.php'
+      - 'scripts/ci/psalm_taint_gate.sh'
   pull_request:
     paths:
       - 'php/**'
@@ -40,6 +41,7 @@ on:
       - 'scripts/dev/validate_info_xml.sh'
       - 'scripts/ci/update_in_process_proof.sh'
       - 'scripts/ci/update_in_process_driver.php'
+      - 'scripts/ci/psalm_taint_gate.sh'
   # Weekly, for the composer-hygiene job below (plan 42-03). The path filter
   # above means that job only runs when something under php/ changes, and a new
   # advisory against an unchanged composer.lock would otherwise surface at the
@@ -268,6 +270,93 @@ jobs:
       - name: No known advisory against composer.lock
         working-directory: php
         run: composer audit --locked --no-interaction
+
+      # The same two checks for the tool project of the psalm-taint job below
+      # (phase 44). Psalm and nextcloud/ocp run as code on the runner, so their
+      # lock file gets the same treatment as the one of the app. Separate steps
+      # with their own names, the two above stay exactly as they are.
+      - name: 'psalm tools: composer.json is valid and composer.lock matches it'
+        working-directory: php/tools/psalm
+        run: composer validate --strict --no-check-publish
+
+      - name: 'psalm tools: no known advisory against composer.lock'
+        working-directory: php/tools/psalm
+        run: composer audit --locked --no-interaction
+
+  # The Psalm taint gate (phase 44, requirement PRUEF-02): user input of the
+  # companion app must not reach an HTML, SQL or SSRF sink. One leg per
+  # nextcloud/ocp version of the window in php/appinfo/info.xml, because the
+  # taint sources and sinks live in the annotations of the OCP of each server
+  # release. The logic lives in the gate script of the last step, which local
+  # runs call as well:
+  #
+  # - it counts the findings itself from the SARIF report with jq and is red on
+  #   any finding. Psalm 6.20.10 ends with 2 on findings, other versions did
+  #   not, so the exit code alone is no verdict; a crash or a missing report is
+  #   red as well.
+  # - every run carries its positive control: a probe controller with two
+  #   deliberate flows is copied into lib/TaintProbe/ of the runner workspace,
+  #   and the gate is red unless Psalm reports TaintedHtml and TaintedSql there.
+  #   A plugin that stopped loading, or an OCP without taint annotations, would
+  #   otherwise turn this job into a quiet green.
+  #
+  # Nothing is uploaded: the SARIF report stays on the runner (owner decision
+  # E-05, no upload to code scanning). Nothing here is softened, no baseline,
+  # no continue-on-error. The three tags stay one per line below; the local
+  # recipe of plan 44-03 reads them from this file.
+  psalm-taint:
+    name: Psalm taint analysis against OCP ${{ matrix.ocp }}
+    runs-on: ubuntu-24.04
+    # About 27 seconds per Psalm pass measured locally, two passes per leg
+    # (real and probe) plus the composer steps; fifteen minutes leaves room for
+    # a slow Packagist.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ocp:
+          - v33.0.9
+          - v34.0.6
+          - v35.0.3
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job pushes or calls the API.
+          persist-credentials: false
+
+      # PHP 8.3 and not the 8.2 of the app: nextcloud/ocp 35 requires ~8.3.
+      # php/psalm.xml still analyses for phpVersion 8.2, the lower bound of the
+      # app, so the runtime version does not widen what the code may use.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install the psalm tools from composer.lock
+        working-directory: php/tools/psalm
+        run: composer install --no-interaction --no-progress --no-scripts
+
+      # The lock file pins the newest nextcloud/ocp of the window; each leg
+      # swaps in its own tag.
+      # The tag comes in through env and not inline, so the shell never sees an
+      # expression it would have to trust.
+      - name: Swap in nextcloud/ocp of this leg
+        working-directory: php/tools/psalm
+        env:
+          OCP_VERSION: ${{ matrix.ocp }}
+        run: composer require --dev "nextcloud/ocp:${OCP_VERSION}" --no-interaction --no-progress --no-scripts -W
+
+      # Psalm wants a composer autoloader in the project it analyses. This
+      # writes one for the classes of the app only, nothing is installed.
+      - name: Write the autoloader of the app
+        working-directory: php
+        run: composer dump-autoload --no-scripts
+
+      - name: Psalm taint gate with positive control
+        run: bash scripts/ci/psalm_taint_gate.sh
 
   phpunit:
     name: PHPUnit over the companion app

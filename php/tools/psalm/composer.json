@@ -1,0 +1,22 @@
+{
+	"name": "findling/psalm-tools",
+	"description": "Psalm taint analysis toolchain of the Findling companion app, CI and development only",
+	"license": "AGPL-3.0-or-later",
+	"type": "project",
+	"_comment": [
+		"This is a project of its own and not part of php/composer.json on purpose. nextcloud/ocp in the vendor directory of the app could collide with the OCP classes of the server checkout inside the single PHPUnit process of the phpunit job (same class names, two definitions), and vimeo/psalm would have to be resolved together with the exactly pinned phpunit/phpunit 11.5.57. A separate project keeps both apart. Nothing in php/tools reaches the store archive: scripts/release/store-archive.sh includes appinfo lib templates js css img l10n only.",
+		"Both versions are exact pins. Psalm 7 breaks the AppFrameworkTainter plugin copied from nextcloud/server (Class \"Psalm\\Type\\TaintKindGroup\" not found), and nextcloud/server itself is on vimeo/psalm ^6.20. nextcloud/ocp v35.0.3 is the locked default; the psalm-taint job of .github/workflows/php.yml swaps it per matrix leg for v33.0.9, v34.0.6 and v35.0.3 with composer require.",
+		"platform.php is 8.3.16 because nextcloud/ocp 35 requires php ~8.3; psalm.xml still analyses for phpVersion 8.2, the lower bound of the app.",
+		"Both packages were cleared by the owner before they were fetched, decision E-07 of 21.11.2026 in .planning/phases/44-php-sicherheits-gates/44-OWNER-DECISIONS.md."
+	],
+	"require-dev": {
+		"nextcloud/ocp": "v35.0.3",
+		"vimeo/psalm": "6.20.10"
+	},
+	"config": {
+		"platform": {
+			"php": "8.3.16"
+		},
+		"sort-packages": true
+	}
+}

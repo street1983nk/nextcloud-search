@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+	Psalm configuration of the taint gate (job psalm-taint in .github/workflows/php.yml,
+	script scripts/ci/psalm_taint_gate.sh). Only the taint analysis is a gate; a plain
+	type check on this level is not part of any job.
+
+	phpVersion 8.2 is the lower bound of the app; the runtime is PHP 8.3 because
+	nextcloud/ocp 35 requires it. nextcloud/ocp comes from the separate tool project
+	tools/psalm and is analysed as extra files, the AppAPI and files_trashbin classes
+	come from a stub. Nothing in this file silences an issue, on purpose: a finding
+	is fixed or decided by the owner, never written away.
+-->
+<psalm
+	errorLevel="4"
+	resolveFromConfigFile="true"
+	phpVersion="8.2"
+	findUnusedBaselineEntry="true"
+	findUnusedCode="false"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="https://getpsalm.org/schema/config"
+	xsi:schemaLocation="https://getpsalm.org/schema/config tools/psalm/vendor/vimeo/psalm/config.xsd"
+>
+	<plugins>
+		<plugin filename="tools/psalm/AppFrameworkTainter.php" />
+	</plugins>
+	<projectFiles>
+		<directory name="lib" />
+		<directory name="templates" />
+		<file name="appinfo/routes.php" />
+		<ignoreFiles>
+			<directory name="vendor" />
+			<directory name="tools" />
+		</ignoreFiles>
+	</projectFiles>
+	<extraFiles>
+		<directory name="tools/psalm/vendor/nextcloud/ocp" />
+	</extraFiles>
+	<stubs>
+		<file name="tools/psalm/stubs/app_api.phpstub" />
+	</stubs>
+</psalm>

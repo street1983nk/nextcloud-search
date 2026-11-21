@@ -70,6 +70,8 @@ PATHS_BEFORE: dict[str, list[str]] = {
         # files are that job, so a change to either has to run it.
         "scripts/ci/update_in_process_proof.sh",
         "scripts/ci/update_in_process_driver.php",
+        # Added with the job psalm-taint (phase 44): the script is that job.
+        "scripts/ci/psalm_taint_gate.sh",
     ],
     "python.yml": [
         "backend/**",
