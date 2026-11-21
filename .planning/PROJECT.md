@@ -91,10 +91,15 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(v1.7 noch nicht geschnitten, /gsd:new-milestone steht aus; Ziele siehe "Next Milestone Goals".)
+v1.7 (Findling 1.7.0), Anforderungen in REQUIREMENTS.md:
 
-- Phase PHP-Sicherheits-Gates: Psalm Taint, php-cs-fixer, zizmor, actionlint (Zusage aus Phase 42)
-- Findling 1.7.0: Fork-PRs #56 (zh_TW-Katalog) und #57 (dreiteilige Locale) von foolfitz, gekürzte Store-Texte beider Apps, Issue #45
+- PRUEF-02 bis 04: PHP-Sicherheits-Gates Psalm Taint, php-cs-fixer, zizmor, actionlint (Zusage aus Phase 42)
+- KAT-03, KAT-04: Fork-PRs #56 (zh_TW-Katalog) und #57 (dreiteilige Locale) von foolfitz
+- EXCL-04 bis 06: Ausschluss je externem Speicher, freie Ausschluss-Plätze, bessere Platzhalter-Meldung (Issue #45)
+- STORE-03, STORE-04: kurze Store-Texte beider Apps, Pflichtinhalte in README/Doku
+- REL-07: Release 1.7.0 nach Volltest und Launch-Härtung
+
+Später:
 - Dedup Weg B (vertagt aus v1.6, D-39-02); v1.7-Merkliste aus deferred-items.md der Phase 40 sichten
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 
@@ -176,9 +181,16 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | Routen-Gate fragt den Router des Servers als Orakel statt eigener Nachbildung (Phase 42) | Eigene Nachbildung lässt Fälle aus (Schreibweise, Docblocks) | ✓ Good, 14/14 Vektoren, Kriterium 3 als eigene Phase |
 | Zählung pro Dokument über Freigabe-Identität (Format 2), kein rc.2 (D-43-15, D-43-17) | Meldungen von mbozem: gleiche Freigabe mit verschiedenen Wurzeln und Schreibweisen | ✓ Good, 1.6.3 im Store, #25 wartet auf Bestätigung |
 
-## Current Milestone: (keiner, v1.7 steht aus)
+## Current Milestone: v1.7 Findling 1.7.0
 
-Nächster Schritt: /gsd:new-milestone v1.7 (Ziele siehe "Next Milestone Goals").
+**Goal:** Findling 1.7.0 mit Ausschluss je externem Speicher (#45), Traditional Chinese (PRs #56, #57) und kurzen Store-Texten; vorher die PHP-Sicherheits-Gates aus Phase 42 Kriterium 3.
+
+**Target features:**
+- PHP-Sicherheits-Gates: Psalm mit Taint-Analyse, php-cs-fixer, zizmor, actionlint
+- Ausschluss je externem Speicher, Anzeige freier Ausschluss-Plätze, bessere Platzhalter-Meldung (#45)
+- zh_TW-Katalog und Admin-Seite bei dreiteiliger Locale (PRs #56, #57 von foolfitz)
+- Store-Texte beider Apps kurz mit Link auf die GitHub-Doku
+- Release 1.7.0 nach Volltest und Launch-Härtung
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.6 (abgeschlossen 2026-11-21)</summary>
@@ -286,4 +298,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-21 after v1.6 milestone*
+*Last updated: 2026-11-21, Milestone v1.7 gestartet*

@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: Awaiting next milestone
-stopped_at: "Zwischen Milestones: v1.6 abgeschlossen und archiviert (21.11.2026), nächster Schritt /gsd:new-milestone v1.7"
-last_updated: "2026-11-21T13:00:00.000Z"
-last_activity: 2026-11-21 (Milestone v1.6 abgeschlossen und archiviert)
+milestone: v1.7
+milestone_name: Findling 1.7.0
+status: planning
+last_updated: "2026-11-21T03:28:15.203Z"
+last_activity: 2026-11-21
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 63
-  completed_plans: 63
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +20,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONES.md (v1.0 bis v1.6).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Zwischen Milestones. v1.6 abgeschlossen und archiviert (.planning/milestones/v1.6-*), nächster Schritt /gsd:new-milestone v1.7
+**Current focus:** Milestone v1.7 Findling 1.7.0 (PHP-Sicherheits-Gates, dann Release 1.7.0 mit #45, PRs #56/#57, kurzen Store-Texten)
 
 ## Current Position
 
-Phase: Milestone v1.6 complete (Phasen 37 bis 43)
+Phase: Not started (defining requirements)
 Plan: keiner
-Status: Zwischen Milestones, nächster Schritt /gsd:new-milestone v1.7
-Last activity: 2026-11-21, Milestone v1.6 abgeschlossen und archiviert (zuletzt 1.6.5 im Store, Tag v1.6.5 auf 06a0d7c8)
-
-Progress: [██████████] 100%
+Status: Defining requirements
+Last activity: 2026-11-21, Milestone v1.7 gestartet
 
 ## Performance Metrics
 
