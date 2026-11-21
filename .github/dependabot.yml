@@ -9,6 +9,12 @@
 # Weekly, grouped by minor and patch, so a normal week is one pull request per
 # ecosystem instead of nine. Major updates arrive as separate pull requests on
 # purpose: they need a human to read a changelog.
+#
+# Every entry waits 14 days before it proposes a freshly published version
+# (cooldown, owner rule on minimum package age, zizmor audit dependabot-cooldown).
+# A compromised release is usually found and yanked within days, and the wait
+# keeps it out of a grouped pull request. GitHub applies cooldown to version
+# updates only; security updates are not delayed by it.
 version: 2
 
 updates:
@@ -30,6 +36,8 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(ci)"
@@ -56,6 +64,8 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(docker)"
@@ -82,6 +92,8 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
@@ -137,6 +149,8 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(deps)"
@@ -152,3 +166,56 @@ updates:
       - dependency-name: "phpunit/phpunit"
         update-types:
           - version-update:semver-major
+
+  # The Psalm taint toolchain (phase 44), a composer project of its own so it is
+  # never resolved together with the app. CI and development only; nothing in
+  # php/tools reaches the release archive. Psalm majors stay a manual step:
+  # Psalm 7 breaks the AppFrameworkTainter plugin copied from nextcloud/server
+  # (the _comment of php/tools/psalm/composer.json says how).
+  - package-ecosystem: composer
+    directory: "/php/tools/psalm"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    groups:
+      psalm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "vimeo/psalm"
+        update-types:
+          - version-update:semver-major
+
+  # The style toolchain (php-cs-fixer with nextcloud/coding-standard, phase 44),
+  # likewise a composer project of its own, CI and development only.
+  - package-ecosystem: composer
+    directory: "/php/tools/php-cs-fixer"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    groups:
+      php-cs-fixer-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

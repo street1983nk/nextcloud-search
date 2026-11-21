@@ -846,8 +846,13 @@ def test_the_digest_and_the_lists_are_checked_before_the_environment() -> None:
 def test_the_two_candidate_lists_are_disjoint_before_the_environment() -> None:
     # Vierte Runde, Punkt 1: an id in both lists ends the step, and the check
     # stands before anything is written.
+    # Since phase 44 the two lists reach comm as quoted arrays (shellcheck
+    # SC2086, owner decision E-03), split out of the same comma lists.
     run = _run(RECORD_STEP)
-    disjoint = run.index("shared=$(comm -12 <(printf '%s\\n' ${expected_candidates//,/ } | sort)")
+    disjoint = run.index("shared=$(comm -12 <(printf '%s\\n' \"${candidate_ids[@]}\" | sort)")
+    assert 'read -ra candidate_ids <<< "${expected_candidates//,/ }"' in run[:disjoint]
+    assert 'read -ra changed_ids <<< "${expected_changed//,/ }"' in run[:disjoint]
+    assert "<(printf '%s\\n' \"${changed_ids[@]}\" | sort)" in run[disjoint:]
     assert 'if [ -n "${shared}" ]; then' in run[disjoint:]
     assert disjoint < run.rindex('} >> "${GITHUB_ENV}"')
     assert disjoint < run.index('echo "UPGRADE_CATCHUP_CANDIDATES=')

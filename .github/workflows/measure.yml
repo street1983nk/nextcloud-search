@@ -259,7 +259,8 @@ jobs:
           TARGET: ${{ steps.image.outputs.target }}
         run: |
           for combination in "2 256" "2 512" "8 256" "8 512"; do
-            set -- ${combination}
+            read -ra parts <<< "${combination}"
+            set -- "${parts[@]}"
             echo "::group::batch $1 sequence $2"
             docker run --rm --network none --cpuset-cpus 0,1 \
               --entrypoint python "${TARGET}" \
@@ -563,7 +564,7 @@ jobs:
           '
           {
             echo "seed=phase-26-ladder"
-            echo "scans=$(ls "${RUNNER_TEMP}/ladder" | wc -l)"
+            echo "scans=$(find "${RUNNER_TEMP}/ladder" -mindepth 1 -maxdepth 1 -not -name '.*' | wc -l)"
             for scan in "${RUNNER_TEMP}"/ladder/*.pdf; do
               echo "$(basename "${scan}") bytes=$(stat -c %s "${scan}") sha256=$(sha256sum "${scan}" | cut -d' ' -f1)"
             done
@@ -578,7 +579,8 @@ jobs:
           TARGET: ${{ steps.image.outputs.target }}
         run: |
           for combination in "1 0" "2 0,1" "4 0-3"; do
-            set -- ${combination}
+            read -ra parts <<< "${combination}"
+            set -- "${parts[@]}"
             echo "::group::slots $1 on cpu set $2"
             docker run --rm --network none --cpuset-cpus "$2" \
               -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \
@@ -610,7 +612,8 @@ jobs:
           TARGET: ${{ steps.image.outputs.target }}
         run: |
           for combination in "1 0" "2 0,1" "4 0-3"; do
-            set -- ${combination}
+            read -ra parts <<< "${combination}"
+            set -- "${parts[@]}"
             echo "::group::threads $1 on cpu set $2"
             docker run --rm --network none --cpuset-cpus "$2" \
               --entrypoint python "${TARGET}" \
@@ -680,7 +683,8 @@ jobs:
           TARGET: ${{ steps.image.outputs.target }}
         run: |
           for combination in "1 0" "2 0,1" "4 0-3"; do
-            set -- ${combination}
+            read -ra parts <<< "${combination}"
+            set -- "${parts[@]}"
             echo "::group::ladder slots $1 on cpu set $2"
             docker run --rm --network none --cpuset-cpus "$2" \
               -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \

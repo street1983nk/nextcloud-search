@@ -46,6 +46,10 @@ jobs:
   remove:
     name: Remove one release from the store
     runs-on: ubuntu-24.04
+    # The store token lives in this environment (zizmor secrets-outside-env,
+    # owner decision E-11); it admits main and tags v* only, and a run waits
+    # for the approval of the owner before this job starts.
+    environment: app-store-delete
     timeout-minutes: 10
     steps:
       # The checkout is not read by any step below; it exists because every

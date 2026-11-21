@@ -542,14 +542,19 @@ jobs:
       # number as an attribute.
       - name: State how many tests actually ran
         working-directory: apps/findling
+        # The PHP comes in through a quoted heredoc rather than php -r '...'
+        # (shellcheck SC2016, owner decision E-03); the output is the same
+        # number.
         run: |
-          count=$(php -r '
-            $log = simplexml_load_file("junit.xml");
-            if ($log === false) { fwrite(STDERR, "junit.xml is not readable\n"); exit(1); }
-            $total = 0;
-            foreach ($log->testsuite as $suite) { $total += (int)$suite["tests"]; }
-            echo $total;
-          ')
+          count=$(php <<'PHP'
+          <?php
+          $log = simplexml_load_file("junit.xml");
+          if ($log === false) { fwrite(STDERR, "junit.xml is not readable\n"); exit(1); }
+          $total = 0;
+          foreach ($log->testsuite as $suite) { $total += (int)$suite["tests"]; }
+          echo $total;
+          PHP
+          )
           echo "the suite executed ${count} tests, the floor is ${MINIMUM_TESTS}"
           if [ "${count}" -lt "${MINIMUM_TESTS}" ]; then
             echo "fewer tests ran than this job requires, so the run proves nothing"
@@ -577,6 +582,7 @@ jobs:
           # renaming or skipping the gate makes it tear.
           ROUTE_GATE_MIN_TESTS: 40
         run: |
+          # shellcheck disable=SC2016 # E-13: PHP-Code im Einzelzitat, $ ist gewollt
           php -r '
             $file = getenv("JUNIT_FILE");
             if ($file === false || $file === "") { fwrite(STDERR, "JUNIT_FILE is not set\n"); exit(1); }

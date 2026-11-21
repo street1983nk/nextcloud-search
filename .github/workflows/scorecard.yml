@@ -15,7 +15,12 @@ on:
   schedule:
     - cron: '45 5 * * 1'
 
-permissions: read-all
+# No permissions on the workflow level (zizmor excessive-permissions, owner
+# decision E-04). The only job carries its own block below, and a job level
+# block replaces the workflow level one completely, so the job keeps exactly
+# the rights it had. scorecard-action forbids write rights on the workflow
+# level when it publishes results; an empty set fulfils that as well.
+permissions: {}
 
 jobs:
   analysis:

@@ -648,10 +648,14 @@ jobs:
             tags+=(-t "${IMAGE}:${version}")
             echo "release run, the manifest also gets the tag ${version}"
           fi
-          # The word splitting on the last line is the point: every digest file
-          # in this directory becomes one more source reference for the manifest.
-          # shellcheck disable=SC2046
-          docker buildx imagetools create "${tags[@]}" $(printf "${IMAGE}@sha256:%s " *)
+          # Every digest file in this directory becomes one more source reference
+          # for the manifest. An array instead of word splitting a command
+          # substitution (SC2046, owner decision E-03), same references.
+          sources=()
+          for digest in *; do
+            sources+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
 
       # A manifest that lists only one platform still pulls and still runs, on
       # exactly the machines that are not the target hardware. So the job asks

@@ -62,6 +62,10 @@ jobs:
   submit:
     name: Register and submit both halves
     runs-on: ubuntu-24.04
+    # The store token and the two signing keys live in this environment
+    # (zizmor secrets-outside-env, owner decision E-11), which only main and
+    # tags v* may enter.
+    environment: app-store
     timeout-minutes: 15
     steps:
       # The checkout is not read by any step below; it exists because every

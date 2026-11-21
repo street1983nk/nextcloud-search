@@ -15,6 +15,11 @@ permissions:
 jobs:
   notify:
     runs-on: ubuntu-24.04
+    # zizmor secrets-outside-env, owner decisions E-11 and E-12: the job runs
+    # in the environment notify (main and tags v* only). The environment has
+    # no secret of its own yet, so NTFY_TOPIC still comes from the repository
+    # secrets until the owner moves it.
+    environment: notify
     timeout-minutes: 5
     steps:
       - name: push to ntfy

@@ -86,6 +86,9 @@ jobs:
   archives:
     name: Build, sign and size check both archives
     runs-on: ubuntu-24.04
+    # The two signing keys live in this environment (zizmor secrets-outside-env,
+    # owner decision E-11), which only main and tags v* may enter.
+    environment: release
 
     # No measurement behind this number yet, and it is named as an estimate
     # rather than dressed up as one: this workflow has never run. What it is

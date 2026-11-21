@@ -348,8 +348,10 @@ jobs:
             -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
             'http://localhost/ocs/v2.php/search/providers/findling/search?term=Belehrung')
           echo "search answered HTTP ${code} with $(jq -r '.ocs.data.entries | length' "${RUNNER_TEMP}/logs/search.json") entries"
-          [ "${code}" = 200 ] && jq -e '.ocs.data.entries | length >= 1' "${RUNNER_TEMP}/logs/search.json" > /dev/null \
-            || { echo "::error::the kept index does not answer a search after the switch"; exit 1; }
+          if ! { [ "${code}" = 200 ] && jq -e '.ocs.data.entries | length >= 1' "${RUNNER_TEMP}/logs/search.json" > /dev/null; }; then
+            echo "::error::the kept index does not answer a search after the switch"
+            exit 1
+          fi
 
       # The negative case: the same switch a second time, told a stock that is
       # one file off. It has to end with 41, and the upgrade in front of it has

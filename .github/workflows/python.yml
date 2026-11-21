@@ -130,8 +130,11 @@ jobs:
           # Same uv release that produced backend/uv.lock, so --frozen means the
           # same resolution locally and in CI.
           version: '0.11.7'
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          # No uv cache (zizmor cache-poisoning, owner decision E-01): this
+          # workflow also runs on release tags, and a cache written by a branch
+          # run must not flow into a tag run. The price is runtime only. Without
+          # a cache, cache-dependency-glob (it only forms the cache key) is gone.
+          enable-cache: false
 
       - name: Install the locked environment
         run: uv sync --frozen
@@ -252,8 +255,8 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: '0.11.7'
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          # No uv cache, same reason as in the job above (owner decision E-01).
+          enable-cache: false
 
       - name: Install the locked environment
         run: uv sync --frozen

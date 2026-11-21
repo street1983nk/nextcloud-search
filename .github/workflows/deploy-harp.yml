@@ -1770,7 +1770,8 @@ jobs:
           # probe <label> "<expected seed ids>" <none|pdf|text> [key=value ...]
           probe() {
             label="$1"
-            want=$(sorted $2)
+            read -ra want_ids <<< "$2"
+            want=$(sorted "${want_ids[@]}")
             rule="$3"
             shift 3
             status=$(search "${label}" "$@")
@@ -3611,7 +3612,8 @@ jobs:
           leftover=$(docker ps -aq --filter 'name=findling_backend')
           if [ -n "${leftover}" ]; then
             echo "a container of the store pass survived the unregister and is removed here"
-            docker rm -f ${leftover} > /dev/null
+            mapfile -t leftover_ids <<< "${leftover}"
+            docker rm -f "${leftover_ids[@]}" > /dev/null
           fi
           for volume in $(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}'); do
             echo "removing the volume ${volume} of the store pass"
@@ -4791,10 +4793,12 @@ jobs:
           if [ "${fail}" -ne 0 ]; then
             exit 1
           fi
-          echo "UPGRADE_EXCLUSIONS_BEFORE=${exclusions_before}" >> "${GITHUB_ENV}"
-          echo "UPGRADE_EXCL_EXCLUDED_ID=${excluded_id}" >> "${GITHUB_ENV}"
-          echo "UPGRADE_EXCL_CONTROL_ID=${control_id}" >> "${GITHUB_ENV}"
-          echo "UPGRADE_EXCL_PATTERN_ID=${pattern_id}" >> "${GITHUB_ENV}"
+          {
+            echo "UPGRADE_EXCLUSIONS_BEFORE=${exclusions_before}"
+            echo "UPGRADE_EXCL_EXCLUDED_ID=${excluded_id}"
+            echo "UPGRADE_EXCL_CONTROL_ID=${control_id}"
+            echo "UPGRADE_EXCL_PATTERN_ID=${pattern_id}"
+          } >> "${GITHUB_ENV}"
 
       # The tenth and eleventh value of a snapshot, since plan 30-07 (D-30-07):
       # czech counts the question smlouve and czechStop the question proc, both
@@ -5337,7 +5341,8 @@ jobs:
           if [ -z "${missing}" ]; then
             echo "every always enabled app of shipped.json is present; nothing to correct"
           else
-            drop=$(printf '%s\n' ${missing} | jq -R . | jq -s .)
+            read -ra missing_ids <<< "${missing}"
+            drop=$(printf '%s\n' "${missing_ids[@]}" | jq -R . | jq -s .)
             jq --argjson drop "${drop}" '.alwaysEnabled = (.alwaysEnabled - $drop)' \
               core/shipped.json > "${RUNNER_TEMP}/shipped.json.new"
             mv "${RUNNER_TEMP}/shipped.json.new" core/shipped.json
@@ -5583,8 +5588,11 @@ jobs:
             found="${found} ${id}"
             echo "part B candidate in the old stock: ${id}, a new type outside the seed"
           done
-          found_sorted=$(printf '%s\n' ${found} | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
-          expected_sorted=$(printf '%s\n' ${expected_candidates//,/ } ${expected_changed//,/ } | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
+          read -ra found_ids <<< "${found}"
+          read -ra candidate_ids <<< "${expected_candidates//,/ }"
+          read -ra changed_ids <<< "${expected_changed//,/ }"
+          found_sorted=$(printf '%s\n' "${found_ids[@]}" | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
+          expected_sorted=$(printf '%s\n' "${candidate_ids[@]}" "${changed_ids[@]}" | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
           if [ "${found_sorted}" != "${expected_sorted}" ]; then
             echo "::error::the old stock holds the catch-up candidates '${found_sorted}' and the determination of plan 31-12 names '${expected_sorted}'; derive the two lists again instead of taking the stock as it comes"
             exit 1
@@ -5616,7 +5624,7 @@ jobs:
           done
           # The two lists never share an id: a candidate either keeps its
           # verdict and stays in the digest, or changes it and leaves it.
-          shared=$(comm -12 <(printf '%s\n' ${expected_candidates//,/ } | sort) <(printf '%s\n' ${expected_changed//,/ } | sort) | tr '\n' ' ' | sed -e 's/ *$//')
+          shared=$(comm -12 <(printf '%s\n' "${candidate_ids[@]}" | sort) <(printf '%s\n' "${changed_ids[@]}" | sort) | tr '\n' ' ' | sed -e 's/ *$//')
           if [ -n "${shared}" ]; then
             echo "::error::the ids '${shared}' stand in UPGRADE_CATCHUP_CANDIDATES and in UPGRADE_CATCHUP_CHANGED, and a candidate cannot both keep and change its verdict"
             exit 1

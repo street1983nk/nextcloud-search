@@ -1093,17 +1093,24 @@ jobs:
     # them. The alternative would be three nearly identical job definitions, and
     # an idle container for a few minutes is the cheaper of the two.
     #
-    # Both images are pinned to a series and not to latest. A patch release
-    # inside the series is wanted here: what this job asks is whether the query
-    # builder speaks MariaDB and PostgreSQL, not whether it speaks one particular
-    # build. 16 for PostgreSQL because that is the major the all-in-one image
-    # ships, which is the whole reason this dialect is in the matrix.
+    # Both images name a series and, since phase 44, the index digest of that
+    # series as it stood on 21.11.2026 (zizmor unpinned-images, owner decision
+    # E-04): a moved tag must not change what runs inside this job unseen. The
+    # tag stays in front of the digest so a reader sees the series. 16 for
+    # PostgreSQL because that is the major the all-in-one image ships, which is
+    # the whole reason this dialect is in the matrix.
+    #
+    # Dependabot does not renew these two digests (neither the github-actions
+    # nor the docker entry reads services of a workflow). A patch release of
+    # the series arrives only by a manual refresh of both digests with
+    # docker buildx imagetools inspect, see docs/testing.md.
     #
     # The credentials of both are the defaults of the composite action, so the
     # calling side stays a single database input.
     services:
       mariadb:
-        image: mariadb:11.4
+        # mariadb:11.4, digest refreshed by hand (not by Dependabot).
+        image: mariadb:11.4@sha256:a8992b5e5404d11e03c54a31d0c1bdea3fd116d283aa6d1a627551f29045309b
         env:
           MARIADB_ROOT_PASSWORD: findling-ci-root-2026
           MARIADB_DATABASE: nextcloud
@@ -1118,7 +1125,8 @@ jobs:
           --health-retries=12
 
       postgres:
-        image: postgres:16
+        # postgres:16, digest refreshed by hand (not by Dependabot).
+        image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
         env:
           POSTGRES_DB: nextcloud
           POSTGRES_USER: nextcloud
@@ -3760,13 +3768,18 @@ jobs:
             fi
             # Escaped the way p() escapes it in templates/search.php
             # (htmlspecialchars with ENT_QUOTES), so that an apostrophe in a
-            # later wording does not turn the comparison red.
-            expected=$(php -r '
-              $c = json_decode(file_get_contents($argv[1]), true);
-              $v = $c["translations"][$argv[2]] ?? "";
-              if ($v === "" || $v === $argv[2]) { exit(3); }
-              echo htmlspecialchars($v, ENT_QUOTES, "UTF-8");
-            ' "${catalogue}" "${source_sentence}") || {
+            # later wording does not turn the comparison red. The PHP comes in
+            # through a quoted heredoc (shellcheck SC2016, owner decision E-03),
+            # the arguments after -- arrive as $argv[1] and $argv[2] as before;
+            # the terminator has to stand at the start of the script line.
+            expected=$(php -- "${catalogue}" "${source_sentence}" <<'PHP'
+          <?php
+          $c = json_decode(file_get_contents($argv[1]), true);
+          $v = $c["translations"][$argv[2]] ?? "";
+          if ($v === "" || $v === $argv[2]) { exit(3); }
+          echo htmlspecialchars($v, ENT_QUOTES, "UTF-8");
+          PHP
+            ) || {
               echo "::error::${code}: the catalogue has no translation of \"${source_sentence}\", so the proof would be worthless"
               failed=1
               continue
@@ -3797,7 +3810,13 @@ jobs:
               failed=1
             fi
           done
-          exit "${failed}"
+          # Exit only on a failure: with a plain exit as the last line, version
+          # 0.11 of the shell linter reports restore_language as never invoked
+          # (SC2329), although the trap calls it. A run without failure ends
+          # with 0 here as before.
+          if [ "${failed}" != "0" ]; then
+            exit "${failed}"
+          fi
 
       - name: Queue and run the crawl
         run: |
