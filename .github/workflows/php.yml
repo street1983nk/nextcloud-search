@@ -101,6 +101,9 @@ jobs:
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step of this job pushes with git; the token stays out of the working tree.
+          persist-credentials: false
 
       - name: Set up PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
@@ -144,6 +147,8 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Before anything is fetched, and deliberately so: everything below rests
       # on the assumption that this file and release.yml name the same commit of
@@ -460,6 +465,7 @@ jobs:
       - name: Check out nextcloud/server
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: nextcloud/server
           ref: ${{ env.SERVER_VERSION }}
           submodules: recursive
@@ -467,6 +473,7 @@ jobs:
       - name: Check out findling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-src
 
       - name: Set up PHP
@@ -626,6 +633,8 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The releases the candidate is updated from are named in the script
       # (FROM_TAGS), next to the control pair, so that the local run and this

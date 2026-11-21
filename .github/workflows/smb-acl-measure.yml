@@ -42,6 +42,8 @@ jobs:
       - name: Check out nextcloud/server
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # No step of this job pushes with git; the token stays out of the working tree.
+          persist-credentials: false
           repository: nextcloud/server
           ref: stable34
           submodules: recursive
@@ -49,6 +51,7 @@ jobs:
       - name: Check out findling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-src
 
       - name: Set up the test Nextcloud without registering the ExApp

@@ -111,6 +111,8 @@ jobs:
       - name: Check out nextcloud/server
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # No step of this job pushes with git; the token stays out of the working tree.
+          persist-credentials: false
           repository: nextcloud/server
           ref: stable34
           submodules: recursive
@@ -124,6 +126,7 @@ jobs:
       - name: Check out nextcloud/viewer like a release tarball carries it
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: nextcloud/viewer
           ref: stable34
           path: apps/viewer
@@ -131,12 +134,14 @@ jobs:
       - name: Check out the state the instance is set up from
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-src
           ref: ${{ matrix.src || github.sha }}
 
       - name: Check out the harness at the head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-harness
 
       # upgrade-rc1 starts at rc.1 and still goes back to the released 1.6.2,
@@ -145,6 +150,7 @@ jobs:
         if: matrix.variant == 'upgrade-rc1'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-162
           ref: v1.6.2
 

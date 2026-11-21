@@ -523,6 +523,7 @@ jobs:
       - name: Check out nextcloud/server
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
@@ -530,6 +531,7 @@ jobs:
       - name: Check out findling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: findling-src
 
       # register-exapp: false is the whole point of this job. The instance comes
