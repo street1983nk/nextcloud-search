@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: planning
-last_updated: "2026-11-21T03:28:15.203Z"
+last_updated: "2026-11-21T14:00:00.000Z"
 last_activity: 2026-11-21
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,10 +24,10 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: keiner
-Status: Defining requirements
-Last activity: 2026-11-21, Milestone v1.7 gestartet
+Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
+Plan: keiner (Phase 44 bereit zum Planen)
+Status: Ready to plan
+Last activity: 2026-11-21, Roadmap v1.7 erstellt (Phasen 44 und 45, 11/11 Requirements zugeordnet)
 
 ## Performance Metrics
 
@@ -100,6 +100,13 @@ Last activity: 2026-11-21, Milestone v1.7 gestartet
 ### Roadmap Evolution
 
 - Phase 43 added (2026-11-07): Findling 1.6.3, Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
+- Roadmap v1.7 (2026-11-21): Phase 44 PHP-Sicherheits-Gates (PRUEF-02 bis 04), Phase 45 Findling 1.7.0 (KAT-03/04, EXCL-04 bis 06, STORE-03/04, REL-07), Phase 45 hängt an Phase 44
+
+### Decisions (Roadmap v1.7)
+
+- Genau zwei Phasen nach Owner-Vorgabe 21.11.2026 (Granularität coarse): erst die offenen PHP-Gates aus Phase 42 Kriterium 3 (Phase 44), dann das Release 1.7.0 (Phase 45).
+- Phase 45: Store-Text-Entwurf vor dem Einbau vom Owner freigegeben; Launch-Härtung und Volltest DE/EN/FR vor der Abgabe; Tag, Signatur und Store-Abgabe je Einzelfreigabe; Antworten in #45, #56, #57 erst nach dem Store-Release; beide Apps Version 1.7.0.
+- Phasenordner 37 bis 43 bleiben unter .planning/phases/ (Verweise aus Code und Doku).
 
 ### Decisions (Roadmap v1.6)
 
@@ -281,12 +288,12 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 ## Session Continuity
 
 Last session: 2026-11-21T13:00:00.000Z
-Stopped at: Zwischen Milestones: v1.6 abgeschlossen und archiviert, nächster Schritt /gsd:new-milestone v1.7
+Stopped at: Roadmap v1.7 erstellt, nächster Schritt /gsd:plan-phase 44
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:new-milestone v1.7: zuerst eine Phase PHP-Sicherheits-Gates (Kriterium 3 aus Phase 42: Psalm mit Taint, php-cs-fixer, zizmor, actionlint; Owner 21.11.2026), dann die Phase Findling 1.7.0 (Fork-PRs #56 und #57 von foolfitz, gekürzte Store-Texte beider Apps, Issue #45; Ziele in PROJECT.md "Next Milestone Goals")
+- /gsd:plan-phase 44 (PHP-Sicherheits-Gates: Psalm mit Taint, php-cs-fixer, zizmor, actionlint), danach Phase 45 Findling 1.7.0 (#45, PRs #56/#57, kurze Store-Texte); Roadmap v1.7 vom 21.11.2026
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen

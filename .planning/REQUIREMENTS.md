@@ -47,3 +47,19 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PRUEF-02 | Phase 44 | Pending |
+| PRUEF-03 | Phase 44 | Pending |
+| PRUEF-04 | Phase 44 | Pending |
+| KAT-03 | Phase 45 | Pending |
+| KAT-04 | Phase 45 | Pending |
+| EXCL-04 | Phase 45 | Pending |
+| EXCL-05 | Phase 45 | Pending |
+| EXCL-06 | Phase 45 | Pending |
+| STORE-03 | Phase 45 | Pending |
+| STORE-04 | Phase 45 | Pending |
+| REL-07 | Phase 45 | Pending |
+
+**Coverage:** 11/11 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt.
+
+---
+*Requirements definiert: 2026-11-21. Traceability gefüllt mit der v1.7-Roadmap: 2026-11-21.*
