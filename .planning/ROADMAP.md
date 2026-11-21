@@ -116,27 +116,74 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 ## Phase Details
 
 ### Phase 44: PHP-Sicherheits-Gates
+
 **Goal**: Die PHP-Companion-App und die Workflows haben die noch offenen Sicherheits- und Stil-Gates aus Phase 42 (Kriterium 3): ein Taint-Befund, ein Stilverstoß oder ein Workflow-Befund ab Medium macht CI rot, bevor Findling 1.7.0 gebaut wird.
 **Depends on**: Nichts (erste Phase des Milestones; baut auf den Gates der Phase 42 auf)
 **Requirements**: PRUEF-02, PRUEF-03, PRUEF-04
 **Success Criteria** (what must be TRUE):
+
   1. Ein CI-Job führt Psalm mit Taint-Analyse gegen OCP 33, 34 und 35 aus, zählt die Befunde selbst aus der SARIF-Ausgabe und wird bei mindestens einem offenen Befund rot; eine absichtlich eingebaute Taint-Strecke (Negativtest) färbt ihn nachweislich rot.
   2. Zum Phasenabschluss meldet der Psalm-Job 0 offene Befunde, oder zu jedem verbleibenden Befund liegt eine dokumentierte Owner-Entscheidung vor.
   3. php-cs-fixer mit nextcloud/coding-standard läuft in CI als dry-run und ist auf dem Phasenkopf grün; ein Stilverstoß macht ihn rot.
   4. zizmor und actionlint prüfen jeden Workflow unter .github/workflows in CI; jeder Befund ab Medium ist behoben oder mit Begründung akzeptiert, und ein neuer Befund ab Medium macht den Job rot.
   5. Alle neuen Gates laufen auch lokal grün (Rezept dokumentiert), ein Strukturgate verhindert ihr stilles Entfernen aus den Workflows, und die secure-phase der Phase schließt ohne offene Threats.
-**Plans**: TBD
+
+**Plans**: 10 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 44-01-PLAN.md: Owner-Entscheidungen E-01 bis E-08 und Paketfreigabe (Checkpoint)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 44-02-PLAN.md: Psalm-Taint-Gate: Tool-Projekt, erster Lauf mit bedingtem Owner-Checkpoint, Gate-Skript und Matrix-Job
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 44-03-PLAN.md: Psalm-Taint-Gate: lokales Rezept und drei lokale Rotläufe
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 44-04-PLAN.md: Formatierungs-Commit und php-cs-fixer-dry-run-Gate
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 44-05-PLAN.md: zizmor/actionlint-Ist-Lauf mit bedingtem Owner-Checkpoint, artipacked beheben
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 44-06-PLAN.md: cooldown, Dependabot-Tool-Einträge, cache-poisoning und shellcheck nach Owner-Schwelle
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 44-07-PLAN.md: workflow-lint.yml mit zizmor und actionlint als Gate
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 44-08-PLAN.md: Strukturgate test_php_static_gates.py, Trigger nach E-06, Doku
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 44-09-PLAN.md: Push nach Owner-Freigabe, CI-Kopf grün mit Log-Belegen
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 44-10-PLAN.md: Rot-Beweis aller vier Gates nach E-08, Phasen-Schlussprüfung für secure-phase
 
 ### Phase 45: Findling 1.7.0
+
 **Goal**: Findling 1.7.0 (findling und findling_backend in gleicher Version) steht im Store: Admins schließen einzelne externe Speicher vom Index aus, Findling spricht Traditional Chinese, die Store-Texte sind kurz und verweisen auf die Doku, und das Release ist nach Launch-Härtung und Volltest DE/EN/FR vom Owner freigegeben.
 **Depends on**: Phase 44
 **Requirements**: KAT-03, KAT-04, EXCL-04, EXCL-05, EXCL-06, STORE-03, STORE-04, REL-07
 **Success Criteria** (what must be TRUE):
+
   1. Admin kann auf der Admin-Seite neben dem Schalter für externe Speicher einzelne externe Speicher ausschließen; bereits indexierte Inhalte eines ausgeschlossenen Speichers verschwinden aus den Suchtreffern, ein wieder zugelassener Speicher wird nachindexiert. Die Seite zeigt die freien Ausschluss-Plätze für Ordner und für Muster, und ein Platzhalterzeichen im Ordnerfeld führt zu einer Fehlermeldung, die auf das Musterfeld verweist, in allen 16 Katalogen.
   2. Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW aus PR #56); die Admin-Seite funktioniert unter der dreiteiligen Locale zh_Hant_TW auch im Rückfall auf root.lang (PR #57); PRODUCT.md und CHANGELOG nennen die Sprache.
   3. Die Store-Beschreibungen beider Apps sind in DE, EN und FR kurz (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku) und wurden erst nach Owner-Freigabe des Entwurfs eingebaut; die verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku aller drei Sprachen, die bisherigen Gates prüfen sie dort, und die READMEs aller Sprachen sind auf aktuelle Fakten geprüft.
   4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen.
   5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56 und #57.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -151,7 +198,7 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 0/TBD | Not started | - |
+| 44. PHP-Sicherheits-Gates | v1.7 | 0/10 | Not started | - |
 | 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
