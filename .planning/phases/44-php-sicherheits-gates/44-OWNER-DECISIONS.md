@@ -198,3 +198,13 @@ Owner-Wortlaut (21.11.2026, AskUserQuestion): Owner hat den bestehenden Token ko
 Gewählt: kein neuer Token, die Environments app-store und app-store-delete tragen denselben gültigen Wert wie das Repo-Secret.
 
 Konsequenz: 44-06 setzt `environment:` an die Jobs nach E-11 ohne weitere Secret-Arbeit. Das Löschen des Repo-Secrets bleibt bei 44-09 Task 3 nach grüner CI.
+
+## E-15
+
+Frage (44-10 Task 2, Rot-Beweis): php-cs blieb im ersten Rot-Beweis grün, weil der Plan-Reiz (Leerzeichen vor dem Semikolon) von nextcloud/coding-standard nicht geprüft wird. Zweiter kurzer Rot-Beweis nur für php-cs (a) oder die eingebaute Gegenprobe Exit 8 als Beleg anerkennen (b)?
+
+Owner-Wortlaut (21.11.2026): "Ok a"
+
+Gewählt: a. Wegwerf-Branch gate-proof-44-cs mit `if(true){echo 1;}` in php/lib/StyleProof.php, vorher lokal mit `scripts/dev/php_gates_docker.sh cs` rot geprüft.
+
+Konsequenz: CI-Lauf 44909755992 zeigt php-cs rot ("Found 1 of 131 files that can be fixed", Exit 1), alle übrigen PHP-Jobs grün. Branch remote und lokal gelöscht. Damit ist der Rot-Beweis für alle vier Gates belegt (44-10-SUMMARY).
