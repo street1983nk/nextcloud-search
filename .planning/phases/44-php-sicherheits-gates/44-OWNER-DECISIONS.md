@@ -178,3 +178,23 @@ Owner-Wortlaut (21.11.2026, AskUserQuestion): "Behalten, später einrichten".
 Gewählt: issue-notify.yml bleibt. Der Job notify bekommt in 44-06 `environment: notify`; das Environment `notify` hat vorerst kein eigenes Secret, der Job nutzt weiter das Repo-Secret NTFY_TOPIC.
 
 Konsequenz: NTFY_TOPIC wird in 44-09 Task 3 nicht gelöscht und nicht als "umgezogen" geprüft; die Abnahme in 44-09 umfasst nur APPSTORE_TOKEN, APP_PRIVATE_KEY und BACKEND_PRIVATE_KEY. Hinweis: zizmor wertet den Befund schon durch die Zeile `environment:` als behoben; der Umzug von NTFY_TOPIC ins Environment bleibt offen, bis der Owner ihn einrichtet.
+
+## E-13
+
+Frage (44-06 Task 2, Checkpoint Route-Gate-Schritt): Wie wird SC2016 im php.yml-Schritt "The route attribute gate ran" behandelt, dessen `php -r '...'`-Form backend/tests/test_php_route_gate_presence.py Regel 4 und der lokale Beweis aus 42-02 festhalten?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): "route-a: Ausnahmezeile".
+
+Gewählt: route-a. Je betroffenem `php -r '`-Schritt eine eigene Zeile im run-Block direkt vor `php -r '` im Format `# shellcheck disable=SC2016 # E-13: PHP-Code im Einzelzitat, $ ist gewollt` (das zweite `#` ist nötig, sonst ist die Direktive ungültig). Ausdruck, Schrittname, env und backend/tests/test_php_route_gate_presence.py bleiben unverändert.
+
+Konsequenz: 44-06 setzt die Zeile vor dem Route-Gate-Ausdruck. Der Schritt "State how many tests actually ran" wird nach E-03 echt behoben (quotiertes Heredoc, Ausgabe vorher und nachher gleich) und braucht keine Ausnahmezeile. Abnahme: mindestens eine Disable-Zeile unter .github, jede mit E-ID; `git diff --quiet HEAD -- backend/tests/test_php_route_gate_presence.py` Exit 0. Das Strukturgate aus 44-08 lässt genau diese Zeile mit E-ID zu.
+
+## E-14
+
+Frage (vor 44-06, Store-Token im Environment): Ist das Environment-Secret APPSTORE_TOKEN gültig und gleich dem Repo-Secret?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): Owner hat den bestehenden Token kopiert; Repo-Secret und Environment-Secret APPSTORE_TOKEN sind gleich und gültig.
+
+Gewählt: kein neuer Token, die Environments app-store und app-store-delete tragen denselben gültigen Wert wie das Repo-Secret.
+
+Konsequenz: 44-06 setzt `environment:` an die Jobs nach E-11 ohne weitere Secret-Arbeit. Das Löschen des Repo-Secrets bleibt bei 44-09 Task 3 nach grüner CI.
