@@ -57,6 +57,42 @@ plans 05-15 and 05-16 and grew again in plan 06.1-08; the twelve behaviours it
 was written against, and the test that holds each of them, are the table further
 down.
 
+## The PHP security gates of phase 44, run locally
+
+`scripts/dev/php_gates_docker.sh` runs the security gates of `php.yml` on the
+development machine, with the very scripts under `scripts/ci/` that the jobs
+run. Today it knows one gate:
+
+    scripts/dev/php_gates_docker.sh psalm   # the job psalm-taint
+    scripts/dev/php_gates_docker.sh all     # every gate it knows, serially
+
+How a run is arranged:
+
+- The gates never see the working tree. `php/` is mirrored from `git ls-files`
+  (tracked files plus untracked ones that are not ignored) into a cache
+  directory outside the repository, `${TMPDIR:-/tmp}/findling-php-gates` or
+  `FINDLING_PHP_GATES_DIR`, so no `vendor/` and no other ignored output comes
+  along. Carriage returns are stripped from every text file of the mirror: the
+  Windows working tree holds CRLF, a runner checks out LF, and the gates must
+  judge what CI judges.
+- The nextcloud/ocp tags come out of the matrix of the job psalm-taint in
+  `php.yml`; nothing is written down twice. Each tag gets a fresh mirror and
+  runs serially, like one leg of the matrix.
+- php and composer run in containers pinned by digest, always `--rm`, without a
+  name and without a port.
+- **jq runs on the host** (owner decision E-09 of phase 44). Neither
+  `php:8.3-cli` nor `composer:2` carries jq, and no package is installed into a
+  container. The recipe writes a small `php` shim into the cache directory and
+  puts it first on `PATH`; the shim hands each php call of the gate to the
+  container, where the cache directory is mounted at the identical path, so a
+  path the gate passes along names the same file on both sides. `TMPDIR` of the
+  gate points into the mirror for the same reason: Psalm writes its SARIF report
+  in the container and jq reads it on the host. The gate script has no switch
+  for any of this; in CI it runs on the runner with the runner's jq.
+
+So the host needs Docker, git, bash and jq. The local run is a convenience and
+not the gate itself; the gate is the job in CI.
+
 ## The textual gates over the PHP sources
 
 Every one of these lives in `backend/tests/` and runs with the ordinary
