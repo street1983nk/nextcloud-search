@@ -1307,8 +1307,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # b5b202e3, the last commit before the plan, gave 3577bd32 with 130 files (positive control). The
 # vendor directory of tools/psalm is ignored by git and absent on a runner; where it exists in a
 # local working tree, the recipe counts it and this test is red there until it is removed.
-PHP_FILES_TODAY = 132
-PHP_TREE_HASH_TODAY = "ab283cdda82c8a358a47cc395efc0f3752624b75e9ef634b94fc1253068e1cf7"
+# Moved on 2026-11-21 by plan 44-04 (the style gate): one file came, the configuration
+# .php-cs-fixer.dist.php, which does not ship either, and the one-time formatting by
+# nextcloud/coding-standard changed the bytes of eleven files (the two templates, import order,
+# one quote, blank lines and two docblocks) without changing a code token outside import order
+# and that quote, so PHP_FILES_TODAY moves to 133. The recipe gave 033cb708; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 033cb708 as well; the recipe
+# over git archive of def59579, the last commit before the plan, gave ab283cdd with 132 files
+# (positive control).
+PHP_FILES_TODAY = 133
+PHP_TREE_HASH_TODAY = "033cb708166e8b706400b4be1c34c2af704bf7acd4746033761d0063b19ec654"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
