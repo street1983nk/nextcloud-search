@@ -239,7 +239,7 @@ def _scan_lint_gate(text: str) -> list[str]:
 def scan_gate_script(name: str, text: str) -> list[str]:
     """Findings about one gate script, by its file name."""
     if name == "psalm_taint_gate.sh":
-        findings = _require(name, text, ("[.runs[].results[]]", "TaintedHtml"))
+        findings = _require(name, text, ("[.runs[].results[]]", "TaintedHtml", "env -u GITHUB_WORKFLOW"))
     elif name == "php_cs_gate.sh":
         findings = _require(name, text, ("--dry-run", "--path-mode=intersection"))
     elif name == "workflow_lint_gate.sh":
@@ -581,6 +581,7 @@ def test_a_shellcheck_severity_in_the_lint_workflow_is_reported() -> None:
 # Probes over the gate scripts.
 
 _CLEAN_PSALM_GATE = """
+run_psalm() { env -u GITHUB_WORKFLOW php "${PSALM}" --taint-analysis; }
 count() { jq '[.runs[].results[]] | length' "$1"; }
 for rule in TaintedHtml TaintedSql; do :; done
 """
@@ -623,6 +624,15 @@ def test_a_psalm_gate_without_the_sarif_count_is_reported() -> None:
 def test_a_psalm_gate_without_tainted_html_is_reported() -> None:
     source = _CLEAN_PSALM_GATE.replace("TaintedHtml ", "")
     assert scan_gate_script("psalm_taint_gate.sh", source) == ["psalm_taint_gate.sh lacks 'TaintedHtml'"]
+
+
+def test_a_psalm_gate_that_keeps_github_workflow_is_reported() -> None:
+    # Psalm 6 exits 0 on taint findings with --report when GITHUB_WORKFLOW is set,
+    # so the probe would read as blind on every runner (first CI run of phase 44).
+    source = _CLEAN_PSALM_GATE.replace("env -u GITHUB_WORKFLOW ", "")
+    assert scan_gate_script("psalm_taint_gate.sh", source) == [
+        "psalm_taint_gate.sh lacks 'env -u GITHUB_WORKFLOW'",
+    ]
 
 
 def test_a_psalm_gate_with_or_true_is_reported() -> None:

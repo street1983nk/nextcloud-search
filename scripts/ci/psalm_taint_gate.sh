@@ -76,8 +76,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Psalm 6 exits 0 instead of 2 when a taint analysis with --report runs while
+# GITHUB_WORKFLOW is set (IssueBuffer::finish), so on a runner the exit code
+# would say nothing. The variable is dropped for psalm only, which keeps exit 2
+# on findings the same locally and in CI.
 run_psalm() {
-	php "${PSALM}" --no-cache --threads=1 --no-progress --monochrome \
+	env -u GITHUB_WORKFLOW php "${PSALM}" --no-cache --threads=1 --no-progress --monochrome \
 		--taint-analysis --report="$1" --report-show-info=false
 }
 
