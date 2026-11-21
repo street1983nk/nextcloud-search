@@ -110,7 +110,7 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 
 ### v1.7 Findling 1.7.0 (aktiv, Phasen 44-45)
 
-- [ ] **Phase 44: PHP-Sicherheits-Gates** - Psalm mit Taint-Analyse, php-cs-fixer und zizmor/actionlint als rote CI-Gates (Kriterium 3 aus Phase 42)
+- [x] **Phase 44: PHP-Sicherheits-Gates** - Psalm mit Taint-Analyse, php-cs-fixer und zizmor/actionlint als rote CI-Gates (Kriterium 3 aus Phase 42)
 - [ ] **Phase 45: Findling 1.7.0** - Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57), kurze Store-Texte, Launch-Härtung und Store-Release beider Apps
 
 ## Phase Details
@@ -165,11 +165,11 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 44-09-PLAN.md: Push nach Owner-Freigabe, CI-Kopf grün mit Log-Belegen
+- [x] 44-09-PLAN.md: Push nach Owner-Freigabe, CI-Kopf grün mit Log-Belegen
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 44-10-PLAN.md: Rot-Beweis aller vier Gates nach E-08, Phasen-Schlussprüfung für secure-phase
+- [x] 44-10-PLAN.md: Rot-Beweis aller vier Gates nach E-08, Phasen-Schlussprüfung für secure-phase
 
 ### Phase 45: Findling 1.7.0
 
@@ -198,7 +198,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 8/10 | In Progress | - |
+| 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
 | 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)

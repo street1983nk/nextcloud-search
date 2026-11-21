@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
-status: executing
-stopped_at: "44-08 erledigt (Commit c6142abb), nächster Plan 44-09 (Push-Checkpoint, nicht gestartet)"
-last_updated: "2026-11-21T19:00:00.000Z"
-last_activity: 2026-11-21, 44-08 erledigt, Strukturgate test_php_static_gates.py, Trigger E-06, Doku
+status: ready_to_plan
+stopped_at: "Phase 44 abgeschlossen (44-10 4cdde0d8, SECURITY 4f4cf979 39/39 closed), nächste Phase 45 (nicht geplant)"
+last_updated: "2026-11-21T15:00:00.000Z"
+last_activity: 2026-11-21, Phase 44 abgeschlossen, Rot-Beweis aller vier Gates, secure-phase 39/39 closed
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
-  completed_plans: 8
-  percent: 80
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 
 ## Current Position
 
-Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-09 als nächster (10 Pläne, 8 erledigt)
-Status: Executing, Stopp vor 44-09 (Push-Checkpoint, Owner-Vorgabe)
-Last activity: 2026-11-21, 44-08 erledigt (Strukturgate 64 Tests, python.yml auf .github/workflows/** und dependabot.yml, docs/testing.md Abschnitt Phase 44; all, phpunit und volle Suite grün)
+Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
+Plan: noch keiner (Phase 45 nicht geplant)
+Status: Ready to plan
+Last activity: 2026-11-21, Phase 44 abgeschlossen: 44-09 Push und Secrets nur in Environments, 44-10 Rot-Beweis aller vier Gates (Läufe 44902366560, 44902366566, 44909755992; E-15), Schlussprüfung grün, 44-SECURITY.md 39/39 closed
 
 ## Performance Metrics
 
@@ -117,6 +117,7 @@ Last activity: 2026-11-21, 44-08 erledigt (Strukturgate 64 Tests, python.yml auf
 - 44-06 (21.11.2026, ec3b3743): E-13 route-a, einzige shellcheck-Ausnahme vor dem Route-Gate-Ausdruck in php.yml; E-14 APPSTORE_TOKEN im Environment gleich dem Repo-Secret. 19 shellcheck-Hinweise verhaltensgleich behoben (Heredoc statt php -r im Zählschritt und in integration.yml, Ausgabevergleich php:8.3-cli; SC2329 ist ein Fehlalarm von shellcheck 0.11 bei unbedingtem exit nach trap), alte SC2046-Ausnahme in docker.yml durch Array ersetzt; eine Testanpassung test_upgrade_seed_steps (Anker auf Array-Form). Offen für 44-07: zizmor-Wiederholung nach dem docker.yml-Fix (RAM-Schwelle verhinderte Docker); release.yml-Probelauf nur noch von main oder v*.
 - 44-07 (21.11.2026, 8e4ae166): zizmor-Nachtrag zu 44-06 per uvx zizmor==1.32.0 Exit 0 (f0937c5e). workflow-lint.yml ruft die Werkzeuge per docker run (Digest, ohne Netz, read-only) statt als Job-Container, weil das actionlint-Image kein bash hat und als guest läuft; Gate-Skript POSIX sh. Gegenprobe: SHELLCHECK_OPTS=--severity=warning blendet SC2086 in actionlint aus, erst das unset im Skript hält den Befund rot.
 - 44-08 (21.11.2026, c6142abb): Strukturgate bindet Ausnahmen an E-ID, Datei und Regel (E-13 nur SC2016 in php.yml) und verbietet @psalm-suppress/@psalm-taint-escape in den analysierten PHP-Dateien; python.yml startet nach E-06 auf .github/workflows/** und .github/dependabot.yml. Volle Suite 7234 passed, 303 skipped.
+- Phase 44 abgeschlossen (21.11.2026): 44-09 b4089a55 (Push, Repo-Secrets APPSTORE_TOKEN/APP_PRIVATE_KEY/BACKEND_PRIVATE_KEY gelöscht, nur NTFY_TOPIC nach E-12), 44-10 4cdde0d8 (Rot-Beweis: zizmor+actionlint 44902366560, psalm-taint drei Beine 44902366566, php-cs 44909755992 nach E-15 mit Reiz if(true){echo 1;}; Schlussprüfung PHPUnit 1222, pytest 7235 passed), 44-SECURITY.md 4f4cf979 (39/39 closed, 4 accept, R-44-05 NTFY_TOPIC, R-44-06 probe-92d ohne CI-Lauf).
 
 ### Decisions (Roadmap v1.6)
 
@@ -297,13 +298,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-21T19:00:00.000Z
-Stopped at: 44-08 erledigt, nächster Plan 44-09 (Push nur nach Owner-Freigabe)
+Last session: 2026-11-21T15:00:00.000Z
+Stopped at: Phase 44 abgeschlossen, nächster Schritt /gsd:plan-phase 45
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:plan-phase 44 (PHP-Sicherheits-Gates: Psalm mit Taint, php-cs-fixer, zizmor, actionlint), danach Phase 45 Findling 1.7.0 (#45, PRs #56/#57, kurze Store-Texte); Roadmap v1.7 vom 21.11.2026
+- /gsd:plan-phase 45: Findling 1.7.0 (#45, PRs #56/#57, kurze Store-Texte); Roadmap v1.7 vom 21.11.2026
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
