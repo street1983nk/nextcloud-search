@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "44-03 erledigt (lokales Rezept Psalm-Gate, Commit 8f5aca31), nächster Plan 44-04"
-last_updated: "2026-11-21T07:10:00.000Z"
-last_activity: 2026-11-21, 44-03 erledigt, lokales Rezept psalm grün und dreifach rot belegt
+stopped_at: "44-04 erledigt (Stil-Gate php-cs, Commits fa1836f5, fb231ba1, 1983d958), nächster Plan 44-05 (Owner-Checkpoint)"
+last_updated: "2026-11-21T08:10:00.000Z"
+last_activity: 2026-11-21, 44-04 erledigt, php-cs-fixer-Gate mit Positivkontrolle, Baum stilgrün
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 3
-  percent: 30
+  completed_plans: 4
+  percent: 40
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-04 als nächster (10 Pläne, 3 erledigt)
-Status: Executing
-Last activity: 2026-11-21, 44-03 erledigt (lokales Rezept php_gates_docker.sh psalm, E-09 Host-jq, E-10 Store-Listing umformuliert)
+Plan: 44-05 als nächster (10 Pläne, 4 erledigt)
+Status: Executing, Stopp nach 44-04 (Owner-Vorgabe, 44-05 hat Owner-Checkpoint)
+Last activity: 2026-11-21, 44-04 erledigt (Formatierungs-Commit ohne Verhaltensänderung, Job php-cs, Rezept cs und all)
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Last activity: 2026-11-21, 44-03 erledigt (lokales Rezept php_gates_docker.sh ps
 - v1.7: 42-09 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 2 Dateien)
 - v1.7: 44-02 in ca. 85 min inkl. ca. 6 min Psalm-Läufe (3 Tasks, 11 Dateien)
 - v1.7: 44-03 in ca. 45 min inkl. ca. 25 min Docker-Läufe (2 Tasks, 2 Dateien)
+- v1.7: 44-04 in ca. 110 min inkl. ca. 35 min Docker- und pytest-Läufe (2 Tasks, 20 Dateien)
 
 ## Accumulated Context
 
