@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: executing
-stopped_at: "Findling 1.6.3 im Store (Tag v1.6.3 auf 8b00d610, zweimal HTTP 201), Antwort in #25 gepostet; #25 beobachten, nach Bestätigung durch mbozem Owner fragen, ob schließen"
-last_updated: "2026-11-11T23:58:00.000Z"
-last_activity: 2026-11-11
+status: milestone_complete
+stopped_at: "Findling 1.6.5 im Store (Tag v1.6.5 auf 06a0d7c8, 16.11.); v1.6 bereit für complete-milestone"
+last_updated: "2026-11-21T12:00:00.000Z"
+last_activity: 2026-11-21
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 42
-  completed_plans: 36
-  percent: 76
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 63
+  completed_plans: 63
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 43: Findling 1.6.3, Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
+**Current focus:** Milestone v1.6 abgeschlossen (Phasen 37 bis 43, zuletzt 1.6.5 im Store), nächster Schritt /gsd:complete-milestone v1.6
 
 ## Current Position
 
-Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 28 of 29 erledigt, 43-28 und 43-29 gestrichen (43-01..14, 43-15..27; 43-13 und 43-14 am 12.11.: 1.6.3 im Store, Antwort in #25 gepostet; 43-12 am 11.11. mit GO: ja und Tag-Kopf 8b00d610; 43-27 am 11.11. mit audited_head 2dacf753 und E2E-Lauf 43094681914); 43-11 ist am 11.11. als "abweichend, abgelöst" abgeschlossen (Owner "Ok"), 43-28 und 43-29 sind gestrichen (kein rc.2), nächster Schritt 43-12 Runde 2; 43-21 erledigt 09.11. (Freigabe-Identität je Speicher, Host und Freigabename gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Treffer, Commits 662e7b63, 38d2e375, f772dbb5, nur lokal); 43-22 erledigt 09.11. (Dokumentschlüssel Format 2 über Freigabe und Freigabe-Pfad, docKeyFormat 2 im Auftrag, format 2 in /reconcile/doc-keys, Commits 11850d86, c0e124c1, nur lokal; PHP liefert ab hier nur Format 2, erst mit 43-24 auslieferbar); 43-23 erledigt 10.11. (PHP-only-Zählung und N1 über den Freigabe-Pfad, docKeyFormat 2 im Body und Pflicht in der Antwort von POST /coverage, coverage.shareIdentity, Commits 0fa2a665, 2ef75e83, nur lokal); 43-24 erledigt 10.11. (Container zieht nach: DOC_KEY_GENERATION 2 mit einmaligem Neuaufbau aller Schlüssel, Generationssperre in POST /coverage, docKeyFormat 2 im Auftrag, im Body und in der Antwort von POST /coverage, format 2 in der Backfill-Antwort, Commits 4c5f4b3c, 2a30c4bf, nur lokal); 43-25 erledigt 11.11. (Abnahmetest mit mbozem-Topologie, physische Wahrheit über Inode, erwartete Abweichung k=4, Positivkontrolle 3, docKeyFormat 2 im Body von POST /coverage für den Kopf-Container, scripts/ci/e2e_head_proof.sh, Commits 423586d5, aa5a4ade, nur lokal, kein Lauf auf einem Runner); 43-26 erledigt 11.11. (Beine upgrade-rc1 und upgrade-rc1-cf, sieben Beine, rc-Proof parametrisiert; erster Lauf 42991291089 auf a42d2dc6 rot, Fix 1 mit Produktfix in worker/doc_keys.py, Lauf 43016026129 auf 2261167b grün in sieben Beinen, gepusht mit Owner-Freigabe; Auswertung f0ab98f4 nur lokal); nächster Schritt 43-27 (Audit-Nachtrag; Push nur mit Owner-Freigabe, Dispatch nur bei Code-Fix), danach 43-29 (43-28 gestrichen), 43-12 Runde 2, 43-13, 43-14
-Status: Testbuild 1.6.3-rc.1 belegt (43-TESTBUILD.md): Proof-Lauf 42565361965 grün (A5: ok auf HaRP ohne --force-update, A6: ok auf stable33+stable34), Archiv-Lauf 42537119924 (findling.tar.gz 692014 Bytes, SHA-256 fa9c3874..., Ablauf 2026-12-08), Branch rc/1.6.3-rc.1 Kopf 47c4ce4e, Image :655fe197 unveränderlich. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
-Last activity: 2026-11-09
+Phase: 43 (findling-1-6-3-sweep-und-zaehler), abgeschlossen 12.11.2026; Milestone v1.6 komplett (Phasen 37 bis 43)
+Plan: alle Pläne erledigt; Phase 43 mit 27/29 (43-11 abgelöst, 43-28 und 43-29 gestrichen), Phase 42 mit 9 Plänen plus Lückenschluss 42-10; 40-07 bis 40-09 sind nie ausgeführte Entwürfe (abgelöst durch Phase 41)
+Status: Milestone v1.6 complete. Releases: 1.6.0 (29.10.), 1.6.1 (02.11., pypdf), 1.6.2 (04.11.), 1.6.3 (12.11., Tag auf 8b00d610), 1.6.4 (12.11., Fix #51, Tag auf 01db2600), 1.6.5 (16.11., opentelemetry-api, Tag auf 06a0d7c8); Belege in docs/store-listing.md und CHANGELOG.md
+Last activity: 2026-11-21 (Planungsstand vor complete-milestone bereinigt)
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -272,20 +272,22 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-07T13:05:00.000Z
-Stopped at: Completed 43-06-PLAN.md (nächster: 43-07 Push-Checkpoint)
+Last session: 2026-11-21T12:00:00.000Z
+Stopped at: Findling 1.6.5 im Store (Tag v1.6.5 auf 06a0d7c8, 16.11.); v1.6 bereit für complete-milestone
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 41 abgeschlossen und verifiziert (04.11.2026); Belegkette "# Release 1.6.2 (04.11.2026)" in docs/store-listing.md nachgetragen. Nächste Phase: 42 (/gsd:plan-phase 42)
+- /gsd:complete-milestone v1.6 (Phasen 37 bis 43; Nachträge 1.6.4 und 1.6.5 ohne Phase, Belege in docs/store-listing.md)
+- Danach /gsd:new-milestone v1.7: zuerst eine Phase Psalm-Gates (Kriterium 3 aus Phase 42: Psalm mit Taint, php-cs-fixer, zizmor, actionlint; Owner 21.11.2026), dann die Phase Findling 1.7.0
+- v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
+- #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
 - Regel: Store-API (apps.json) höchstens alle 10 Minuten abfragen; 40 Minuten Dauerabfrage führten am 04.11.2026 zu HTTP 429 für die Owner-IP
-- Owner: Forum-Post I1 (Thread 249775, Desktop/Findling_1.6.2_Forum_ENTWURF.md)
+- Regel: Commit-Nachrichten nie mit close/fix/resolve-Schlüsselwort direkt vor einer Issue-Nummer
+- Owner: Forum-Post gebündelt erst, wenn PII Redaction und Audio & Video Search fertig sind (Owner-Entscheid 12.11.2026); Owner postet
 - Owner: UI-Sichtung der Backup-Pause in einer laufenden 1.6.2-Instanz
 - Rückmeldungen auf issue 37, 25 und 44 beobachten (alle drei closed, Antworten gepostet); 33 und 43 offen, 45 als Kandidat für v1.7
-- Regel: Commit-Nachrichten nie mit close/fix/resolve-Schlüsselwort direkt vor einer Issue-Nummer
-- Nachaudit 40-NACHAUDIT.md (efcf26c5..91a0603f) auswerten; Befunde ab MEDIUM in 1.6.1, danach Phase 40 neu verifizieren, Phasenhaken in ROADMAP und Milestone v1.6 schliessen
 - Owner: UI-Sichtung der drei Saetze (plus Gateway-Satz) in einer laufenden 1.6.0-Instanz
 - Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
-- Issue #36 offen lassen bis budachst bestaetigt (dann erst Closes); Forum-Post 1.6.0 nur als Entwurf fuer den Owner (Owner postet)
+- Issue #36 offen lassen bis budachst bestätigt (dann erst Closes)
 - E1/E2: historische Umlaute in docs/audits und docs/measurements als eigener Doku-Commit

@@ -8,7 +8,7 @@
 - [x] **v1.3 Sprachausbau** -- Shipped 2026-09-27 (Phasen 17 bis 23, Archiv: .planning/milestones/v1.3-ROADMAP.md)
 - [x] **v1.4 Leistungsprofile** -- Shipped 2026-10-06 (Phasen 24 bis 29, Archiv: .planning/milestones/v1.4-ROADMAP.md)
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
-- [ ] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- In Arbeit seit 2026-10-28 (Phasen 37 bis 40, Ziel-Einreichung 1.6.0 am 29.10.2026)
+- [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026)
 
 ## Phases
 
@@ -89,13 +89,16 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 
 </details>
 
-### v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (In Arbeit)
+### v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (Shipped 2026-11-16)
 
 - [x] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml
  (completed 2026-10-28)
 - [x] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09) (completed 2026-10-28)
 - [x] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden (completed 2026-10-28)
-- [ ] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps
+- [x] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps (completed 2026-10-29, Store submission 40868132102); die Verifikationslücken aus 40-VERIFICATION.md sind geschlossen: SC1 durch 40-NACHAUDIT.md und die Fixes F-40N-01..04 in 41-01 (ausgeliefert mit 1.6.2, 41-VERIFICATION.md passed), die Restpunkte in deferred-items.md
+- [x] **Phase 41: Findling 1.6.2** - Backup-Pause-Schalter (#37), Backup-Doku, #25-Fixes, Nachaudit-Fixes F-40N-01..04, Store-Einreichung 1.6.2 (completed 2026-11-04)
+- [x] **Phase 42: PHP-Sicherheits-Gates für die Companion-App** - Routen-Attribut-Gate, composer validate/audit, lokales PHPUnit; Kriterium 3 offen als eigene Phase in v1.7 (completed 2026-11-05)
+- [x] **Phase 43: Findling 1.6.3** - Löschlauf unabhängig vom Quiet-Gate, Zähler pro Dokument (#25), Store-Einreichung 1.6.3 (completed 2026-11-12)
 
 ## Phase Details
 
@@ -166,38 +169,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 - [x] 40-05-PLAN.md - Tag v1.6.0, Release-Belegkette, Fremdinstallation, Einreichung 2x HTTP 201, REL-06 abgehakt (REL-06)
 - [x] 40-06-PLAN.md - Issue-#36-Fix-Paket in 1.6.0 (Owner-Entscheid 28.10.): per-File-Gateway-Verdikt statt Pass-Abbruch, Writer-Rollback nach _abort, 422-Log + Suchpfad ohne 5xx (KEIN PHP-404, siehe Plan), Ausfall sichtbar, Kandidat F /status ohne Blockade (laeuft nach 40-03, vor 40-04/40-05)
 
-## Progress
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
-| 1-6 + 06.1 (Archiv) | v1.0 | 103/103 | Complete | 2026-09-07 |
-| 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
-| 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
-| 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
-| 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
-| 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
-| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
-| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete | 2026-10-28 |
-| 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
-| 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 6/6 | Executed, verification pending |  |
-| 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 12/12 | Complete | 2026-11-04 |
-| 43. Findling 1.6.3: Löschlauf und Zähler pro Dokument (#25) | v1.6 | 8/16 | In Progress (nächster: 43-07 Push-Checkpoint) |  |
-
-## Nach v1.3 (Wiedervorlage)
-
-Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter; v1.4-Fokus laut Owner-Linie: BL-F04 SPEED, Vorarbeit-Research und Basiszahlen liegen vor):
-
-- Franzoesisches Koerperfeld (FR hat OCR und Katalog, aber keine lexikalische Kette; v1.4-Kandidat)
-- Getrennte pt_BR/pt_PT-Wortlaute fuer die Suche selbst
-- Niederlaendische Betonungsakzente als eigene `custom_stopword`-Liste
-- Sortierung nach Name oder Groesse (Fast-Field, SCHEMA_VERSION-Sprung; koennte kuenftig mit einem ohnehin faelligen Umbau reisen)
-- Mimetype-Gruppen aus `files.mime`, geplantes Vorwaermen
-- Pro-Schiene (Index-Verschluesselung, External Storage; ISV-Entscheid 03.11.)
-- Estnisch/Daenisch lexikalisch nicht moeglich (tantivy kennt keinen estonian-Stemmer): muss aktiv an die Buerokratt/OS2ai-Outreach-Spur kommuniziert werden, bevor dort falsche Erwartungen entstehen
-- Snapshot `snap-03f1d1d9ad9262704`: Wiedervorlage beim Milestone-Close (Stand 27.09.: bleibt im Standard-Tier, dritter Behalten-Entscheid, ~2,85 USD/Monat; naechste Wiedervorlage beim v1.4-Close)
-- Deferred aus Phase 23: F-23-04 (v1.4-Backlog), idle-Guard EmbeddingModel.release() (v1.4), IN-01..03 dokumentiert
-
-Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
+Nachtrag 21.11.2026: 40-07-PLAN.md bis 40-09-PLAN.md im Phasenordner sind Entwürfe vom 29.10.2026, nie ausgeführt und abgelöst durch Phase 41 (1.6.1 wurde reines pypdf-Security-Release); sie zählen nicht zu den sechs Plänen. Verifikation: 40-VERIFICATION.md (gaps_found) ist geschlossen, SC1 durch 40-NACHAUDIT.md und 41-01, die Restpunkte durch den Nachtrag in deferred-items.md.
 
 ### Phase 41: Findling 1.6.2: Backup-Pause-Schalter (#37), Backup-Doku, #25-Fixes, Nachaudit-Fixes F-40N-01..04, Audit, Owner-Runde, Store-Einreichung
 
@@ -257,12 +229,14 @@ Plans:
 
 Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.
 
+Stand 21.11.2026: Phase abgeschlossen, 42-VERIFICATION.md passed (05.11.2026, Re-Verifikation nach dem Lückenschluss 42-10, dca4478d; 42-10 hat eine SUMMARY, aber keinen eigenen PLAN). Kriterium 3 bleibt offen: als eigene Phase in v1.7 vor 1.7.0, Owner 21.11.2026.
+
 ### Phase 43: Findling 1.6.3: Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
 
 **Goal:** Index-Einträge nicht mehr eingebundener Speicher werden zuverlässig entfernt, auch wenn die Ruhe-Schwelle (quiet_max) den vollen Abgleich blockiert: Stempel und `_sweep_vanished` laufen, sobald eine vollständige Mountliste vorliegt. Die Fortschrittszählung zählt pro Dokument (Speicher-Schlüssel plus Pfad), die PHP-App liefert dafür die Zuordnung storage zu key mit. Danach Audit, Owner-Runde, Store-Einreichung 1.6.3 und Antwort in #25 (erst nach Store-Release).
 **Requirements**: D-43-01, D-43-02, D-43-03, D-43-04, D-43-05, D-43-06, D-43-07, D-43-08, D-43-09, D-43-10, D-43-11, D-43-12, D-43-13, D-43-14, D-43-15, D-43-16, D-43-17
 **Depends on:** Phase 42
-**Plans:** 29 plans
+**Plans:** 27/29 plans complete (43-11 abgelöst, 43-28 und 43-29 gestrichen; Tag v1.6.3 auf 8b00d610, CHANGELOG [1.6.3] - 2026-11-12)
 
 Nachtrag 09.11.2026: mbozem bestätigt dieselbe Freigabe mit verschiedenen Wurzeln (D-43-15) und meldet dieselbe Freigabe in zwei Schreibweisen; D-43-17 = Faltung der Schreibweise von Host und Freigabe (Freigabe Planung 43-21, 43-FREIGABEN.md). Zusatzpläne 43-21 bis 43-29 laufen vor der zweiten Owner-Runde 43-12; Owner-Entscheide OE-1 bis OE-8 in 43-21 Task 1.
 
@@ -275,10 +249,10 @@ Plans:
 - [x] 43-04-PLAN.md: Container-Route POST /coverage mit Hintergrundzählung und Cache (TDD)
 - [x] 43-05-PLAN.md: PHP: Nenner pro Gruppe max(PHP_g, judged_g + phpOnly_g) (D-43-11), Abzüge nur eingebundener Speicher, counting, sichtbarer Fallback 1.6.2
 - [x] 43-06-PLAN.md: Hinweis 7 Tage (D-43-06, D-43-12), Sätze zu Zählung, unlesbaren Dateien und Rückfall, Migration, 16 Kataloge
-- [ ] 43-07-PLAN.md: Pflicht-Abnahme D-43-08 auf Samba-Harness mit unabhängiger Wahrheit, erster Push (Owner)
-- [ ] 43-08-PLAN.md: Bump 1.6.3, CHANGELOG, Upgrade-Zusicherungen, Push (Owner)
-- [ ] 43-09-PLAN.md: Audit Security/Bugs/Performance des 1.6.3-Deltas, Fixes ab MEDIUM
-- [ ] 43-10-PLAN.md: Testbuild 1.6.3-rc.1 als Artefakt ohne Pre-Release (D-43-13), A5 auf HaRP und A6 auf frischer Instanz (Owner-Push)
+- [x] 43-07-PLAN.md: Pflicht-Abnahme D-43-08 auf Samba-Harness mit unabhängiger Wahrheit, erster Push (Owner)
+- [x] 43-08-PLAN.md: Bump 1.6.3, CHANGELOG, Upgrade-Zusicherungen, Push (Owner)
+- [x] 43-09-PLAN.md: Audit Security/Bugs/Performance des 1.6.3-Deltas, Fixes ab MEDIUM
+- [x] 43-10-PLAN.md: Testbuild 1.6.3-rc.1 als Artefakt ohne Pre-Release (D-43-13), A5 auf HaRP und A6 auf frischer Instanz (Owner-Push)
 - [x] 43-11-PLAN.md: Testbuild-Kommentar an mbozem (Owner-Freigabe), Rückmeldung abwarten; abgeschlossen als "abweichend, abgelöst" (Owner 11.11.2026): Kommentar zu rc.1 gepostet, Landebericht von mbozem am 09.11. in #25, die gemeldeten Wurzel- und Schreibweisenfälle sind mit 43-21 bis 43-27 behoben
 - [x] 43-17-PLAN.md: Content-Gateway liest SMB ohne Server-Verschlüsselung nicht blockierend mit Fristen (D-43-16)
 - [x] 43-18-PLAN.md: Container wertet 422 als skipped(unreadable), Fix-Runde 80 s (D-43-16)
@@ -297,5 +271,44 @@ Plans:
 - [x] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (12.11.2026, von Claude im Auftrag des Owners ausgeführt), Belege in docs/store-listing.md "# Release 1.6.3 (12.11.2026)"
 - [x] 43-14-PLAN.md: Antwort in #25 nach Store-Release (Owner-Freigabe, gepostet 12.11.2026), Issue bleibt offen; Schließen nach Bestätigung durch mbozem, offen; Branch rc/1.6.3-rc.1 bleibt
 
+Nachträge ohne Phase:
+- 1.6.4 (12.11.2026): Update-Fix zu Issue #51 (Migration zu 1.6.3 mit "Undefined constant"), Tag v1.6.4 auf 01db2600, store-submit 43215774533 (2x HTTP 201); die fehlerhafte Begleit-App findling 1.6.3 ist aus dem Store entfernt (store-release-delete 43219137034, HTTP 204), findling_backend 1.6.3 bleibt.
+- 1.6.5 (16.11.2026): Sicherheits-Update opentelemetry-api 1.45.1 auf 1.45.2 (CVE-2026-126360), keine funktionalen Änderungen, Tag v1.6.5 auf 06a0d7c8, store-submit 43801394739 (2x HTTP 201).
+- Belege: docs/store-listing.md ("# Release 1.6.4 (12.11.2026)" und "# Release 1.6.5 (16.11.2026)") und CHANGELOG.md.
+
+## Progress
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1-6 + 06.1 (Archiv) | v1.0 | 103/103 | Complete | 2026-09-07 |
+| 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
+| 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
+| 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
+| 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
+| 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
+| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
+| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete | 2026-10-28 |
+| 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
+| 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 6/6 | Complete | 2026-10-29 |
+| 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 12/12 | Complete | 2026-11-04 |
+| 42. PHP-Sicherheits-Gates für die Companion-App | v1.6 | 10/10 (9 Pläne plus Lückenschluss 42-10) | Complete | 2026-11-05 |
+| 43. Findling 1.6.3: Löschlauf und Zähler pro Dokument (#25) | v1.6 | 27/29 (43-28, 43-29 gestrichen) | Complete | 2026-11-12 |
+
+## Nach v1.3 (Wiedervorlage)
+
+Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter; v1.4-Fokus laut Owner-Linie: BL-F04 SPEED, Vorarbeit-Research und Basiszahlen liegen vor):
+
+- Franzoesisches Koerperfeld (FR hat OCR und Katalog, aber keine lexikalische Kette; v1.4-Kandidat)
+- Getrennte pt_BR/pt_PT-Wortlaute fuer die Suche selbst
+- Niederlaendische Betonungsakzente als eigene `custom_stopword`-Liste
+- Sortierung nach Name oder Groesse (Fast-Field, SCHEMA_VERSION-Sprung; koennte kuenftig mit einem ohnehin faelligen Umbau reisen)
+- Mimetype-Gruppen aus `files.mime`, geplantes Vorwaermen
+- Pro-Schiene (Index-Verschluesselung, External Storage; ISV-Entscheid 03.11.)
+- Estnisch/Daenisch lexikalisch nicht moeglich (tantivy kennt keinen estonian-Stemmer): muss aktiv an die Buerokratt/OS2ai-Outreach-Spur kommuniziert werden, bevor dort falsche Erwartungen entstehen
+- Snapshot `snap-03f1d1d9ad9262704`: Wiedervorlage beim Milestone-Close (Stand 27.09.: bleibt im Standard-Tier, dritter Behalten-Entscheid, ~2,85 USD/Monat; naechste Wiedervorlage beim v1.4-Close)
+- Deferred aus Phase 23: F-23-04 (v1.4-Backlog), idle-Guard EmbeddingModel.release() (v1.4), IN-01..03 dokumentiert
+
+Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
+
 ---
-*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*
+*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21.*
