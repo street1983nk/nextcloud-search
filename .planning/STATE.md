@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "44-04 erledigt (Stil-Gate php-cs, Commits fa1836f5, fb231ba1, 1983d958), nächster Plan 44-05 (Owner-Checkpoint)"
-last_updated: "2026-11-21T08:10:00.000Z"
-last_activity: 2026-11-21, 44-04 erledigt, php-cs-fixer-Gate mit Positivkontrolle, Baum stilgrün
+stopped_at: "44-05 erledigt (Commits 6b384a00, 1211162d, 325fb97a, Environments E-11/E-12), nächster Plan 44-06"
+last_updated: "2026-11-21T10:00:00.000Z"
+last_activity: 2026-11-21, 44-05 erledigt, artipacked behoben, vier GitHub-Environments angelegt
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 4
-  percent: 40
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-05 als nächster (10 Pläne, 4 erledigt)
-Status: Executing, Stopp nach 44-04 (Owner-Vorgabe, 44-05 hat Owner-Checkpoint)
-Last activity: 2026-11-21, 44-04 erledigt (Formatierungs-Commit ohne Verhaltensänderung, Job php-cs, Rezept cs und all)
+Plan: 44-06 als nächster (10 Pläne, 5 erledigt)
+Status: Executing, Stopp nach 44-05 (Owner-Vorgabe)
+Last activity: 2026-11-21, 44-05 erledigt (zizmor 0 x artipacked, E-11/E-12 Environments release, app-store, app-store-delete, notify)
 
 ## Performance Metrics
 
@@ -113,6 +113,7 @@ Last activity: 2026-11-21, 44-04 erledigt (Formatierungs-Commit ohne Verhaltens�
 - Phasenordner 37 bis 43 bleiben unter .planning/phases/ (Verweise aus Code und Doku).
 - 44-01 (21.11.2026): Owner-Entscheide E-01 bis E-08 in 44-OWNER-DECISIONS.md, strenger als die Empfehlung: zizmor-Persona auditor und shellcheck inkl. info/style als Gate ohne Abschwächung; secrets-outside-env (10) geht in 44-05 Task 2 an den Owner; 44-06 jetzt mit bedingtem Checkpoint.
 - 44-02 (21.11.2026, 4f51f090): Psalm 6.20.10 in php/tools/psalm, Job psalm-taint (v33.0.9, v34.0.6, v35.0.3), Gate zählt SARIF selbst und löst Regelnamen über tool.driver.rules auf (ruleId ist numerisch); 0 Befunde je Tag, kein Checkpoint; Baumhash PHP 132/ab283cdd. Offen: jq fehlt in php:8.3-cli (44-03), test_store_metadata Store-Listing-Wortregel schon vorher rot (deferred-items.md). E-07-Owner-Zusatz: ocp, shim, custom-fixers ausdrücklich freigegeben.
+- 44-05 (21.11.2026, 325fb97a): Ist-Lauf zizmor auditor 68 und actionlint 19 deckungsgleich mit RESEARCH, kein unbekannter Befund; E-11 vier Environments (release, app-store, app-store-delete mit Reviewer street1983nk, notify; Policy main und v*), 44-06 setzt environment an die Jobs; E-12 NTFY_TOPIC bleibt Repo-Secret, in 44-09 Task 3 nur APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY löschen; 53/53 checkouts mit persist-credentials false.
 
 ### Decisions (Roadmap v1.6)
 
@@ -293,8 +294,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-21T04:40:32.977Z
-Stopped at: 44-01 erledigt, nächster Plan 44-02 (nicht gestartet)
+Last session: 2026-11-21T10:00:00.000Z
+Stopped at: 44-05 erledigt, nächster Plan 44-06
 Resume file: None
 
 ## Operator Next Steps

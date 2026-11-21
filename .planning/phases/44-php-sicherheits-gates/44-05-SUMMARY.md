@@ -1,12 +1,28 @@
 ---
 phase: 44-php-sicherheits-gates
 plan: 05
-status: checkpoint-task-2
+subsystem: ci
+tags: [zizmor, actionlint, github-actions, environments, artipacked]
+requires: [44-04]
+provides: [checkout ohne persistierte Zugangsdaten, GitHub-Environments release/app-store/app-store-delete/notify]
+affects: [44-06, 44-07, 44-09]
+key-files:
+  modified:
+    - .github/actions/setup-test-nc/action.yml
+    - .github/workflows/*.yml (15 Dateien laut Plan)
+    - .planning/phases/44-php-sicherheits-gates/44-OWNER-DECISIONS.md
+decisions:
+  - "E-11: vier Environments (release, app-store, app-store-delete mit Reviewer, notify), Policy Branch main und Tag v*"
+  - "E-12: NTFY_TOPIC bleibt Repo-Secret, notify ohne eigenes Secret, in 44-09 nicht löschen"
+requirements: [PRUEF-04]
+completed: 2026-11-21
 ---
 
-# Phase 44 Plan 05: Workflow-Befunde Teil 1 (Zwischenstand am Checkpoint Task 2)
+# Phase 44 Plan 05: Workflow-Befunde Teil 1 Summary
 
-Stand: 21.11.2026, HEAD 7c860fbb. Task 1 erledigt, Task 2 wartet auf den Owner, Task 3 offen.
+Ist-Lauf zizmor (auditor) und actionlint deckt sich vollständig mit RESEARCH (kein unbekannter Befund); Owner hat vier GitHub-Environments angelegt (E-11, E-12); alle 53 actions/checkout-Schritte tragen jetzt `persist-credentials: false`, zizmor meldet 0 x artipacked.
+
+Stand: 21.11.2026. Commits: 6b384a00 (Task 1, Befundliste), 1211162d (E-11, E-12), 325fb97a (Task 3). Kein Push.
 
 ## Task 1: Ist-Lauf
 
@@ -144,4 +160,53 @@ Kein unbekannter Befund. Arbeitsbaum unter .github unverändert (`git status --p
 - `gh api repos/street1983nk/nextcloud-search/environments`: total_count 0, es gibt noch kein Environment.
 - Repo-Secrets (Namen): APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY, NTFY_TOPIC.
 
-Die Owner-Antworten (E-11 ff., da E-09 und E-10 bereits vergeben sind) und der Lesebeleg nach dem Anlegen folgen nach dem Checkpoint.
+### Owner-Antworten (E-11 ff., da E-09 und E-10 bereits vergeben sind)
+
+- E-11 "4 Environments (Empf.)": environment für alle vier Jobs.
+- E-12 "Behalten, später einrichten": notify ohne eigenes Secret, NTFY_TOPIC bleibt Repo-Secret.
+
+Wortlaut und Konsequenzen in 44-OWNER-DECISIONS.md. Teil B: kein unbekannter Befund.
+
+### Lesebeleg nach dem Anlegen (21.11.2026, `gh api`, nur Namen)
+
+| Environment | deployment_branch_policy | Regeln | Secrets (Namen) | Schutz |
+|-------------|--------------------------|--------|-----------------|--------|
+| release | custom_branch_policies true, protected_branches false | main (branch), v* (tag) | APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY | nur branch_policy |
+| app-store | wie oben | main (branch), v* (tag) | APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY | nur branch_policy |
+| app-store-delete | wie oben | main (branch), v* (tag) | APPSTORE_TOKEN | required_reviewers [street1983nk] |
+| notify | wie oben | main (branch), v* (tag) | keine (E-12) | nur branch_policy |
+
+Repo-Secrets weiterhin vorhanden: APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY, NTFY_TOPIC.
+
+### Zuordnung für 44-06 und 44-09
+
+| Workflow/Job | `environment:` (44-06) | Repo-Secret löschen in 44-09 Task 3 |
+|--------------|------------------------|-------------------------------------|
+| release.yml/archives | release | APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY |
+| store-submit.yml/submit | app-store | APPSTORE_TOKEN (und die beiden Schlüssel, s. o.) |
+| store-release-delete.yml/remove | app-store-delete | APPSTORE_TOKEN |
+| issue-notify.yml/notify | notify | nein, NTFY_TOPIC bleibt (E-12) |
+
+## Task 3: persist-credentials
+
+- `persist-credentials: false` an allen 49 gemeldeten checkout-Schritten (Verteilung wie im Plan), eingefügt unter bestehendem `with:` bzw. mit neuem `with:`; englischer Kommentar nur an der ersten Stelle je Datei, in deploy-harp.yml keiner.
+- probe-92d.yml Z. 115 (`git fetch` eines Release-Tags von origin): kein explizites Token, Repo öffentlich, anonymer fetch reicht (A6); Beleg folgt mit dem CI-Lauf in 44-09. Kein Workflow pusht per git; `submodules: recursive` läuft innerhalb des checkout-Schritts und ist von der Option nicht betroffen.
+- Zählung: `uses: actions/checkout@` 53, `persist-credentials: false` 53 (über .github/workflows/*.yml und setup-test-nc/action.yml; 49 neu plus scorecard 1 und php psalm-taint/php-cs/composer-hygiene 3).
+- zizmor nach dem Edit: 0 x artipacked; Rest 19 Befunde (10 secrets-outside-env, 4 dependabot-cooldown, 1 excessive-permissions, 2 cache-poisoning, 2 unpinned-images), alle für 44-06 vorgesehen.
+- actionlint unverändert 19 shellcheck-Zeilen (44-06).
+- deploy-harp.yml: 506064 Byte (Grenze 512000).
+- pytest test_workflow_pins, test_workflow_size, test_workflow_tag_triggers, test_workflow_contexts, test_php_supply_chain_gates: 81 passed.
+
+## Deviations from Plan
+
+1. Neue Owner-IDs beginnen bei E-11 statt E-09, weil E-09 und E-10 schon vor 44-03 vergeben wurden.
+2. Die zizmor-Langausgabe (988 Zeilen) steht nicht in der SUMMARY, sondern die vollständige Fundstellenliste (68 Zeilen) mit Zählung; actionlint vollständig.
+3. Die Einfügung lief über ein Hilfsskript im Scratchpad (nicht im Repo), Ergebnis per Diff und Zählung geprüft.
+
+## Threat Flags
+
+Keine neue Angriffsfläche. Hinweis: store-release-delete.yml wartet nach 44-06 auf die Freigabe durch street1983nk (Required reviewer).
+
+## Self-Check: PASSED
+
+Commits 6b384a00, 1211162d, 325fb97a vorhanden; alle geänderten Dateien vorhanden.
