@@ -162,3 +162,10 @@ Keine neue Angriffsfläche. T-44-12 (Cache), T-44-13 (cooldown), T-44-14 (Psalm-
 ## Self-Check: PASSED
 
 Commits 6e956930 und ec3b3743 vorhanden; alle geänderten Dateien vorhanden; test_php_route_gate_presence.py unverändert; einzige Disable-Zeile unter .github trägt E-13. Offen: zizmor-Wiederholung nach dem docker.yml-Fix (RAM-Schwelle).
+
+## Nachtrag 21.11.2026: zizmor nach dem docker.yml-Fix
+
+- Freier RAM vor dem Lauf: MemFree 3812620 KiB, unter der Docker-Schwelle 4194304 KiB, keine Container aktiv. Daher ohne Container: `uvx zizmor==1.32.0` (gleiche Version wie das freigegebene Image, `--version` meldet "zizmor 1.32.0").
+- Aufruf über den Stand nach ec3b3743: `zizmor --offline --no-progress --persona auditor --min-severity medium --format plain .`
+- Ergebnis: alle 19 Dateien unter .github geprüft (dependabot.yml, setup-test-nc/action.yml, 17 Workflows inklusive docker.yml), "No findings to report. Good job! (238 ignored)", Exit 0. Zahl der ignorierten Befunde wie vor dem docker.yml-Fix.
+- Der offene Punkt aus Task 3 und Self-Check ist damit erledigt.
