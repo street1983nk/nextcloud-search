@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: milestone_complete
-stopped_at: "Findling 1.6.5 im Store (Tag v1.6.5 auf 06a0d7c8, 16.11.); v1.6 bereit für complete-milestone"
-last_updated: "2026-11-21T12:00:00.000Z"
-last_activity: 2026-11-21
+status: Awaiting next milestone
+stopped_at: "Zwischen Milestones: v1.6 abgeschlossen und archiviert (21.11.2026), nächster Schritt /gsd:new-milestone v1.7"
+last_updated: "2026-11-21T13:00:00.000Z"
+last_activity: 2026-11-21 (Milestone v1.6 abgeschlossen und archiviert)
 progress:
   total_phases: 7
   completed_phases: 7
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
+Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONES.md (v1.0 bis v1.6).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Milestone v1.6 abgeschlossen (Phasen 37 bis 43, zuletzt 1.6.5 im Store), nächster Schritt /gsd:complete-milestone v1.6
+**Current focus:** Zwischen Milestones. v1.6 abgeschlossen und archiviert (.planning/milestones/v1.6-*), nächster Schritt /gsd:new-milestone v1.7
 
 ## Current Position
 
-Phase: 43 (findling-1-6-3-sweep-und-zaehler), abgeschlossen 12.11.2026; Milestone v1.6 komplett (Phasen 37 bis 43)
-Plan: alle Pläne erledigt; Phase 43 mit 27/29 (43-11 abgelöst, 43-28 und 43-29 gestrichen), Phase 42 mit 9 Plänen plus Lückenschluss 42-10; 40-07 bis 40-09 sind nie ausgeführte Entwürfe (abgelöst durch Phase 41)
-Status: Milestone v1.6 complete. Releases: 1.6.0 (29.10.), 1.6.1 (02.11., pypdf), 1.6.2 (04.11.), 1.6.3 (12.11., Tag auf 8b00d610), 1.6.4 (12.11., Fix #51, Tag auf 01db2600), 1.6.5 (16.11., opentelemetry-api, Tag auf 06a0d7c8); Belege in docs/store-listing.md und CHANGELOG.md
-Last activity: 2026-11-21 (Planungsstand vor complete-milestone bereinigt)
+Phase: Milestone v1.6 complete (Phasen 37 bis 43)
+Plan: keiner
+Status: Zwischen Milestones, nächster Schritt /gsd:new-milestone v1.7
+Last activity: 2026-11-21, Milestone v1.6 abgeschlossen und archiviert (zuletzt 1.6.5 im Store, Tag v1.6.5 auf 06a0d7c8)
 
 Progress: [██████████] 100%
 
@@ -270,16 +270,27 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 41 P11 | Owner-Lauf, Abschluss ca. 10 min (Doku) | 3 tasks | 3 files |
 | Phase 43 P06 | ca. 80 min | 2 tasks | 31 files |
 
+Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag zum Abschluss von v1.6, audit-open meldete 13 offene Punkte):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | issue14-acl-unreadable | diagnosed (unverändert seit v1.5-Close) |
+| quick_task | 260929-kii, 260929-s7p, 261001-vl0, 261002-93i, 261002-af9, 261002-cvf, 261003-d3y, 261003-wxg | missing (Altlasten v1.4, unverändert seit v1.5-Close) |
+| quick_task | 261005-vit-vollindex-term | unknown (Altlast v1.4) |
+| verification | 38-VERIFICATION.md | human_needed (4/4 verifiziert; Owner-Kommunikation, #33 am 08.11. geschlossen) |
+| verification | 39-VERIFICATION.md | human_needed (5/5 verifiziert; Textabnahme und UI-Sichtung durch den Owner, kein Code-Gap) |
+| verification | 40-VERIFICATION.md | gaps_found (geschlossen über 40-NACHAUDIT.md und 41-01, Restpunkte in deferred-items.md der Phase 40) |
+
 ## Session Continuity
 
-Last session: 2026-11-21T12:00:00.000Z
-Stopped at: Findling 1.6.5 im Store (Tag v1.6.5 auf 06a0d7c8, 16.11.); v1.6 bereit für complete-milestone
+Last session: 2026-11-21T13:00:00.000Z
+Stopped at: Zwischen Milestones: v1.6 abgeschlossen und archiviert, nächster Schritt /gsd:new-milestone v1.7
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:complete-milestone v1.6 (Phasen 37 bis 43; Nachträge 1.6.4 und 1.6.5 ohne Phase, Belege in docs/store-listing.md)
-- Danach /gsd:new-milestone v1.7: zuerst eine Phase Psalm-Gates (Kriterium 3 aus Phase 42: Psalm mit Taint, php-cs-fixer, zizmor, actionlint; Owner 21.11.2026), dann die Phase Findling 1.7.0
+- /gsd:new-milestone v1.7: zuerst eine Phase PHP-Sicherheits-Gates (Kriterium 3 aus Phase 42: Psalm mit Taint, php-cs-fixer, zizmor, actionlint; Owner 21.11.2026), dann die Phase Findling 1.7.0 (Fork-PRs #56 und #57 von foolfitz, gekürzte Store-Texte beider Apps, Issue #45; Ziele in PROJECT.md "Next Milestone Goals")
+- body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
 - Regel: Store-API (apps.json) höchstens alle 10 Minuten abfragen; 40 Minuten Dauerabfrage führten am 04.11.2026 zu HTTP 429 für die Owner-IP

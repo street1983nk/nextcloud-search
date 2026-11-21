@@ -213,6 +213,32 @@
 - Verifikation der mittleren Phasen (31-33) blieb bis zum Milestone-Close liegen (Status "verification pending" ueber Wochen); Phasen-Verifier direkt nach Phasenende fahren, nicht gesammelt am Schluss
 - Die automatische Accomplishment-Extraktion des Milestone-CLI liefert Abweichungszeilen statt One-Linern; der MILESTONES.md-Eintrag muss weiterhin von Hand geschrieben werden
 
+## Milestone: v1.6, Store-Sichtbarkeit und Betriebs-Feinschliff
+
+**Shipped:** 2026-11-16 (1.6.0 eingereicht 2026-10-29, zuletzt 1.6.5; geschlossen 2026-11-21)
+**Phases:** 7 | **Plans:** 63 | **Commits:** 468
+
+### What Was Built
+
+- Store-Sichtbarkeit ("Findling Search", discussion-Link, Cross-Promo-Satz) nach einer gebündelten Remote-Owner-Runde
+- Zertifikatsrotation ohne Re-Register und ohne Container-Neustart (Tunnel-Wächter vor frpc, CI-Probe mit echter CA-Neuausstellung)
+- Ausschluss-Anzeige, Dedup Weg C, Doku-Hygiene; Backup-Pause-Schalter mit Backup-Doku; PHP-Sicherheits-Gates mit dem Server-Router als Orakel
+- Löschlauf unabhängig vom Quiet-Gate und Zählung pro Dokument über die Freigabe-Identität; sechs Store-Releases 1.6.0 bis 1.6.5
+
+### What Worked
+
+- Eine Remote-Owner-Runde mit Empfehlung je Punkt ("wie empfohlen") trug den ganzen Milestone-Start trotz Reise des Owners
+- Verifikationslücke Phase 40 nicht weggeredet, sondern per Nachaudit geschlossen; die Befunde reisten mit 1.6.2
+- Orakel statt Nachbildung: das Routen-Gate fragt den Reflector des Servers und fand dadurch Schreibweisen-Fälle
+- Abnahmetest mit physischer Wahrheit (Inode auf dem Samba-Host) statt Speicher-IDs; Melder-Fälle (mbozem) direkt als Topologie nachgebaut
+
+### What Did Not Work / Lessons
+
+- Der Milestone wuchs nach dem Kernrelease 1.6.0 um drei Phasen und drei Nachtrags-Releases; ein Milestone-Schnitt direkt nach 1.6.0 wäre klarer gewesen
+- 1.6.3 der Begleit-App brach das Update (#51, Migration nannte eine App-Klasse); Lehre: Migrationen nennen keine App-Klassen, CI-Job "Store update in one process"
+- Phase 43 lief bis 29 Pläne mit abgelösten und gestrichenen Plänen; rc-Testbuilds an Melder brauchen eine feste Abbruchregel
+- Kein Milestone-Audit; Nachweise liegen verstreut in Phasen-VERIFICATIONs, Nachaudit und Store-Belegen
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -225,6 +251,7 @@
 | v1.3 | 7 (17-23) | 69 | Sicherheitsbedingung als Phasenreihenfolge (17-18-19); Owner-Tor als eigene erste Phase; auto_advance-Ketten (ganze Phasen in einer Session); secure-phase je Milestone-Abschluss |
 | v1.4 | 6 (24-29) | 78 | Community-Issue (#18) als Release-Treiber; Checkpoint-Woertlichkeit; serielle src-Wellen gegen die Baumhash-Ratsche |
 | v1.5 | 7 (30-36) | 79 | Schema-Buendelung in der ersten Phase; Angriffs-Korpus als xfail(strict)-Treppe; Wortlaut-Plaene vor dem Bau; Review+Verifier nach Release, vor Close |
+| v1.6 | 7 (37-43) | 63 | Remote-Owner-Runde mit Empfehlung je Punkt; Nachaudit bei Verifikationslücke; Orakel-Gates gegen den Server; Nachtrags-Releases ohne Phase |
 
 ### Cumulative Quality
 
@@ -236,6 +263,7 @@
 | v1.3 | ~3.000 Python + PHP-Suite | 7/7 Tag-Laeufe gruen; Audit 0 CRIT / 0 HIGH; secure-phase SECURED 46/46; CI 6/6 inkl. HaRP |
 | v1.4 | ~5.000 Python + 666 PHP | Audit 0 CRIT / 0 HIGH (F-29-01 vor Release gefixt); secure-phase 28 = 71/71, 29 = 65/65; Submission 2x HTTP 201 |
 | v1.5 | 6.177 Python + 846 PHP | Audit 36: 0 CRIT/HIGH/MEDIUM; Code-Review 0 Critical; Verifier 5/5; 8 CI-Workflows gruen; Submission 2x HTTP 201 mit Gegenprobe |
+| v1.6 | PHP-Suite 1197 Tests (Phase 43) + Python-Suite | Audit 40 0 CRIT/HIGH/MEDIUM plus Nachaudit; Verifier 41/42 passed; sieben Tag-Läufe grün bei 1.6.0 und 1.6.2; Store-Belege je Release in docs/store-listing.md |
 
 ### Top Lessons (Verified Across Milestones)
 

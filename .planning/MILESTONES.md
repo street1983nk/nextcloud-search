@@ -1,5 +1,31 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (Shipped: 2026-11-16)
+
+**Delivered:** Findling 1.6.0 bis 1.6.5 im Nextcloud App Store (beide Apps; 1.6.0 am 29.10. über store-submit 40868132102 mit 2x HTTP 201, Tag v1.6.0 auf 91a0603f; zuletzt 1.6.5 am 16.11. über 43801394739, Tag v1.6.5 auf 06a0d7c8): Anzeigename "Findling Search" mit discussion-Link und Cross-Promo-Satz zum MCP Connector, Zertifikatsrotation ohne Re-Register und ohne Container-Neustart (#33), Erklärsatz und Stand-Hinweis an den Ausschluss-Zählern, Dedup Weg C, Backup-Pause-Schalter (#37), PHP-Sicherheits-Gates für die Companion-App, Löschlauf unabhängig vom Quiet-Gate und Zählung pro Dokument über die Freigabe-Identität (#25).
+
+**Phases completed:** 37 bis 43 (7 Phasen, 63 Pläne)
+
+**Timeline:** 28.10. bis 21.11.2026 (468 Commits, 400 Dateien, ~74.000 Zeilen)
+
+**Key accomplishments:**
+
+- Owner-Tor in einer Remote-Runde (D-37-01 bis D-37-09), Store-Sichtbarkeit mit Gates für IDs, Namen, discussion-Link und Cross-Promo-Satz in beiden info.xml (STORE-01/02, DEDUP-01)
+- Tunnel-Wächter vor frpc: x509 erkennen, ratenbegrenzt mit Abhilfe melden, gedeckelter Neustart nur bei geänderten Dateien; CI-Probe mit echter CA-Neuausstellung und Positivkontrolle, Heilung in 8 bis 19 s (ZERT-01/02, #33)
+- Ausschluss-Anzeige in 16 Katalogen, Dedup Weg C (Abdeckung je Schlüssel), Messung A6/A7 in CI, Weg A verworfen und Weg B auf v1.7 vertagt; Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden (ANZE-01/02, DEDUP-02, DOCS-01/02)
+- 1.6.0 mit Audit-Gate 0 CRIT/HIGH/MEDIUM, Upgrade-Strecke ab v1.5.0, Issue-#36-Paket und Owner-GO (REL-06); Nachaudit 40-NACHAUDIT.md, Fixes F-40N-01..04 in 1.6.2
+- 1.6.2: Backup-Pause über occ und Admin-Schalter (WAL-Checkpoint, Tantivy-Commit, übersteht Neustarts), Backup-Doku DE/EN/FR, embeddedLeftOut über 100 000 (#25, #37)
+- Phase 42: Routen-Attribut-Gate gegen den Router des Servers als Orakel, composer validate/audit, lokales PHPUnit; Kriterium 3 (Psalm Taint, php-cs-fixer, zizmor, actionlint) als eigene Phase in v1.7 zugesagt
+- 1.6.3: Löschlauf mit eigenem Stempel, Dokumentschlüssel Format 2 über die Freigabe-Identität, Abnahmetest mit sieben Beinen auf Samba-Harness; 1.6.4 Update-Fix #51, 1.6.5 Sicherheits-Update opentelemetry-api
+
+**Nachweise:** kein v1.6-MILESTONE-AUDIT; Nachweise: Phase-VERIFICATIONs 41/42, 40-NACHAUDIT, Store-Belege docs/store-listing.md.
+
+**Vorbehalte:** 38-VERIFICATION und 39-VERIFICATION stehen auf human_needed (Owner-Kommunikation und UI-Sichtung, kein Code-Gap; #33 am 08.11. geschlossen), 40-VERIFICATION auf gaps_found (geschlossen über 40-NACHAUDIT.md und 41-01, Restpunkte in deferred-items.md), Phase 43 ohne VERIFICATION-Datei (Abnahme über 43-ABNAHME.md und 43-AUDIT.md); 1.6.3 der Begleit-App wurde aus dem Store entfernt und durch 1.6.4 ersetzt; Dedup Weg B und Kriterium 3 aus Phase 42 nach v1.7.
+
+Known deferred items at close: 13 (see STATE.md Deferred Items)
+
+---
+
 ## v1.5 Umsteiger-Release (Shipped: 2026-10-28)
 
 **Delivered:** Findling 1.5.0 im Nextcloud App Store (beide Apps, Submission-Lauf 39598694849 mit 2x HTTP 201 am 21.10., Tag v1.5.0 auf 6c953a76; 1.5.1 als Nachzuegler ebenfalls im Store): Tschechisch als siebte Suchsprache (Stoppliste aus Lucene, cs ausserhalb Snowball, OCR-Option ces), sechs neue Dateitypen (DOC, XLS, Mails/EML, ZIP mit Auszug der inneren Datei, HEIC/HEIF) samt Nachholweg fuer Bestandsinstallationen, Typ- und Ordnerfilter in der Unified Search, Ausschlussmuster mit bitparallelem Matcher (#22) und sichtbare Grenzwerte (#21), dreisprachige Umstiegs-Seite vom fulltextsearch-Framework mit Admin-Banner bei Parallelbetrieb, Aehnliche-Dokumente-Ansicht, Launch-Haertung mit boesartigem Formatkorpus (blocked_malicious ueber die ganze Kette) und bewiesener Upgrade-Strecke.
