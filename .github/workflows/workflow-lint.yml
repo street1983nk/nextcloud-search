@@ -1,0 +1,100 @@
+name: Workflow security lint
+
+# The workflow security gate of phase 44 (requirement PRUEF-04). Two jobs judge
+# every workflow, the composite action under .github/actions and dependabot.yml
+# with scripts/ci/workflow_lint_gate.sh:
+#
+#   zizmor      security audit with the persona auditor (owner decision E-04),
+#               red on any finding of severity medium or above. It runs
+#               offline: the job holds no token, the run is the same as the
+#               local recipe, and the audits that need the GitHub API (known
+#               vulnerable action versions and the like) are left out on
+#               purpose. That is a known limit of this gate.
+#   actionlint  syntax, expressions and shellcheck over every run block, red on
+#               shellcheck findings of every severity, including info and style
+#               (owner decision E-03).
+#
+# Each job also runs its tool against .github/fixtures/workflow-lint-probe.yml,
+# a workflow that is unsafe on purpose, and turns red when the tool does not
+# report it: a gate that cannot see the probe is blind.
+#
+# Why a workflow of its own and not a job in security.yml: security.yml starts
+# on pushes to main and on pull requests only, so a branch commit without a pull
+# request would never meet the gate. This one starts on every branch, on pull
+# requests and on release tags, whenever something under .github changes.
+#
+# No SARIF upload to code scanning (owner decision E-05): the jobs need nothing
+# but contents: read, and the SARIF format would also swallow the exit codes the
+# gate depends on.
+#
+# No schedule: both tools are pinned by digest and the audit runs offline, so a
+# weekly run over an unchanged tree could find nothing new. A new tool version
+# arrives as a commit that changes the digests, and that commit runs the gate.
+#
+# The tools run with docker run and not as a job container: the actionlint
+# image has no bash and runs as an unprivileged user, the zizmor image is
+# minimal, and neither is a good home for actions/checkout. The workspace is
+# mounted read only and the container has no network, exactly like the local
+# recipe scripts/dev/php_gates_docker.sh workflows.
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+    paths:
+      - '.github/**'
+      - 'scripts/ci/workflow_lint_gate.sh'
+  pull_request:
+    paths:
+      - '.github/**'
+      - 'scripts/ci/workflow_lint_gate.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor (persona auditor, medium and above)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Released by the owner with this digest (decision E-07 of phase 44).
+      - name: zizmor over the repository, then against the probe
+        env:
+          ZIZMOR_IMAGE: ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d
+        run: |
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}:/repo:ro" -w /repo \
+            --entrypoint sh "${ZIZMOR_IMAGE}" scripts/ci/workflow_lint_gate.sh zizmor
+
+  actionlint:
+    name: actionlint (shellcheck of every severity)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The checkout keeps .git, which actionlint needs to find the project.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Released by the owner with this digest (decision E-07 of phase 44). The
+      # shellcheck that judges the run blocks comes from this image (0.11.0),
+      # not from the runner.
+      - name: actionlint over the workflows, then against the probe
+        env:
+          ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        run: |
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}:/repo:ro" -w /repo \
+            --entrypoint sh "${ACTIONLINT_IMAGE}" scripts/ci/workflow_lint_gate.sh actionlint

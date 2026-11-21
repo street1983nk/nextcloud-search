@@ -6,15 +6,18 @@
 #
 #     scripts/dev/php_gates_docker.sh psalm
 #     scripts/dev/php_gates_docker.sh cs
+#     scripts/dev/php_gates_docker.sh workflows
 #     scripts/dev/php_gates_docker.sh all
 #
-#   psalm  the job psalm-taint: scripts/ci/psalm_taint_gate.sh once per
-#          nextcloud/ocp tag of the job matrix, serially
-#   cs     the job php-cs: scripts/ci/php_cs_gate.sh in php:8.2-cli
-#   all    every gate this script knows, serially (today: psalm, then cs)
+#   psalm      the job psalm-taint: scripts/ci/psalm_taint_gate.sh once per
+#              nextcloud/ocp tag of the job matrix, serially
+#   cs         the job php-cs: scripts/ci/php_cs_gate.sh in php:8.2-cli
+#   workflows  the jobs zizmor and actionlint of .github/workflows/
+#              workflow-lint.yml: scripts/ci/workflow_lint_gate.sh once in the
+#              zizmor image and once in the actionlint image, serially
+#   all        every gate this script knows, serially: psalm, cs, workflows
 #
-# The subcommand workflows (zizmor and actionlint) is added by a later plan of
-# phase 44. An unknown subcommand ends with exit 2.
+# An unknown subcommand ends with exit 2.
 #
 # How a run is arranged, and why:
 #
@@ -35,6 +38,10 @@
 #     cache directory mounted at the identical path, so every path the gate
 #     passes along means the same file on both sides. The style gate needs no
 #     jq and runs inside php:8.2-cli as a whole.
+#   - The workflow gate needs no mirror: workflows and shell scripts are LF in
+#     every checkout (.gitattributes), and actionlint wants the .git directory.
+#     The repository is mounted read only, without network, exactly as the CI
+#     job mounts its workspace; the images are the ones of workflow-lint.yml.
 #
 # FINDLING_PHP_GATES_DIR overrides where the cache directory lives (default
 # ${TMPDIR:-/tmp}/findling-php-gates). Each leg rebuilds the mirror; only the
@@ -54,6 +61,10 @@ PHP_WORKFLOW="${REPO_ROOT}/.github/workflows/php.yml"
 COMPOSER_IMAGE="composer:2@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93"
 PHP83_IMAGE="php:8.3-cli@sha256:9e2a4e9b1704c05cc469fddbf9b0f0f205e2bb13efd249bbad177289ebdc5c7c"
 PHP82_IMAGE="php:8.2-cli@sha256:842748bc4526d4c3c56501fd314e2d75d1005e8a45b7a40f9768ee820df0a6d6"
+# The workflow tools, released by the owner with these digests (decision E-07
+# of phase 44) and identical to the images of workflow-lint.yml.
+ZIZMOR_IMAGE="ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d"
+ACTIONLINT_IMAGE="rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667"
 
 say() {
 	echo "php_gates_docker: $*"
@@ -65,13 +76,13 @@ die() {
 }
 
 usage() {
-	echo "usage: scripts/dev/php_gates_docker.sh psalm|cs|all" >&2
+	echo "usage: scripts/dev/php_gates_docker.sh psalm|cs|workflows|all" >&2
 	exit 2
 }
 
 [ "$#" -eq 1 ] || usage
 case "$1" in
-	psalm | cs | all) COMMAND="$1" ;;
+	psalm | cs | workflows | all) COMMAND="$1" ;;
 	*) usage ;;
 esac
 
@@ -197,11 +208,34 @@ run_cs_gate() {
 	say "php-cs-fixer gate green"
 }
 
+# The workflow gate, one container per tool, one after the other. The images
+# carry sh but no bash, so the gate script is POSIX sh and is started with sh.
+run_workflow_gate() {
+	local repo_mount
+	repo_mount=$(to_mount_path "${REPO_ROOT}")
+	local tool image
+	for tool in zizmor actionlint; do
+		case "${tool}" in
+			zizmor) image="${ZIZMOR_IMAGE}" ;;
+			actionlint) image="${ACTIONLINT_IMAGE}" ;;
+		esac
+		say "workflow gate: ${tool}"
+		if ! MSYS_NO_PATHCONV=1 docker run --rm --network none \
+			-v "${repo_mount}:/repo:ro" -w /repo \
+			--entrypoint sh "${image}" scripts/ci/workflow_lint_gate.sh "${tool}"; then
+			die "workflow gate is red (${tool})"
+		fi
+	done
+	say "workflow gate green (zizmor, actionlint)"
+}
+
 case "${COMMAND}" in
 	psalm) run_psalm_gate ;;
 	cs) run_cs_gate ;;
+	workflows) run_workflow_gate ;;
 	all)
 		run_psalm_gate
 		run_cs_gate
+		run_workflow_gate
 		;;
 esac

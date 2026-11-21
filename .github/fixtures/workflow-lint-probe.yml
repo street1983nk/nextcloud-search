@@ -1,0 +1,35 @@
+# Positive control of the workflow security gate (phase 44, requirement
+# PRUEF-04). This file is unsafe on purpose and must stay that way.
+#
+# scripts/ci/workflow_lint_gate.sh runs zizmor and actionlint against this file
+# on every run of the gate and expects both tools to report it: zizmor at least
+# one finding of severity medium (template injection below is high), actionlint
+# exit 1 with the shellcheck rule SC2086 in its output. If either tool stops
+# seeing these faults, the gate is blind and turns red.
+#
+# The file lives under .github/fixtures, outside .github/workflows and
+# .github/actions: GitHub never runs it, zizmor does not collect it when it
+# audits the repository root, and test_workflow_pins.py does not scan it.
+# Do not move it, do not fix it.
+name: Workflow lint probe
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # artipacked: the token stays in .git/config of the checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # template-injection: an attacker controlled title runs as shell code.
+      - run: echo "${{ github.event.issue.title }}"
+      # An undefined steps property, reported by actionlint itself.
+      - run: echo "${{ steps.missing.outputs.value }}"
+      # SC2086, severity info: an unquoted variable. It proves that shellcheck
+      # runs and that its threshold includes info and style.
+      - env:
+          PROBE_VALUE: probe
+        run: echo $PROBE_VALUE
