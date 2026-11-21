@@ -67,6 +67,17 @@ on:
       # The glob covers docs/l10n-catalogues.md and every language document in
       # one line.
       - 'docs/l10n-*.md'
+      # And once more for the workflows themselves, since phase 44 (owner
+      # decision E-06). backend/tests/test_php_static_gates.py holds the jobs
+      # psalm-taint and php-cs of php.yml and the jobs of workflow-lint.yml in
+      # place, and test_workflow_pins.py, test_workflow_tag_triggers.py,
+      # test_workflow_contexts.py and test_workflow_size.py judge every workflow.
+      # A commit that touched nothing but a workflow, say one that deleted a
+      # gate job, would start none of them and pass until the next Monday.
+      # dependabot.yml comes along because the supply chain gate of
+      # test_php_supply_chain_gates.py reads it.
+      - '.github/workflows/**'
+      - '.github/dependabot.yml'
   pull_request:
     paths:
       - 'backend/**'
@@ -84,6 +95,10 @@ on:
       # Same reason as in the push list above: the rule table gate and the
       # vocabulary exceptions have to see the l10n documents they judge.
       - 'docs/l10n-*.md'
+      # Same reason as in the push list above: the structural gates of the
+      # workflows have to see the workflows (owner decision E-06).
+      - '.github/workflows/**'
+      - '.github/dependabot.yml'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
   # that has to answer a pull request quickly.

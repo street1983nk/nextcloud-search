@@ -59,13 +59,17 @@ down.
 
 ## The PHP security gates of phase 44, run locally
 
-`scripts/dev/php_gates_docker.sh` runs the security gates of `php.yml` on the
-development machine, with the very scripts under `scripts/ci/` that the jobs
-run. Today it knows two gates:
+`scripts/dev/php_gates_docker.sh` runs the security gates of `php.yml` and
+`workflow-lint.yml` on the development machine, with the very scripts under
+`scripts/ci/` that the jobs run. It knows three gates:
 
-    scripts/dev/php_gates_docker.sh psalm   # the job psalm-taint
-    scripts/dev/php_gates_docker.sh cs      # the job php-cs
-    scripts/dev/php_gates_docker.sh all     # every gate it knows, serially
+    scripts/dev/php_gates_docker.sh psalm      # the job psalm-taint
+    scripts/dev/php_gates_docker.sh cs         # the job php-cs
+    scripts/dev/php_gates_docker.sh workflows  # the jobs zizmor and actionlint
+    scripts/dev/php_gates_docker.sh all        # psalm, cs, workflows, serially
+
+What each gate checks, its positive control and its limit are described in
+"The gates of phase 44, and the boundary of each one" further down.
 
 How a run is arranged:
 
@@ -95,6 +99,13 @@ How a run is arranged:
   nextcloud/coding-standard includes the line ending rule, and on the CRLF
   working tree every file would be reported. Never run php-cs-fixer directly on
   the Windows working tree.
+- The workflow gate needs no mirror. Workflows and shell scripts are LF in every
+  checkout (`.gitattributes`), and actionlint needs the `.git` directory to find
+  the project, so the repository itself is mounted read only, without network,
+  once into the zizmor image and once into the actionlint image, both pinned by
+  the digests of `workflow-lint.yml`. Neither image has bash, which is why
+  `scripts/ci/workflow_lint_gate.sh` is POSIX sh.
+- Docker runs strictly one container at a time; the legs never overlap.
 
 So the host needs Docker, git, bash and jq. The local run is a convenience and
 not the gate itself; the gate is the job in CI.
@@ -121,6 +132,7 @@ zero violations over zero routes and look healthy.
 | `test_search_limits_lockstep.py` | A drift between `SEARCH_LIMIT_MAX` and `SEARCH_OFFSET_MAX` of the container and their two PHP mirrors. A mirror above the container turns a refused request into "the search does not answer", which is a false statement about the state of the server. It says nothing about whether either number is right; that argument stands at the constants themselves. |
 | `test_status_endpoint.py`, `test_rates_endpoint.py`, `test_diagnose_endpoint.py` | The three container routes the admin page reads: the shape of the answer, the privacy boundary (numbers, never names) and the answer for a file nothing knows. |
 | `test_php_supply_chain_gates.py` | A quiet removal of the composer gates. The job `composer-hygiene` of `php.yml` has to run `composer validate --strict` and `composer audit --locked` in `php/`, with a deadline and without `\|\| true` or `continue-on-error`; `php.yml` has to carry its weekly schedule and an event aware concurrency group; `dependabot.yml` has to keep composer under `/php`, with PHPUnit majors left to a human. It says nothing about whether composer finds an advisory; that was proven against a throwaway lock in plan 42-03. |
+| `test_php_static_gates.py` | A quiet removal or defusing of the four gates of phase 44. The jobs `psalm-taint` (OCP matrix equal to the Nextcloud window of `php/appinfo/info.xml`) and `php-cs` of `php.yml` and the jobs `zizmor` and `actionlint` of `workflow-lint.yml` have to run their gate scripts with a deadline and without `\|\| true` or `continue-on-error`; the scripts have to keep their positive controls and thresholds; `psalm.xml` has to load the taint plugin without a baseline or a suppressed taint issue; and every inline exception under `.github` has to carry an E-ID the owner granted. It reads text and structure; whether the tools really turn red is proven by the controls inside the scripts. |
 
 The job `composer-hygiene` (plan 42-03) turns red on a `composer.json` that
 fails `composer validate --strict`, on a `composer.lock` that no longer matches
@@ -132,8 +144,10 @@ Europe/Berlin. Between two Mondays a new advisory against an unchanged lock
 reaches this repository only through dependabot and the security alerts of the
 repository.
 
-Psalm with taint analysis, php-cs-fixer, zizmor and actionlint are deliberately
-not part of these gates; they are reserved for a later phase before Findling 1.7.
+Psalm with taint analysis, php-cs-fixer, zizmor and actionlint were left out of
+phase 42 on purpose and arrived with phase 44 as CI jobs of their own; see "The
+gates of phase 44, and the boundary of each one". The structural gate that keeps
+them in place is `test_php_static_gates.py` in the table above.
 
 ## What the integration jobs do cover
 
@@ -305,6 +319,92 @@ to ask. The surface gates say nothing about permissions at all; they hold the
 promise that the row stays a row of links and that it never puts a number in
 front of somebody about files that are not his. A reader who quotes any one of
 the three for the claim of another has the wrong sentence.
+
+## The gates of phase 44, and the boundary of each one
+
+Phase 44 put four static gates into CI and a fifth, structural one next to the
+unit tests. Each gate script runs a positive control in the same run, a probe
+the tool has to report, so that a gate that went blind (lost configuration,
+lost plugin, silenced exit code) turns red instead of green. The decisions the
+owner took along the way carry an E-ID; their wording is in
+`.planning/phases/44-php-sicherheits-gates/44-OWNER-DECISIONS.md`.
+
+| Gate | What turns it red | Its positive control | Its limit |
+|---|---|---|---|
+| `psalm-taint` in `php.yml`, `scripts/ci/psalm_taint_gate.sh` | Any taint finding of Psalm 6.20.10 over `php/lib`, `php/templates` and `php/appinfo/routes.php`, counted from the SARIF report with jq, once per nextcloud/ocp major of the app (33, 34, 35). A crash, a missing report or exit 2 with an empty report is red as well. | `php/tools/psalm/taint-probe/ProbeController.php` is copied to `lib/TaintProbe/` and must yield at least two findings there, among them TaintedHtml (the AppFrameworkTainter plugin works) and TaintedSql (this OCP still carries its taint annotations). | Templates are nearly blind: `p()` and `print_unescaped()` are not part of OCP, and template variables arrive through `$_`, which Psalm does not connect to a controller, so `$_` is no source. Only the `$route` argument of `exAppRequest` is an SSRF sink; `$params` is not, on purpose, because it carries the admin's request body. Psalm stays on 6, because 7 removes a class the plugin needs; dependabot leaves Psalm majors to a human. |
+| `php-cs` in `php.yml`, `scripts/ci/php_cs_gate.sh` | Any file under `lib`, `appinfo`, `templates` or `tests` that breaks nextcloud/coding-standard, as a dry run with the diff in the log. Any exit code other than 0 and 8 is red too. | A file with one plain violation is written to `lib/CsProbe.php` and checked with `--path-mode=intersection`; php-cs-fixer must answer with exit 8, which also proves that the finder still covers `lib/`. | Style, not behaviour. Locally it may only run on the LF mirror of the recipe below; on the CRLF working tree every file would be reported. |
+| `zizmor` in `workflow-lint.yml`, `scripts/ci/workflow_lint_gate.sh zizmor` | Any zizmor 1.32.0 finding of severity medium or above, persona auditor, over the repository root: every workflow, the composite action under `.github/actions` and `dependabot.yml`. Exit 13 and 14 are findings, any other exit code besides 0 means zizmor did not run, and both are red. | `.github/fixtures/workflow-lint-probe.yml` must yield exit 13 or 14 (it carries a template injection and a checkout that keeps its token). zizmor does not collect that directory when it audits the root, so the probe never reaches the real pass. | It runs offline: no token in the job, the same verdict locally, and the audits that need the GitHub API (known vulnerable action versions and the like) are left out. It treats secrets-outside-env as fixed as soon as a job names an `environment:`; whether the secrets really live only in the environment is shown by the read of the secret names in plan 44-09, not by this gate. |
+| `actionlint` in `workflow-lint.yml`, `scripts/ci/workflow_lint_gate.sh actionlint` | Any actionlint 1.7.12 finding, including shellcheck findings of every severity, info and style among them. An inherited `SHELLCHECK_OPTS` is removed before the run, so the calling environment cannot lower the threshold. | The same probe must yield exit 1 and name SC2086, an info finding of shellcheck for an unquoted variable. Exit 1 alone would also come from the undefined steps property of the probe; SC2086 proves that shellcheck runs at all (actionlint skips it silently when the binary is missing) and that info is still inside the threshold. | shellcheck comes from the pinned image (0.11.0), not from the runner (0.9.0), so a finding can differ from what a shellcheck installed elsewhere says. The one granted exception is the line `# shellcheck disable=SC2016 # E-13: ...` before the route attribute gate of `php.yml`. |
+| `backend/tests/test_php_static_gates.py` in "Python gates" | A gate job removed or renamed, a missing deadline, `continue-on-error` or `\|\| true`, an OCP matrix that drifts from min-version and max-version of `php/appinfo/info.xml`, a gate script without its control or threshold (`--min-severity medium`, persona auditor, `unset SHELLCHECK_OPTS`, SC2086), `--no-exit-codes`, a SARIF output format, an ignore pattern, a weaker persona, a shellcheck severity, a Psalm baseline or suppressed taint issue, a zizmor configuration file, or an inline exception under `.github` without a granted E-ID. | Every rule has a staged sample that must be reported and a clean sample that must not. | It reads text and structure, not the result of a run. That the tools really turn red is the job of the controls above and of the one red proof at the real CI gates on the throwaway branch of plan 44-10. |
+
+Two more limits, both from plan 44-06:
+
+- The service images `mariadb` and `postgres` of `integration.yml` are pinned by
+  digest, with the tag as a comment. Dependabot does not renew them. They are
+  renewed by hand with `docker buildx imagetools inspect <image>:<tag>` and the
+  index digest it prints, when a new patch tag of the series appears or the
+  image carries a security notice.
+- secrets-outside-env, as said in the table: an `environment:` line satisfies
+  zizmor, the move of the secrets is checked by reading the secret names.
+
+The structural gate starts on every commit that touches a workflow or
+`dependabot.yml`, because `python.yml` carries `.github/workflows/**` and
+`.github/dependabot.yml` in its paths (E-06). `workflow-lint.yml` starts on
+every branch, on pull requests and on release tags whenever something under
+`.github/**` or the gate script changes. It is a workflow of its own because
+`security.yml` runs on pushes to main only.
+
+### The owner decisions behind these gates
+
+- E-01: `python.yml` runs setup-uv with `enable-cache: false`, because the
+  workflow also runs on release tags and a poisoned cache would reach a release.
+- E-02: every dependabot entry waits 14 days (`cooldown: default-days: 14`)
+  before it proposes a version update; security updates are not delayed.
+- E-03: shellcheck findings of every severity count, and all 19 existing ones
+  were fixed instead of being silenced.
+- E-04: zizmor runs with the persona auditor; its 13 additional findings were
+  fixed or decided by the owner, none was accepted by the executor.
+- E-05: no SARIF upload to code scanning, so the jobs need nothing but
+  `contents: read`.
+- E-06: `python.yml` starts on workflow and dependabot changes, so the
+  structural gate sees a commit that touches nothing else.
+- E-07: the new development tools (Psalm, php-cs-fixer with
+  nextcloud/coding-standard, zizmor, actionlint) are released for CI and
+  development only, with the exact versions and digests in the files; they are
+  never part of the app package.
+- E-08: the one red proof at the real CI gates runs on the throwaway branch
+  `gate-proof-44`, which is deleted only after the owner agrees.
+- E-09: in the local recipe jq runs on the host, the PHP calls of the Psalm gate
+  go through a shim into the container.
+- E-10: two phrases of `docs/store-listing.md` were reworded so that an existing
+  vocabulary test passes unchanged.
+- E-11: the jobs that hold the store and signing secrets run in the GitHub
+  environments `release`, `app-store` and `app-store-delete`, the issue
+  notification in `notify`; each environment admits `main` and `v*` only, and
+  `app-store-delete` waits for the owner's approval.
+- E-12: `NTFY_TOPIC` stays a repository secret for now; the job notify already
+  names its environment.
+- E-13: one accepted exception, SC2016 before the route attribute gate of
+  `php.yml`, whose PHP code needs the dollar sign in single quotes; the
+  structural gate admits exactly this line.
+- E-14: the store token in the environments is the same valid token as the
+  repository secret, which is deleted only after CI is green with the
+  environments.
+
+### Running the phase 44 gates locally
+
+    bash scripts/dev/php_gates_docker.sh psalm
+    bash scripts/dev/php_gates_docker.sh cs
+    bash scripts/dev/php_gates_docker.sh workflows
+    bash scripts/dev/php_gates_docker.sh all
+
+The recipe needs Docker, git, bash and jq on the host and runs one container at
+a time. The PHP gates work on an LF mirror of `php/` (the Windows working tree
+is CRLF); the workflow gate mounts the repository read only. The OCP tags are
+read out of the matrix of `php.yml`, and the images are pinned by the same
+digests as in the workflows, so the local run cannot drift from CI. Details are
+in "The PHP security gates of phase 44, run locally" near the top of this file.
+The local run is a convenience; the gate is the job in CI.
 
 ## The guest user probe, which is deliberately not a gate
 

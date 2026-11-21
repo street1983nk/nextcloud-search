@@ -85,6 +85,11 @@ PATHS_BEFORE: dict[str, list[str]] = {
         # the whole PHP half and have to start on a commit that touches it.
         "php/**",
         "docs/l10n-*.md",
+        # Widened by phase 44 (owner decision E-06): the structural gate
+        # test_php_static_gates.py and the workflow gates have to start on a
+        # commit that touches nothing but a workflow or dependabot.yml.
+        ".github/workflows/**",
+        ".github/dependabot.yml",
     ],
     "resilience.yml": [
         "backend/**",
