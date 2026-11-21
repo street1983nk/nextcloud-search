@@ -32,6 +32,7 @@ on:
       - 'scripts/ci/update_in_process_proof.sh'
       - 'scripts/ci/update_in_process_driver.php'
       - 'scripts/ci/psalm_taint_gate.sh'
+      - 'scripts/ci/php_cs_gate.sh'
   pull_request:
     paths:
       - 'php/**'
@@ -42,6 +43,7 @@ on:
       - 'scripts/ci/update_in_process_proof.sh'
       - 'scripts/ci/update_in_process_driver.php'
       - 'scripts/ci/psalm_taint_gate.sh'
+      - 'scripts/ci/php_cs_gate.sh'
   # Weekly, for the composer-hygiene job below (plan 42-03). The path filter
   # above means that job only runs when something under php/ changes, and a new
   # advisory against an unchanged composer.lock would otherwise surface at the
@@ -283,6 +285,16 @@ jobs:
         working-directory: php/tools/psalm
         run: composer audit --locked --no-interaction
 
+      # And for the tool project of the php-cs job below: php-cs-fixer and the
+      # rule set run as code on the runner as well.
+      - name: 'php-cs-fixer tools: composer.json is valid and composer.lock matches it'
+        working-directory: php/tools/php-cs-fixer
+        run: composer validate --strict --no-check-publish
+
+      - name: 'php-cs-fixer tools: no known advisory against composer.lock'
+        working-directory: php/tools/php-cs-fixer
+        run: composer audit --locked --no-interaction
+
   # The Psalm taint gate (phase 44, requirement PRUEF-02): user input of the
   # companion app must not reach an HTML, SQL or SSRF sink. One leg per
   # nextcloud/ocp version of the window in php/appinfo/info.xml, because the
@@ -357,6 +369,44 @@ jobs:
 
       - name: Psalm taint gate with positive control
         run: bash scripts/ci/psalm_taint_gate.sh
+
+  # The style gate (phase 44, requirement PRUEF-03): php-cs-fixer with the rule
+  # set of nextcloud/coding-standard over lib, appinfo, templates and tests,
+  # configured in php/.php-cs-fixer.dist.php without a rule of its own. A dry
+  # run changes no file; any file that breaks the standard turns the job red
+  # and the log carries its diff. The gate script also writes a probe with one
+  # violation to lib/ of the runner workspace on every run and is red unless
+  # php-cs-fixer reports it, so a finder that lost lib/ cannot pass quietly.
+  # The runner checks out LF, so the line ending rule of the standard sees what
+  # is committed; the CRLF of a Windows working tree only matters locally, and
+  # the local recipe checks an LF mirror for that reason.
+  php-cs:
+    name: php-cs-fixer dry run (nextcloud/coding-standard)
+    runs-on: ubuntu-24.04
+    # About five seconds per pass measured locally; ten minutes leaves room for
+    # a slow Packagist.
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job pushes or calls the API.
+          persist-credentials: false
+
+      # PHP 8.2, the lower bound of the app, the platform of the tool project.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install the php-cs-fixer tools from composer.lock
+        working-directory: php/tools/php-cs-fixer
+        run: composer install --no-interaction --no-progress --no-scripts
+
+      - name: php-cs-fixer dry run with positive control
+        run: bash scripts/ci/php_cs_gate.sh
 
   phpunit:
     name: PHPUnit over the companion app

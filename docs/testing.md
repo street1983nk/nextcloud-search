@@ -61,9 +61,10 @@ down.
 
 `scripts/dev/php_gates_docker.sh` runs the security gates of `php.yml` on the
 development machine, with the very scripts under `scripts/ci/` that the jobs
-run. Today it knows one gate:
+run. Today it knows two gates:
 
     scripts/dev/php_gates_docker.sh psalm   # the job psalm-taint
+    scripts/dev/php_gates_docker.sh cs      # the job php-cs
     scripts/dev/php_gates_docker.sh all     # every gate it knows, serially
 
 How a run is arranged:
@@ -88,7 +89,12 @@ How a run is arranged:
   path the gate passes along names the same file on both sides. `TMPDIR` of the
   gate points into the mirror for the same reason: Psalm writes its SARIF report
   in the container and jq reads it on the host. The gate script has no switch
-  for any of this; in CI it runs on the runner with the runner's jq.
+  for any of this; in CI it runs on the runner with the runner's jq. The style
+  gate needs no jq and runs inside `php:8.2-cli` as a whole.
+- The style gate is the reason the mirror must be LF: the rule set of
+  nextcloud/coding-standard includes the line ending rule, and on the CRLF
+  working tree every file would be reported. Never run php-cs-fixer directly on
+  the Windows working tree.
 
 So the host needs Docker, git, bash and jq. The local run is a convenience and
 not the gate itself; the gate is the job in CI.

@@ -5,14 +5,16 @@
 # Usage:
 #
 #     scripts/dev/php_gates_docker.sh psalm
+#     scripts/dev/php_gates_docker.sh cs
 #     scripts/dev/php_gates_docker.sh all
 #
 #   psalm  the job psalm-taint: scripts/ci/psalm_taint_gate.sh once per
 #          nextcloud/ocp tag of the job matrix, serially
-#   all    every gate this script knows, serially (today: psalm)
+#   cs     the job php-cs: scripts/ci/php_cs_gate.sh in php:8.2-cli
+#   all    every gate this script knows, serially (today: psalm, then cs)
 #
-# The subcommands cs (php-cs-fixer) and workflows (zizmor and actionlint) are
-# added by later plans of phase 44. An unknown subcommand ends with exit 2.
+# The subcommand workflows (zizmor and actionlint) is added by a later plan of
+# phase 44. An unknown subcommand ends with exit 2.
 #
 # How a run is arranged, and why:
 #
@@ -26,11 +28,13 @@
 #     written down here, so the local recipe cannot drift from the CI matrix.
 #   - The gate script itself is the one CI runs, copied into the mirror.
 #   - php and composer run in containers (pinned by digest, --rm, no name, no
-#     port). jq runs on the host: neither image carries it, and the owner
-#     decided against installing packages into a container (phase 44, "Host-jq
-#     per Shim"). A small php shim on PATH hands every php call of the gate to
-#     the container, with the cache directory mounted at the identical path, so
-#     every path the gate passes along means the same file on both sides.
+#     port). The Psalm gate needs jq, which runs on the host: neither image
+#     carries it, and the owner decided against installing packages into a
+#     container (decision E-09 of phase 44, "Host-jq per Shim"). A small php
+#     shim on PATH hands every php call of that gate to the container, with the
+#     cache directory mounted at the identical path, so every path the gate
+#     passes along means the same file on both sides. The style gate needs no
+#     jq and runs inside php:8.2-cli as a whole.
 #
 # FINDLING_PHP_GATES_DIR overrides where the cache directory lives (default
 # ${TMPDIR:-/tmp}/findling-php-gates). Each leg rebuilds the mirror; only the
@@ -44,10 +48,12 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "${SCRIPT_DIR}/../.." && pwd)
 PHP_WORKFLOW="${REPO_ROOT}/.github/workflows/php.yml"
 
-# The same digests as in 44-RESEARCH.md (composer:2 and php:8.3-cli, looked up
-# for phase 44). A new digest is a new owner decision, not a silent refresh.
+# The same digests as in 44-RESEARCH.md (composer:2, php:8.3-cli and
+# php:8.2-cli, looked up for phase 44). A new digest is a new owner decision,
+# not a silent refresh.
 COMPOSER_IMAGE="composer:2@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93"
 PHP83_IMAGE="php:8.3-cli@sha256:9e2a4e9b1704c05cc469fddbf9b0f0f205e2bb13efd249bbad177289ebdc5c7c"
+PHP82_IMAGE="php:8.2-cli@sha256:842748bc4526d4c3c56501fd314e2d75d1005e8a45b7a40f9768ee820df0a6d6"
 
 say() {
 	echo "php_gates_docker: $*"
@@ -59,13 +65,13 @@ die() {
 }
 
 usage() {
-	echo "usage: scripts/dev/php_gates_docker.sh psalm|all" >&2
+	echo "usage: scripts/dev/php_gates_docker.sh psalm|cs|all" >&2
 	exit 2
 }
 
 [ "$#" -eq 1 ] || usage
 case "$1" in
-	psalm | all) COMMAND="$1" ;;
+	psalm | cs | all) COMMAND="$1" ;;
 	*) usage ;;
 esac
 
@@ -87,7 +93,6 @@ read_ocp_tags() {
 }
 
 [ -f "${PHP_WORKFLOW}" ] || die "no workflow at ${PHP_WORKFLOW}"
-command -v jq >/dev/null 2>&1 || die "jq is required on the host; the gates count their findings with it"
 docker info >/dev/null 2>&1 || die "docker is not reachable; start Docker Desktop first"
 
 GATES_BASE="${FINDLING_PHP_GATES_DIR:-${TMPDIR:-/tmp}/findling-php-gates}"
@@ -111,12 +116,15 @@ build_mirror() {
 		if [ -f "${REPO_ROOT}/${path}" ]; then
 			printf '%s\n' "${path}" >>"${list}"
 		fi
-	done < <(git -C "${REPO_ROOT}" ls-files -z --cached --others --exclude-standard -- php scripts/ci/psalm_taint_gate.sh)
+	done < <(git -C "${REPO_ROOT}" ls-files -z --cached --others --exclude-standard -- php scripts/ci/psalm_taint_gate.sh scripts/ci/php_cs_gate.sh)
 	[ -s "${list}" ] || die "git ls-files gave no file under php/"
 	tar -C "${REPO_ROOT}" -cf - -T "${list}" | tar -C "${MIRROR}" -xf -
 	# grep -I skips binary files, so only text files lose their carriage returns.
+	# -U keeps the grep of Git for Windows from dropping the carriage return
+	# before it matches (without it no CRLF file is ever found); elsewhere -U
+	# changes nothing.
 	local crlf="${GATES_BASE}/crlf.lst"
-	grep -rlI $'\r' "${MIRROR}" >"${crlf}" || true
+	grep -rlUI $'\r' "${MIRROR}" >"${crlf}" || true
 	if [ -s "${crlf}" ]; then
 		tr '\n' '\0' <"${crlf}" | xargs -0 sed -i 's/\r$//'
 	fi
@@ -149,6 +157,7 @@ EOF
 }
 
 run_psalm_gate() {
+	command -v jq >/dev/null 2>&1 || die "jq is required on the host; the psalm gate counts its findings with it"
 	local tags
 	tags=$(read_ocp_tags)
 	local count
@@ -174,7 +183,25 @@ run_psalm_gate() {
 	say "psalm taint gate green against ${count} nextcloud/ocp tags"
 }
 
+# The style gate as a whole inside php:8.2-cli, the PHP of the job php-cs; the
+# image carries bash, and the gate needs nothing else.
+run_cs_gate() {
+	say "php-cs-fixer gate (nextcloud/coding-standard)"
+	build_mirror
+	run_composer "${MIRROR}/php/tools/php-cs-fixer" install --no-interaction --no-progress --no-scripts
+	if ! MSYS_NO_PATHCONV=1 docker run --rm \
+		-v "${BASE_MOUNT}:${GATES_BASE}" -w "${MIRROR}" \
+		"${PHP82_IMAGE}" bash scripts/ci/php_cs_gate.sh; then
+		die "php-cs-fixer gate is red"
+	fi
+	say "php-cs-fixer gate green"
+}
+
 case "${COMMAND}" in
 	psalm) run_psalm_gate ;;
-	all) run_psalm_gate ;;
+	cs) run_cs_gate ;;
+	all)
+		run_psalm_gate
+		run_cs_gate
+		;;
 esac

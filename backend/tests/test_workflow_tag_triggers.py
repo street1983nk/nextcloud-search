@@ -72,6 +72,8 @@ PATHS_BEFORE: dict[str, list[str]] = {
         "scripts/ci/update_in_process_driver.php",
         # Added with the job psalm-taint (phase 44): the script is that job.
         "scripts/ci/psalm_taint_gate.sh",
+        # Added with the job php-cs (phase 44): the script is that job.
+        "scripts/ci/php_cs_gate.sh",
     ],
     "python.yml": [
         "backend/**",
