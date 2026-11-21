@@ -126,7 +126,6 @@ final class ProbeService {
 				]);
 
 				return ['started' => true, 'code' => self::START_STARTED];
-
 			case ExAppService::ADMIN_BUSY:
 				$state = $outcome['body']['state'] ?? null;
 				if ($state === self::START_REBUILDING) {
@@ -139,7 +138,6 @@ final class ProbeService {
 
 			case ExAppService::ADMIN_MISSING:
 				return ['started' => false, 'code' => self::START_UNSUPPORTED];
-
 			case ExAppService::ADMIN_UNREACHABLE:
 				return $this->adopt($profile, $precision, $uid)
 					? ['started' => true, 'code' => self::START_STARTED]

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Tests\Unit;
 
+use OCA\Findling\Tests\RouteSecurity\AppSurface;
 use OCA\Findling\Tests\RouteSecurity\Fixture\AnnotationFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\BaseRouteFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\CaseFixture;
@@ -22,7 +23,6 @@ use OCA\Findling\Tests\RouteSecurity\Fixture\PublicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\RateLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\StaticMagicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\VisibilityFixture;
-use OCA\Findling\Tests\RouteSecurity\AppSurface;
 use OCA\Findling\Tests\RouteSecurity\RouteProfiles;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;

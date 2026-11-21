@@ -463,7 +463,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 				 * banner whose sentence changes while the page is open is
 				 * exactly what the version state below needs.
 				 */
-				?>
+			?>
 				<span class="findling-banner__text" id="<?php p($banner['id']); ?>-text"><?php p($banner['text']); ?></span>
 			</p>
 		<?php } ?>
@@ -486,7 +486,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 		 * changes it here changes coverageBlock() in the same commit, and a
 		 * test in test_admin_ui_contract.py holds the two together.
 		 */
-		?>
+?>
 		<span class="findling-figure__value" id="findling-coverage-percent"><?php p($count($percent ?? 0) . "\u{00A0}%"); ?></span>
 	</p>
 	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>
@@ -502,13 +502,13 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
 		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
 		<?php
-		/*
-		 * Two explanations and one of them on display (plan 39-01, ANZE-01,
-		 * L-36-05): above nought the sentence of what the figure counts, at
-		 * nought a sentence of its own, because "Those files are too large"
-		 * next to a nought reads as if something had been left out.
-		 */
-		?>
+/*
+ * Two explanations and one of them on display (plan 39-01, ANZE-01,
+ * L-36-05): above nought the sentence of what the figure counts, at
+ * nought a sentence of its own, because "Those files are too large"
+ * next to a nought reads as if something had been left out.
+ */
+?>
 		<span id="findling-coverage-leftout-explain"<?php if ($leftOut === 0) { ?> hidden<?php } ?>><?php p($l->t('Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.')); ?></span>
 		<span id="findling-coverage-leftout-none"<?php if ($leftOut !== 0) { ?> hidden<?php } ?>><?php p($l->t('Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.')); ?></span>
 	</p>
@@ -532,41 +532,41 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	 * list on its own: an index whose chains are all empty is exactly the state
 	 * this line exists for.
 	 */
-	?>
+?>
 	<p class="settings-hint" id="findling-languages"<?php if ($languagesActive === '' && $languagesFilled === '') { ?> hidden<?php } ?>><?php p($l->t('Languages of the index: %1$s switched on, %2$s with text in the index.', [$languagesActive, $languagesFilled])); ?></p>
 
 	<?php
-	/*
-	 * The second track, and it is a block of its own rather than a second
-	 * number in the sentence above. The two figures move at different speeds:
-	 * the full text half is complete while the semantic half is still filling
-	 * up, for hours, and an admin who sees one figure at a hundred per cent and
-	 * a search by paraphrase that finds nothing has no way to tell why (D-16).
-	 *
-	 * Built like every other block on this page: all shapes lie in the markup
-	 * and the ones that do not apply carry the hidden attribute, each with its
-	 * own rule, because a specific display rule beats the user agent rule of
-	 * the attribute. The script flips attributes and writes text nodes.
-	 *
-	 * The block appears with a denominator OR with a word about the engine, and
-	 * the second half of that is bug audit MEDIUM-3 of plan 07-05: on a fresh
-	 * installation there is no denominator for hours, and the sentence that
-	 * says whether there is a model in this image at all was hidden behind one.
-	 * The share line inside keeps the denominator rule of its own, so a block
-	 * that appears for the engine alone does not claim that a figure is missing.
-	 */
-	?>
+/*
+ * The second track, and it is a block of its own rather than a second
+ * number in the sentence above. The two figures move at different speeds:
+ * the full text half is complete while the semantic half is still filling
+ * up, for hours, and an admin who sees one figure at a hundred per cent and
+ * a search by paraphrase that finds nothing has no way to tell why (D-16).
+ *
+ * Built like every other block on this page: all shapes lie in the markup
+ * and the ones that do not apply carry the hidden attribute, each with its
+ * own rule, because a specific display rule beats the user agent rule of
+ * the attribute. The script flips attributes and writes text nodes.
+ *
+ * The block appears with a denominator OR with a word about the engine, and
+ * the second half of that is bug audit MEDIUM-3 of plan 07-05: on a fresh
+ * installation there is no denominator for hours, and the sentence that
+ * says whether there is a model in this image at all was hidden behind one.
+ * The share line inside keeps the denominator rule of its own, so a block
+ * that appears for the engine alone does not claim that a figure is missing.
+ */
+?>
 	<div id="findling-semantic"<?php if (!$hasDenominator && !$hasEngineWord) { ?> hidden<?php } ?>>
 		<h3 class="findling-subheading" id="findling-semantic-heading"><?php p($l->t('Findable by meaning')); ?></h3>
 
 		<p class="findling-figure" id="findling-semantic-figure"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>>
 			<?php
-			/*
-			 * The same non-breaking space as the figure above, written as the
-			 * same escape, so that both figures of this page keep one shape
-			 * when the script takes over on the first poll (IN-03).
-			 */
-			?>
+		/*
+		 * The same non-breaking space as the figure above, written as the
+		 * same escape, so that both figures of this page keep one shape
+		 * when the script takes over on the first poll (IN-03).
+		 */
+?>
 			<span class="findling-figure__value" id="findling-semantic-percent"><?php p($count($embeddedPercent ?? 0) . "\u{00A0}%"); ?></span>
 		</p>
 		<progress id="findling-semantic-bar" max="100" value="<?php p((string)($embeddedPercent ?? 0)); ?>" aria-labelledby="findling-semantic-heading"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>></progress>
@@ -590,7 +590,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 		 * of plan 07-05 the block around it appears for this line alone when
 		 * the container has named its state and nothing is indexed yet.
 		 */
-		?>
+?>
 		<p class="settings-hint" id="findling-semantic-engine"><?php p($engineSentence); ?></p>
 
 		<p class="settings-hint" id="findling-semantic-hint"><?php p($l->t('The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.')); ?></p>
@@ -611,30 +611,30 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	 * apply, like every other block of this page, and both are hidden for a
 	 * container that did not send the object guard.
 	 */
-	?>
+?>
 	<p class="settings-hint" id="findling-guard"<?php if (!$guardShown) { ?> hidden<?php } ?>><?php p($guardLine); ?></p>
 	<p class="settings-hint" id="findling-slots"<?php if (!$slotsShown) { ?> hidden<?php } ?>><?php p($slotsLine); ?></p>
 	<?php
-	/*
-	 * The content gateway that does not answer (issue #36, Befund D, plan
-	 * 40-06), under the run state for the reason the guard lines stand there:
-	 * it is why the run does not move. One static catalogue sentence, hidden
-	 * while the gateway answers; the script flips the same element on every
-	 * poll, so both halves of the page say the same from the first frame on.
-	 */
-	?>
+/*
+ * The content gateway that does not answer (issue #36, Befund D, plan
+ * 40-06), under the run state for the reason the guard lines stand there:
+ * it is why the run does not move. One static catalogue sentence, hidden
+ * while the gateway answers; the script flips the same element on every
+ * poll, so both halves of the page say the same from the first frame on.
+ */
+?>
 	<p class="settings-hint" id="findling-gateway-unavailable"<?php if (!$gatewayDown) { ?> hidden<?php } ?>><?php p($l->t('The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.')); ?></p>
 
 	<?php
-	/*
-	 * The backup pause of issue #37 (plan 41-06, D-41-01): the same switch as
-	 * occ findling:pause and occ findling:resume, one appconfig key behind both.
-	 * The state line names the pause as the backend reports it, and a backup
-	 * may begin only on "paused"; "pausing" can last as long as the batch in
-	 * flight, with OCR up to about half an hour (D-41-18). No confirmation: the
-	 * switch is undone by pressing it again.
-	 */
-	?>
+/*
+ * The backup pause of issue #37 (plan 41-06, D-41-01): the same switch as
+ * occ findling:pause and occ findling:resume, one appconfig key behind both.
+ * The state line names the pause as the backend reports it, and a backup
+ * may begin only on "paused"; "pausing" can last as long as the batch in
+ * flight, with OCR up to about half an hour (D-41-18). No confirmation: the
+ * switch is undone by pressing it again.
+ */
+?>
 	<div id="findling-pause">
 		<p class="settings-hint" id="findling-pause-state" role="status" aria-live="polite"<?php if ($pauseSentence === '') { ?> hidden<?php } ?>><?php p($pauseSentence); ?></p>
 		<p><button type="button" id="findling-pause-toggle" data-findling-paused="<?php p($pauseWished ? 'true' : 'false'); ?>"><?php p($pauseLabel); ?></button></p>
@@ -1395,7 +1395,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * the form holds the stored precision, which is always the case when the
 	 * page is rendered; the script shows it the moment the tick changes.
 	 */
-	?>
+?>
 	<p class="findling-banner findling-banner--info" id="findling-profile-reindex" hidden>
 		<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($infoIcon); ?>"/></svg>
 		<span class="findling-banner__text" id="findling-profile-reindex-long"<?php if ($reindexSeconds === null) { ?> hidden<?php } ?>><?php p($l->t('Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.', [$count($reindexDocuments), $span($reindexSeconds ?? 0)])); ?></span>
@@ -1435,7 +1435,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * composes an icon. No live attribute here: the one live region of the block is
 	 * the announce span at its end, and a second one would speak twice.
 	 */
-	?>
+?>
 	<div class="findling-card" id="findling-profile-verdict" tabindex="-1"<?php if ($probeRunning) { ?> hidden<?php } ?>>
 		<div id="findling-profile-verdict-empty"<?php if ($checkShown) { ?> hidden<?php } ?>>
 			<h3 class="findling-subheading"><?php p($l->t('No check yet.')); ?></h3>
@@ -1466,15 +1466,15 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<h2><?php p($l->t('Rules and limits')); ?></h2>
 
 	<?php
-	/*
-	 * One label for the group and for the field that adds to it, and that is
-	 * deliberate rather than economical. The design contract carries exactly one
-	 * label for this control, "Excluded folders", so inventing a second string
-	 * for the input would be a string nobody signed off; the list is named by the
-	 * same label through aria-labelledby, which is what a screen reader needs in
-	 * order to say what the list is a list of.
-	 */
-	?>
+/*
+ * One label for the group and for the field that adds to it, and that is
+ * deliberate rather than economical. The design contract carries exactly one
+ * label for this control, "Excluded folders", so inventing a second string
+ * for the input would be a string nobody signed off; the list is named by the
+ * same label through aria-labelledby, which is what a screen reader needs in
+ * order to say what the list is a list of.
+ */
+?>
 	<label class="findling-rules__label" id="findling-rules-exclusions-label" for="findling-rules-new"><?php p($l->t('Excluded folders')); ?></label>
 	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups')); ?></p>
 
@@ -1510,7 +1510,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * script never builds markup" holds for this list as well; a pattern is a
 	 * text node and an aria-label and nothing else.
 	 */
-	?>
+?>
 	<label class="findling-rules__label" id="findling-rules-patterns-label" for="findling-rules-patterns-new"><?php p($l->t('Excluded patterns')); ?></label>
 	<p class="settings-hint" id="findling-rules-patterns-help"><?php foreach ($patternHelpParts as $helpPart) {
 		if (is_string($helpPart) && isset($exampleMarkers[$helpPart])) {
@@ -1564,7 +1564,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * link only adds the details. The script rewrites the text spans on every
 	 * poll and never the markup.
 	 */
-	?>
+?>
 	<div class="findling-limits" id="findling-limits">
 		<h3 class="findling-subheading" id="findling-limits-heading"><?php p($l->t('Limits per file')); ?></h3>
 		<ul class="findling-limits__list" aria-labelledby="findling-limits-heading">
@@ -1622,18 +1622,18 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * by commit in THIRD-PARTY.md. alert-circle-outline, the same path the
 	 * banners of block one carry, in the destructive icon colour here.
 	 */
-	?>
+?>
 	<?php
-	/*
-	 * Two lines next to the one icon since plan 33-05: the sentence for new
-	 * folders and under it the sentence for new patterns, each shown only when
-	 * the save brings something new of its kind (33-WORTLAUT.md section C). The
-	 * second has no number (PE-5): a pattern does not resolve into a folder one
-	 * could count under. Its patterns stand in a code element of their own,
-	 * between the two halves of the translated sentence, which the script cuts
-	 * at its placeholder.
-	 */
-	?>
+/*
+ * Two lines next to the one icon since plan 33-05: the sentence for new
+ * folders and under it the sentence for new patterns, each shown only when
+ * the save brings something new of its kind (33-WORTLAUT.md section C). The
+ * second has no number (PE-5): a pattern does not resolve into a folder one
+ * could count under. Its patterns stand in a code element of their own,
+ * between the two halves of the translated sentence, which the script cuts
+ * at its placeholder.
+ */
+?>
 	<div class="findling-rules__confirm" id="findling-rules-confirm" role="group" aria-labelledby="findling-rules-confirm-text" hidden>
 		<p class="findling-rules__confirm-text" id="findling-rules-confirm-text">
 			<svg class="findling-rules__confirm-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>

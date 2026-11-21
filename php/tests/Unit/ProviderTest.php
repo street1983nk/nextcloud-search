@@ -835,7 +835,7 @@ final class ProviderTest extends TestCase {
 		// to a node whose path keeps the dot, and the recheck below it found
 		// nothing. No picker produces a dot segment, so the value is no folder
 		// and the run is the run without the filter (USRCH-03).
-		foreach (['.', '/.', '/Projekte/.', '/./Projekte', '/Projekte/./2026', '\\Projekte\\.\\2026', "/Projekte/./"] as $raw) {
+		foreach (['.', '/.', '/Projekte/.', '/./Projekte', '/Projekte/./2026', '\\Projekte\\.\\2026', '/Projekte/./'] as $raw) {
 			$filters = $this->filtersOf($this->filteredQuery([Provider::FILTER_FOLDER => $raw]));
 
 			self::assertInstanceOf(SearchFilters::class, $filters, $raw);

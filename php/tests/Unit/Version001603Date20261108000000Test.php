@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use Closure;
-use OCA\Findling\Migration\Version001603Date20261108000000;
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Migration\Version001603Date20261108000000;
 use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\SettingsService;
 use OCP\DB\IResult;

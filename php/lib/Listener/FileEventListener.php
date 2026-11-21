@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Listener;
 
+use OCA\Files_Trashbin\Events\MoveToTrashEvent;
+use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
 use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\ExclusionService;
@@ -11,8 +13,6 @@ use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
-use OCA\Files_Trashbin\Events\MoveToTrashEvent;
-use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 use OCP\BackgroundJob\IJobList;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;

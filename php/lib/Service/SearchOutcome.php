@@ -81,12 +81,13 @@ final class SearchOutcome {
 	public const FAILURE_ALL_CANDIDATES_REJECTED = 'all_candidates_rejected';
 
 	/**
+	 * ``excerpts`` holds the excerpt of a hit, keyed by file id, and is absent
+	 * for every hit the excerpt call did not cover.
+	 *
 	 * @param list<ApprovedHit> $hits the hits that passed the permission
 	 *                                decision, in the order the container
 	 *                                ranked them
 	 * @param array<int,array{text:string,highlights:list<array{int,int}>}> $excerpts
-	 *        the excerpt of a hit, keyed by file id, and absent for every hit
-	 *        the excerpt call did not cover
 	 * @param int $nextCursor the container offset a following run continues
 	 *                        from
 	 * @param bool $hasMore whether the container said there is more behind the

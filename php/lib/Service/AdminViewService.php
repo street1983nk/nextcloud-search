@@ -2069,9 +2069,6 @@ final class AdminViewService {
 	 * older than this app. Nought per cent semantic coverage would be a claim
 	 * about a container that never said anything about it.
 	 *
-	 * @param array<string,int> $scan
-	 * @param array<string,mixed> $backend
-	 * @param int $indexable the denominator, worked out once in overview()
 	 * ``recounting`` is true when the container answered, a denominator exists
 	 * and more documents are indexed than the denominator holds. That is the
 	 * window until the next recount of ScanRecountJob (quick task 260929-kii),
@@ -2098,6 +2095,9 @@ final class AdminViewService {
 	 * LEAVE_OUT_MAX_IDS left out storages, a hashed storage id, a backend
 	 * without a known id format).
 	 *
+	 * @param array<string,int> $scan
+	 * @param array<string,mixed> $backend
+	 * @param int $indexable the denominator, worked out once in overview()
 	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
 	 * @param bool $externalStorageOn whether external storages are indexed at all
 	 * @param bool $queuesIdle nothing scheduled and nothing running

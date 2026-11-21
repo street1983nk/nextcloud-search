@@ -1,0 +1,23 @@
+{
+	"name": "findling/php-cs-fixer-tools",
+	"description": "php-cs-fixer with nextcloud/coding-standard for the Findling companion app, CI and development only",
+	"license": "AGPL-3.0-or-later",
+	"type": "project",
+	"_comment": [
+		"This is a project of its own, like tools/psalm, and not part of php/composer.json on purpose: the style toolchain must not be resolved together with the exactly pinned phpunit/phpunit of the app, and nothing in php/tools reaches the store archive (scripts/release/store-archive.sh includes appinfo lib templates js css img l10n only).",
+		"All three versions are exact pins. php-cs-fixer/shim and kubawerlos/php-cs-fixer-custom-fixers are required by nextcloud/coding-standard. kubawerlos/php-cs-fixer-custom-fixers 3.37.5 and php-cs-fixer/shim 3.95.30 to 3.95.32 are left out on purpose: they were younger than the minimum age of 14 days when the pins were chosen.",
+		"platform.php is 8.2.27, the lower bound of the app, so the lock never pulls a version the PHP 8.2 runtime of the job php-cs cannot run.",
+		"All three packages were cleared by the owner before they were fetched, decision E-07 of 21.11.2026 in .planning/phases/44-php-sicherheits-gates/44-OWNER-DECISIONS.md."
+	],
+	"require-dev": {
+		"kubawerlos/php-cs-fixer-custom-fixers": "v3.37.4",
+		"nextcloud/coding-standard": "v1.5.0",
+		"php-cs-fixer/shim": "v3.95.29"
+	},
+	"config": {
+		"platform": {
+			"php": "8.2.27"
+		},
+		"sort-packages": true
+	}
+}

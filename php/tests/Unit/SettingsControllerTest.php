@@ -527,7 +527,6 @@ final class SettingsControllerTest extends TestCase {
 		self::fail('no route attribute on ' . $method);
 	}
 
-
 	public function testThePreviewNamesTheNewPatternsAndCountsOnlyThePrefixes(): void {
 		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
 		$this->values[SettingsService::KEY_EXCLUSION_PATTERNS] = ['*.photoslibrary'];
