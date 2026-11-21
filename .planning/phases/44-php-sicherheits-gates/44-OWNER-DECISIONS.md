@@ -127,3 +127,23 @@ Owner-Wortlaut: "Rot-Beweis auf Wegwerf-Branch gate-proof-44, Löschung erst nac
 Gewählt: option-a.
 
 Konsequenz: Plan 44-10 legt den Wegwerf-Branch `gate-proof-44` mit Taint-Probe, Stilverstoß und Wegwerf-Workflow an. Push nur nach Owner-Frage (D-10); CI muss in psalm-taint (drei Beine), php-cs, zizmor und actionlint rot sein. Das Löschen des Branches (remote und lokal) erfolgt erst nach ausdrücklicher Owner-Freigabe. main bleibt unberührt.
+
+## E-09
+
+Frage (vor 44-03, aus Abweichung 3 von 44-02): Wie kommt jq in das lokale Rezept, wenn weder php:8.3-cli noch composer:2 jq enthalten?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): "Host-jq per Shim".
+
+Gewählt: Im lokalen Rezept scripts/dev/php_gates_docker.sh läuft PHP im Container, jq auf dem Host. Ein php-Shim auf dem PATH reicht jeden php-Aufruf des Gate-Skripts an den Container weiter, der Spiegel liegt dort unter identischem Pfad (Form wie im Testlauf von 44-02). Keine Paketinstallation im Container, kein Schalter im Gate-Skript.
+
+Konsequenz: 44-03 baut das Rezept so und dokumentiert es in docs/testing.md (Englisch, wie die Datei). In CI ändert sich nichts, jq ist auf dem Runner vorhanden.
+
+## E-10
+
+Frage (vor 44-03, aus deferred-items.md von 44-02): Wie wird `test_the_store_listing_document_avoids_the_blocked_term_counting_every_line` wieder grün, der wegen zwei Stellen im 1.6.5-Abschnitt von docs/store-listing.md rot ist?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): "Umformulieren".
+
+Gewählt: Die zwei Stellen werden mit gleicher Bedeutung umformuliert (Workflow-Name als "Release-Läufe für den App Store", "Quellpakete"); der Test bleibt unverändert.
+
+Konsequenz: eigener Commit `docs(store-listing): ...` vor 44-03; der Test ist danach grün, der Eintrag in deferred-items.md ist erledigt.

@@ -141,7 +141,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 44-03-PLAN.md: Psalm-Taint-Gate: lokales Rezept und drei lokale Rotläufe
+- [x] 44-03-PLAN.md: Psalm-Taint-Gate: lokales Rezept und drei lokale Rotläufe
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -198,7 +198,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 2/10 | In Progress | - |
+| 44. PHP-Sicherheits-Gates | v1.7 | 3/10 | In Progress | - |
 | 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)

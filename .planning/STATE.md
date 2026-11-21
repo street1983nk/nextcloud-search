@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "44-02 erledigt (Psalm-Taint-Gate, Commit 4f51f090), nächster Plan 44-03"
-last_updated: "2026-11-21T05:10:00.000Z"
-last_activity: 2026-11-21, 44-02 erledigt, Psalm-Taint-Gate gegen OCP 33/34/35 mit 0 Befunden
+stopped_at: "44-03 erledigt (lokales Rezept Psalm-Gate, Commit 8f5aca31), nächster Plan 44-04"
+last_updated: "2026-11-21T07:10:00.000Z"
+last_activity: 2026-11-21, 44-03 erledigt, lokales Rezept psalm grün und dreifach rot belegt
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 2
-  percent: 20
+  completed_plans: 3
+  percent: 30
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-03 als nächster (10 Pläne, 2 erledigt)
-Status: Executing, Stopp nach 44-02 (Owner-Vorgabe)
-Last activity: 2026-11-21, 44-02 erledigt (Psalm-Taint-Gate, 0 Befunde gegen OCP 33/34/35, Probe 3 Treffer)
+Plan: 44-04 als nächster (10 Pläne, 3 erledigt)
+Status: Executing
+Last activity: 2026-11-21, 44-03 erledigt (lokales Rezept php_gates_docker.sh psalm, E-09 Host-jq, E-10 Store-Listing umformuliert)
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ Last activity: 2026-11-21, 44-02 erledigt (Psalm-Taint-Gate, 0 Befunde gegen OCP
 - v1.7: 42-08 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
 - v1.7: 42-09 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 2 Dateien)
 - v1.7: 44-02 in ca. 85 min inkl. ca. 6 min Psalm-Läufe (3 Tasks, 11 Dateien)
+- v1.7: 44-03 in ca. 45 min inkl. ca. 25 min Docker-Läufe (2 Tasks, 2 Dateien)
 
 ## Accumulated Context
 
