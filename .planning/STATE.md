@@ -286,8 +286,7 @@ Resume file: None
 - Regel: Commit-Nachrichten nie mit close/fix/resolve-Schlüsselwort direkt vor einer Issue-Nummer
 - Owner: Forum-Post gebündelt erst, wenn PII Redaction und Audio & Video Search fertig sind (Owner-Entscheid 12.11.2026); Owner postet
 - Owner: UI-Sichtung der Backup-Pause in einer laufenden 1.6.2-Instanz
-- Rückmeldungen auf issue 37, 25 und 44 beobachten (alle drei closed, Antworten gepostet); 33 und 43 offen, 45 als Kandidat für v1.7
+- Issues (Stand 21.11.2026): #33 closed 08.11., #36 closed 29.10., #51 closed 21.11.; #25 und #43 offen mit Nachfrage vom 21.11.; #45 Teil von Findling 1.7.0
 - Owner: UI-Sichtung der drei Saetze (plus Gateway-Satz) in einer laufenden 1.6.0-Instanz
-- Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
-- Issue #36 offen lassen bis budachst bestätigt (dann erst Closes)
+- Owner: HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
 - E1/E2: historische Umlaute in docs/audits und docs/measurements als eigener Doku-Commit
