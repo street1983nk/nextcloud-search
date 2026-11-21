@@ -435,14 +435,20 @@ Die Versionen (OCP-Tags, Image-Digests) liest das lokale Skript aus dem Workflow
 | A7 | Dependabot-Cooldown gilt nicht für Sicherheitsupdates | Open Questions | Gering |
 | A8 | Paketlegitimität ohne slopcheck-Lauf | Package Legitimacy Audit | Gering (alle Pakete aus Nextcloud-/Hersteller-Primärquellen); Owner-Checkpoint vor Installation |
 
-## Open Questions (Owner-Entscheidungen für Checkpoints)
+## Open Questions (RESOLVED)
 
 1. **cache-poisoning in python.yml (High, Konfidenz Low):** Fix `enable-cache: false` (verlangsamt `uv sync` in zwei Jobs) oder begründet akzeptieren (python.yml veröffentlicht nichts, ein Tag-Lauf baut aber auch kein Artefakt). Empfehlung: Fix, weil D-06 Fix bevorzugt und der Preis nur Laufzeit ist. Alternative ohne Laufzeitverlust: Cache nur, wenn kein Tag-Lauf (`enable-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}`), ob zizmor das erkennt, ist nicht geprüft.
+   RESOLVED: siehe E-01 in 44-OWNER-DECISIONS.md (option-a, `enable-cache: false`)
 2. **dependabot-cooldown:** Wert von `default-days`. zizmor verlangt >= 7. Empfehlung 14, passend zur Owner-Regel "Werkzeugversionen mindestens zwei Wochen alt".
+   RESOLVED: siehe E-02 in 44-OWNER-DECISIONS.md (14 Tage)
 3. **actionlint und shellcheck info/style (19 Befunde):** Variante a) alle 19 beheben bzw. mit `# shellcheck disable=SCxxxx` plus Begründung im Skript markieren (SC2016 in php.yml ist Absicht) und dann jeder shellcheck-Befund rot. Variante b) `SHELLCHECK_OPTS=--severity=warning` (heute 0 Befunde), info/style gelten als unter Medium. Empfehlung: b) als Gate-Schwelle (deckt "ab Medium" aus D-03 ab, shellcheck-"warning" ist die erste echte Fehlerklasse) und die 19 info-Befunde als einmaliges Aufräumen nur dort, wo es echte Quoting-Lücken sind; die Schwelle selbst ist eine Owner-Entscheidung.
+   RESOLVED: siehe E-03 in 44-OWNER-DECISIONS.md (strenger als Empfehlung: Schwelle inkl. info und style, alle 19 echt behoben, kein disable ohne Owner-Wort)
 4. **zizmor-Persona:** regular (Default, 55 Befunde, alle behebbar) oder auditor (zusätzlich secrets-outside-env, unpinned-images High, excessive-permissions). Empfehlung: regular als Gate, auditor-Befunde als Liste an den Owner.
+   RESOLVED: siehe E-04 in 44-OWNER-DECISIONS.md (strenger als Empfehlung: Persona auditor als Gate, 13 Zusatzbefunde behoben, secrets-outside-env als Owner-Frage)
 5. **SARIF-Upload an GitHub Code Scanning:** Server macht das (`security-events: write`). Nicht nötig für das Gate; Empfehlung: weglassen, Rechte minimal halten.
+   RESOLVED: siehe E-05 in 44-OWNER-DECISIONS.md (kein Upload)
 6. **Strukturgate-Trigger (Pitfall 11):** `.github/workflows/**` in python.yml aufnehmen ja/nein.
+   RESOLVED: siehe E-06 in 44-OWNER-DECISIONS.md (option-a, paths von python.yml erweitert)
 
 ## Environment Availability
 
