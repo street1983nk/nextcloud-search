@@ -147,3 +147,34 @@ Owner-Wortlaut (21.11.2026, AskUserQuestion): "Umformulieren".
 Gewählt: Die zwei Stellen werden mit gleicher Bedeutung umformuliert (Workflow-Name als "Release-Läufe für den App Store", "Quellpakete"); der Test bleibt unverändert.
 
 Konsequenz: eigener Commit `docs(store-listing): ...` vor 44-03; der Test ist danach grün, der Eintrag in deferred-items.md ist erledigt.
+
+## E-11
+
+Frage (44-05 Task 2, Teil A): Wie werden die 10 zizmor-Befunde secrets-outside-env (Persona auditor, E-04 Nr. 1 bis 10) behandelt?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): "4 Environments (Empf.)".
+
+Gewählt: echter Fix per GitHub-Environment für alle vier betroffenen Jobs, kein Ignore:
+
+| Workflow/Job | Environment | Secrets im Environment | E-04 Nr. |
+|--------------|-------------|------------------------|----------|
+| release.yml/archives | `release` | APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY | 2, 3, 4 |
+| store-submit.yml/submit | `app-store` | APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY | 6 bis 10 |
+| store-release-delete.yml/remove | `app-store-delete` (Required reviewer street1983nk) | APPSTORE_TOKEN | 5 |
+| issue-notify.yml/notify | `notify` | keine, siehe E-12 | 1 |
+
+Alle vier Environments mit "Selected branches and tags": Branch `main`, Tag `v*`.
+
+Lesebeleg des Executors (21.11.2026, `gh api`, nur Namen, keine Werte): vier Environments mit `custom_branch_policies: true`, `protected_branches: false`; je Environment die Regeln `main` (branch) und `v*` (tag); Secrets wie in der Tabelle; `app-store-delete` mit `required_reviewers` [street1983nk]; die Repo-Secrets APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY und NTFY_TOPIC bestehen unverändert.
+
+Konsequenz: 44-06 setzt `environment: <Name>` an die vier Jobs. 44-09 pusht nach Owner-Freigabe und belegt grüne CI; erst danach löscht der Owner die Repo-Secrets APPSTORE_TOKEN, APP_PRIVATE_KEY und BACKEND_PRIVATE_KEY (44-09 Task 3), danach Namens-Lesebeleg. Ein Lauf von store-release-delete.yml wartet ab jetzt auf die Freigabe durch street1983nk.
+
+## E-12
+
+Frage (44-05 Task 2, Teil A, Nr. 1): Was passiert mit NTFY_TOPIC in issue-notify.yml?
+
+Owner-Wortlaut (21.11.2026, AskUserQuestion): "Behalten, später einrichten".
+
+Gewählt: issue-notify.yml bleibt. Der Job notify bekommt in 44-06 `environment: notify`; das Environment `notify` hat vorerst kein eigenes Secret, der Job nutzt weiter das Repo-Secret NTFY_TOPIC.
+
+Konsequenz: NTFY_TOPIC wird in 44-09 Task 3 nicht gelöscht und nicht als "umgezogen" geprüft; die Abnahme in 44-09 umfasst nur APPSTORE_TOKEN, APP_PRIVATE_KEY und BACKEND_PRIVATE_KEY. Hinweis: zizmor wertet den Befund schon durch die Zeile `environment:` als behoben; der Umzug von NTFY_TOPIC ins Environment bleibt offen, bis der Owner ihn einrichtet.
