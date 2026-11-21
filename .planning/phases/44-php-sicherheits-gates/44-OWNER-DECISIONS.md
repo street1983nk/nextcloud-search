@@ -114,6 +114,8 @@ Freigegebene Versionen und Digests (Liste aus 44-01 Task 2; nextcloud/ocp ist di
 | actionlint (Image) | `rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667` | github.com/rhysd/actionlint |
 | Taint-Plugin | Kopie von `build/psalm/AppFrameworkTainter.php` aus nextcloud/server (MIT laut SPDX-Kopf) | github.com/nextcloud/server |
 
+Owner-Zusatz vom 21.11.2026 (AskUserQuestion vor 44-02, Antwort "Ja, mit frei"): nextcloud/ocp, php-cs-fixer/shim und kubawerlos/php-cs-fixer-custom-fixers sind ausdrücklich mit freigegeben. Damit ist die Zusammenfassung dieser drei Pakete unter die Freigabe (Hinweis in 44-01-SUMMARY.md) vom Owner bestätigt.
+
 Konsequenz: 44-02 bis 44-07 installieren genau diese Versionen und Digests. Jede andere Version, jedes weitere Paket oder Image braucht eine neue Owner-Freigabe.
 
 ## E-08

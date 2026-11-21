@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "44-01 erledigt (Owner-Entscheidungen E-01 bis E-08), nächster Plan 44-02"
-last_updated: "2026-11-21T04:40:32.997Z"
-last_activity: 2026-11-21, 44-01 erledigt, Pläne 44-05 bis 44-08 an E-03/E-04 angepasst
+stopped_at: "44-02 erledigt (Psalm-Taint-Gate, Commit 4f51f090), nächster Plan 44-03"
+last_updated: "2026-11-21T05:10:00.000Z"
+last_activity: 2026-11-21, 44-02 erledigt, Psalm-Taint-Gate gegen OCP 33/34/35 mit 0 Befunden
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 1
-  percent: 10
+  completed_plans: 2
+  percent: 20
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-02 als nächster (10 Pläne, 1 erledigt)
-Status: Executing, Stopp nach 44-01 (Owner-Vorgabe)
-Last activity: 2026-11-21, 44-01 erledigt (E-01 bis E-08), Pläne 44-05 bis 44-08 an E-03/E-04 angepasst
+Plan: 44-03 als nächster (10 Pläne, 2 erledigt)
+Status: Executing, Stopp nach 44-02 (Owner-Vorgabe)
+Last activity: 2026-11-21, 44-02 erledigt (Psalm-Taint-Gate, 0 Befunde gegen OCP 33/34/35, Probe 3 Treffer)
 
 ## Performance Metrics
 
@@ -95,6 +95,7 @@ Last activity: 2026-11-21, 44-01 erledigt (E-01 bis E-08), Pläne 44-05 bis 44-0
 - v1.7: 42-07 in ca. 90 min inkl. ca. 70 min CI mit einem Rerun (3 Tasks, 11 Dateien)
 - v1.7: 42-08 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
 - v1.7: 42-09 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 2 Dateien)
+- v1.7: 44-02 in ca. 85 min inkl. ca. 6 min Psalm-Läufe (3 Tasks, 11 Dateien)
 
 ## Accumulated Context
 
@@ -109,6 +110,7 @@ Last activity: 2026-11-21, 44-01 erledigt (E-01 bis E-08), Pläne 44-05 bis 44-0
 - Phase 45: Store-Text-Entwurf vor dem Einbau vom Owner freigegeben; Launch-Härtung und Volltest DE/EN/FR vor der Abgabe; Tag, Signatur und Store-Abgabe je Einzelfreigabe; Antworten in #45, #56, #57 erst nach dem Store-Release; beide Apps Version 1.7.0.
 - Phasenordner 37 bis 43 bleiben unter .planning/phases/ (Verweise aus Code und Doku).
 - 44-01 (21.11.2026): Owner-Entscheide E-01 bis E-08 in 44-OWNER-DECISIONS.md, strenger als die Empfehlung: zizmor-Persona auditor und shellcheck inkl. info/style als Gate ohne Abschwächung; secrets-outside-env (10) geht in 44-05 Task 2 an den Owner; 44-06 jetzt mit bedingtem Checkpoint.
+- 44-02 (21.11.2026, 4f51f090): Psalm 6.20.10 in php/tools/psalm, Job psalm-taint (v33.0.9, v34.0.6, v35.0.3), Gate zählt SARIF selbst und löst Regelnamen über tool.driver.rules auf (ruleId ist numerisch); 0 Befunde je Tag, kein Checkpoint; Baumhash PHP 132/ab283cdd. Offen: jq fehlt in php:8.3-cli (44-03), test_store_metadata Store-Listing-Wortregel schon vorher rot (deferred-items.md). E-07-Owner-Zusatz: ocp, shim, custom-fixers ausdrücklich freigegeben.
 
 ### Decisions (Roadmap v1.6)
 
