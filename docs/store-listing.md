@@ -3335,12 +3335,12 @@ Belegkette:
 3. `git rev-list -n 1 v1.6.5` = `06a0d7c8c9a33e7cce599c1c834d66a902ad0ce2`,
    `git cat-file -t v1.6.5` = tag (annotiert), Nachricht "Findling 1.6.5",
    Tagger street1983nk.
-4. Tag-Läufe auf v1.6.5, alle 7 success: Release archives for the app store,
+4. Tag-Läufe auf v1.6.5, alle 7 success: Release-Läufe für den App Store,
    PHP and store metadata gates, Python gates, Integration, Resilience,
    Multi-arch image, HaRP deploy.
 5. `gh release view v1.6.5`: `isImmutable` true, veröffentlicht
    2026-11-16T03:18:29Z, neun Assets (findling.tar.gz + .sig,
-   findling_backend.tar.gz + .sig, Quellarchive wie bei 1.6.4). Release-Notiz
+   findling_backend.tar.gz + .sig, Quellpakete wie bei 1.6.4). Release-Notiz
    mit `gh release edit v1.6.5 --notes-file` gesetzt und wortgleich gegen den
    Entwurf verglichen.
 6. Eingereicht über `store-submit.yml` (`-f tag=v1.6.5`), ein Lauf,
