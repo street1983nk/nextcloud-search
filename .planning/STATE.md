@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "44-07 erledigt (Commit 8e4ae166), nächster Plan 44-08"
-last_updated: "2026-11-21T17:00:00.000Z"
-last_activity: 2026-11-21, 44-07 erledigt, workflow-lint.yml mit zizmor und actionlint als Gate
+stopped_at: "44-08 erledigt (Commit c6142abb), nächster Plan 44-09 (Push-Checkpoint, nicht gestartet)"
+last_updated: "2026-11-21T19:00:00.000Z"
+last_activity: 2026-11-21, 44-08 erledigt, Strukturgate test_php_static_gates.py, Trigger E-06, Doku
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 7
-  percent: 70
+  completed_plans: 8
+  percent: 80
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 44 (PHP-Sicherheits-Gates), Milestone-Phasen 44 bis 45
-Plan: 44-08 als nächster (10 Pläne, 7 erledigt)
-Status: Executing
-Last activity: 2026-11-21, 44-07 erledigt (workflow-lint.yml, Gate-Skript mit Positivkontrollen, Probe, Rezept workflows; fünf Rotläufe belegt)
+Plan: 44-09 als nächster (10 Pläne, 8 erledigt)
+Status: Executing, Stopp vor 44-09 (Push-Checkpoint, Owner-Vorgabe)
+Last activity: 2026-11-21, 44-08 erledigt (Strukturgate 64 Tests, python.yml auf .github/workflows/** und dependabot.yml, docs/testing.md Abschnitt Phase 44; all, phpunit und volle Suite grün)
 
 ## Performance Metrics
 
@@ -116,6 +116,7 @@ Last activity: 2026-11-21, 44-07 erledigt (workflow-lint.yml, Gate-Skript mit Po
 - 44-05 (21.11.2026, 325fb97a): Ist-Lauf zizmor auditor 68 und actionlint 19 deckungsgleich mit RESEARCH, kein unbekannter Befund; E-11 vier Environments (release, app-store, app-store-delete mit Reviewer street1983nk, notify; Policy main und v*), 44-06 setzt environment an die Jobs; E-12 NTFY_TOPIC bleibt Repo-Secret, in 44-09 Task 3 nur APPSTORE_TOKEN, APP_PRIVATE_KEY, BACKEND_PRIVATE_KEY löschen; 53/53 checkouts mit persist-credentials false.
 - 44-06 (21.11.2026, ec3b3743): E-13 route-a, einzige shellcheck-Ausnahme vor dem Route-Gate-Ausdruck in php.yml; E-14 APPSTORE_TOKEN im Environment gleich dem Repo-Secret. 19 shellcheck-Hinweise verhaltensgleich behoben (Heredoc statt php -r im Zählschritt und in integration.yml, Ausgabevergleich php:8.3-cli; SC2329 ist ein Fehlalarm von shellcheck 0.11 bei unbedingtem exit nach trap), alte SC2046-Ausnahme in docker.yml durch Array ersetzt; eine Testanpassung test_upgrade_seed_steps (Anker auf Array-Form). Offen für 44-07: zizmor-Wiederholung nach dem docker.yml-Fix (RAM-Schwelle verhinderte Docker); release.yml-Probelauf nur noch von main oder v*.
 - 44-07 (21.11.2026, 8e4ae166): zizmor-Nachtrag zu 44-06 per uvx zizmor==1.32.0 Exit 0 (f0937c5e). workflow-lint.yml ruft die Werkzeuge per docker run (Digest, ohne Netz, read-only) statt als Job-Container, weil das actionlint-Image kein bash hat und als guest läuft; Gate-Skript POSIX sh. Gegenprobe: SHELLCHECK_OPTS=--severity=warning blendet SC2086 in actionlint aus, erst das unset im Skript hält den Befund rot.
+- 44-08 (21.11.2026, c6142abb): Strukturgate bindet Ausnahmen an E-ID, Datei und Regel (E-13 nur SC2016 in php.yml) und verbietet @psalm-suppress/@psalm-taint-escape in den analysierten PHP-Dateien; python.yml startet nach E-06 auf .github/workflows/** und .github/dependabot.yml. Volle Suite 7234 passed, 303 skipped.
 
 ### Decisions (Roadmap v1.6)
 
@@ -296,8 +297,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-21T17:00:00.000Z
-Stopped at: 44-07 erledigt, nächster Plan 44-08
+Last session: 2026-11-21T19:00:00.000Z
+Stopped at: 44-08 erledigt, nächster Plan 44-09 (Push nur nach Owner-Freigabe)
 Resume file: None
 
 ## Operator Next Steps

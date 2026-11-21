@@ -161,7 +161,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 44-08-PLAN.md: Strukturgate test_php_static_gates.py, Trigger nach E-06, Doku
+- [x] 44-08-PLAN.md: Strukturgate test_php_static_gates.py, Trigger nach E-06, Doku
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -198,7 +198,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 7/10 | In Progress | - |
+| 44. PHP-Sicherheits-Gates | v1.7 | 8/10 | In Progress | - |
 | 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
