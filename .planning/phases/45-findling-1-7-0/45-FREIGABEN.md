@@ -64,3 +64,7 @@ Die Texte 1, 2, 3, 5, 6 und 7 gelten wörtlich wie im Plan 45-17 (Abschnitt "Tex
 Entscheid Fix #25 in 1.7.0 45-23: "Go" (2026-11-22 17:00, Claude-Code-Chat) Entscheid: ja
 
 Hinweis: Uhrzeit ungefähr (etwa 17:00 UTC, vom Koordinator übergeben; die genaue Zeit steht im Chatverlauf). Die Zeile deckt die Behebung beider belegten Befunde aus Issue #25 (mbozem) in 1.7.0: F1, eine Nachzählung blockiert den Abgleich (45-23), und F2, die Ruhemarke hungert den Abgleich auf großen Instanzen aus (45-24), unter der Owner-Regel "kein 1.7.1 um 1.7.0 zu fixen" (TDD, Mutationsgegenproben, Live-Probe in 45-20, secure-phase vor dem Tag). Einen Mindestabstand der Nachzählung von "etwa 6 h" hat der Owner gebilligt; Wert und Texte legt 45-23 Task 1 noch einmal vor. F3 ("JPG-Schleife") ist nicht gedeckt und wartet auf die Logs des Melders. Kein Push, kein Tag, kein Kommentar.
+
+Entscheid V-02-Regel 45-19: "Go mit den Empfehlungen" (2026-11-22 18:37, Claude-Code-Chat) Entscheid: c
+
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Die Antwort des Owners bezieht sich auf die im Chat vorgelegten Empfehlungen, hier auf Option c aus 45-19 Task 0: eine Regel nur nach dem Einhängepunkt, gleich welcher Typ, gesetzt in ExternalMountService und gelesen von Liste und Bestätigung (Beispiel /Share mit SMB/CIFS ID 5, SFTP ID 8, SMB/CIFS ID 17: Liste "SMB/CIFS ID 5", "SFTP ID 8", "SMB/CIFS ID 17", Bestätigung "/Share (ID 5), /Share (ID 8), /Share (ID 17)"). Kein Push, kein Tag, kein Kommentar.
