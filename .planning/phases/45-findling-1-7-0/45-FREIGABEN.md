@@ -9,3 +9,8 @@ Hinweis: Zeiten in UTC. Die Freigaben decken nur die zwei Merges mit --match-hea
 Freigabe Push 45-06: "Ja" (2026-11-22 03:47, Claude-Code-Chat) Entscheid: ja
 
 Hinweis: Zeit in UTC. Die Freigabe deckt den Push der lokalen Commits 45-01 bis 45-06 samt diesem Freigabe-Commit auf main (kein Tag, keine Store-Aktion, kein Kommentar), einen CI-Warter und höchstens einen Rerun fehlgeschlagener Jobs; keinen zweiten Push eines Fixes.
+
+Freigabe Version 45-08: "A" (2026-11-22 05:01, Claude-Code-Chat) Entscheid: ja
+Freigabe Changelog 45-08: "A" (2026-11-22 05:01, Claude-Code-Chat) Entscheid: ja
+
+Hinweis: Zeit in UTC. Antwort A = Version ja, CHANGELOG ja (EN gezeigt, DE/FR inhaltsgleich); A heißt auch: liegt der Tag später als 2026-11-22, wird das Datum von [1.7.0] in CHANGELOG.md, CHANGELOG.de.md und CHANGELOG.fr.md beim Release auf das Tag-Datum angepasst. Kein Push, kein Tag, kein Kommentar.
