@@ -23,9 +23,10 @@ final class ReaderCandidates {
 	 * the row is given up as skipped(unreadable) (issue #14).
 	 *
 	 * Twenty, and the argument is at QueueService::readerOf(). The ordinary
-	 * file is read by the first name of its list; the number only matters on a
+	 * file is read by the first name of its order; the number only matters on a
 	 * Team Folder whose advanced permissions close a file to most of its
-	 * members.
+	 * members. The owner first, and the owner counts (issue #59): twenty names
+	 * in all, not the owner plus twenty.
 	 *
 	 * The one source of this number: QueueService and the content gateway read
 	 * it from here, and the gate on the remedy text binds to this constant.
@@ -52,6 +53,23 @@ final class ReaderCandidates {
 	 * would hide the file from everybody behind the cap.
 	 */
 	private const MAX_USERS = 500;
+
+	/**
+	 * The mount providers of the server that build a home mount, as strings so
+	 * that nothing is loaded (issue #59).
+	 *
+	 * Both build the mount point '/' . uid of their user (nextcloud/server
+	 * stable33, stable34 and stable35, lib/private/Files/Mount/
+	 * LocalHomeMountProvider.php and ObjectHomeMountProvider.php, getHomeMountForUser
+	 * with self::class as provider), which the mount cache stores as '/<uid>/'
+	 * (45-AUDIT.md, Mount-Cache-Probe on NC 35.0.3: '130 | bob | /bob/ |
+	 * OC\Files\Mount\LocalHomeMountProvider'). ICachedMountInfo::getMountProvider()
+	 * exists since NC 24.
+	 */
+	private const HOME_MOUNT_PROVIDERS = [
+		'OC\Files\Mount\LocalHomeMountProvider',
+		'OC\Files\Mount\ObjectHomeMountProvider',
+	];
 
 	public function __construct(
 		private IUserMountCache $userMountCache,
@@ -82,11 +100,32 @@ final class ReaderCandidates {
 	 * hundred names are a plausible team folder either way, and guessing from the
 	 * length would break the moment the ceiling moves.
 	 *
+	 * The owner (issue #59) is the user whose HOME mount carries the file:
+	 * mount point exactly '/<uid>/' and a provider of HOME_MOUNT_PROVIDERS,
+	 * nothing else. A share, a Team Folder and an external storage name no
+	 * owner, and neither does a mount whose provider is unknown or empty. The
+	 * owner is read in the same loop and costs no query of its own.
+	 * Node::getOwner() was weighed and not taken: it needs a node, so a mount
+	 * setup and a lookup per file before the reader is even chosen, and for a
+	 * Team Folder it answers a user who may not read the file at all.
+	 *
+	 * The ceiling ends the loop, and that holds for the owner as well: a home
+	 * mount that comes after five hundred other mounts is not looked at, the
+	 * file then has no owner and is read in alphabetical order, as before. The
+	 * ceiling bounds the user objects that are resolved per file (perf audit
+	 * M5), and a file whose owner shares it with five hundred people is not the
+	 * case of #59.
+	 *
+	 * A user the mount cache does not know yet (somebody who never logged in
+	 * since a Team Folder was given to their group, I-45-17-04) is in no list
+	 * and therefore no reader either.
+	 *
 	 * @return array{users: list<string>, truncated: bool, owner: ?string}
 	 */
 	public function forFile(int $fileId): array {
 		$userIds = [];
 		$truncated = false;
+		$owner = null;
 		try {
 			// The user behind a mount can be gone between the mount cache and
 			// this line, and that throws rather than returning null, so the loop
@@ -103,7 +142,13 @@ final class ReaderCandidates {
 					break;
 				}
 
-				$userIds[] = $mount->getUser()->getUID();
+				$uid = $mount->getUser()->getUID();
+				$userIds[] = $uid;
+				if ($owner === null
+					&& $mount->getMountPoint() === '/' . $uid . '/'
+					&& in_array($mount->getMountProvider(), self::HOME_MOUNT_PROVIDERS, true)) {
+					$owner = $uid;
+				}
 			}
 		} catch (\Throwable $e) {
 			$this->logger->warning('Findling: could not resolve who sees a queued file', ['exception' => $e]);
@@ -124,16 +169,27 @@ final class ReaderCandidates {
 		$userIds = array_values(array_unique($userIds));
 		sort($userIds);
 
-		return ['users' => $userIds, 'truncated' => $truncated, 'owner' => null];
+		return ['users' => $userIds, 'truncated' => $truncated, 'owner' => $owner];
 	}
 
 	/**
-	 * The names that are asked to read the file, in the order they are asked.
+	 * The names that are asked to read the file, in the order they are asked:
+	 * the owner first when the owner is among them, then the others in the
+	 * order given, MAX_READER_TRIES names in all (issue #59).
+	 *
+	 * The queue and the gateway both ask this one method, so a file is read
+	 * in the claim and opened again in the gateway in the same order. An owner
+	 * who is not in the list changes nothing; the list is not widened by a
+	 * name the mount cache did not give.
 	 *
 	 * @param list<string> $users sorted, as forFile() hands them out
 	 * @return list<string>
 	 */
 	public static function readingOrder(array $users, ?string $owner): array {
+		if ($owner !== null && in_array($owner, $users, true)) {
+			$users = [$owner, ...array_values(array_filter($users, static fn (string $user): bool => $user !== $owner))];
+		}
+
 		return array_slice($users, 0, self::MAX_READER_TRIES);
 	}
 }

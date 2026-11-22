@@ -802,7 +802,7 @@ class QueueService {
 		// read. Who may read a file in order to index it and who may find it are
 		// not the same question, and collapsing them into one field is how a
 		// prefilter silently turns into a permission model.
-		$reader = $this->readerOf($fileId, $userIds, $folders);
+		$reader = $this->readerOf($fileId, $userIds, $access['owner'], $folders);
 		if (!is_array($reader)) {
 			return $reader;
 		}
@@ -977,8 +977,8 @@ class QueueService {
 	}
 
 	/**
-	 * The first user of the list who may read the file, with their folder and
-	 * the node, or the reason why there is none.
+	 * The first user of the reading order who may read the file, with their
+	 * folder and the node, or the reason why there is none.
 	 *
 	 * Issue #14 is the reason this is a loop and not the first entry of the
 	 * list. Every member of a Team Folder has a mount on its files, so every
@@ -990,6 +990,14 @@ class QueueService {
 	 * with a remedy that said the file had been deleted. The list stays sorted,
 	 * so a retried row is still read in the same context as before; what changed
 	 * is that a name which cannot read the file is passed over.
+	 *
+	 * Issue #59 is the reason the owner comes first when the owner sees the
+	 * file (ReaderCandidates::readingOrder, the one order the gateway uses as
+	 * well): a file shared without download under the watermark of Nextcloud
+	 * Office was read as the alphabetically first recipient, whose fetch the
+	 * secure view refused, while the owner reads it through the home mount
+	 * without a share. The owner first, and the owner counts: twenty names in
+	 * all. The access list userIds stays the sorted prefilter list.
 	 *
 	 * Without a reader the answer is always unreadable and never gone, and the
 	 * reason is where the list comes from. usersFor() asks the mount cache,
@@ -1017,14 +1025,16 @@ class QueueService {
 	 * exactly as before, and the home folders stay cached for the whole claim.
 	 * A file whose only reader sorts behind the cap is therefore unreadable as
 	 * well, and the remedy says which names are asked, so that sentence stays
-	 * true: the first ReaderCandidates::MAX_READER_TRIES users in alphabetical order.
+	 * true: the owner first, then the other users in alphabetical order,
+	 * ReaderCandidates::MAX_READER_TRIES in all.
 	 *
 	 * @param non-empty-list<string> $userIds sorted, as usersFor() hands them out
+	 * @param ?string $owner the owner of the file, see ReaderCandidates::forFile()
 	 * @param array<string, ?Folder> $folders home folders resolved during this claim
 	 * @return array{0:string, 1:Folder, 2:File}|string
 	 */
-	private function readerOf(int $fileId, array $userIds, array &$folders): array|string {
-		foreach (ReaderCandidates::readingOrder($userIds, null) as $userId) {
+	private function readerOf(int $fileId, array $userIds, ?string $owner, array &$folders): array|string {
+		foreach (ReaderCandidates::readingOrder($userIds, $owner) as $userId) {
 			// The folder and the lookup both run with the member as the active
 			// user of the request, see ReaderContext for why: groupfolders builds
 			// the mount of a member as "in share" otherwise, and a +read -share

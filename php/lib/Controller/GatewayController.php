@@ -7,13 +7,10 @@ namespace OCA\Findling\Controller;
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Http\BoundedStreamReader;
 use OCA\Findling\Http\BoundedStreamResponse;
-use OCA\Findling\Service\ReaderContext;
-use OCA\Findling\Service\SearchService;
+use OCA\Findling\Service\GatewayReader;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
-use OCP\Files\File;
-use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
@@ -37,6 +34,18 @@ final class GatewayController extends OCSController {
 	private const SMB_FILE_IN_USE = 'Icewind\SMB\Exception\FileInUseException';
 
 	/**
+	 * The header of a 403 that a rule caused (issue #59), and its one value.
+	 *
+	 * The container (backend/src/findling/nc/client.py) tells a refusal by a
+	 * rule from a gateway that is down by this header and not by the status
+	 * alone: AppAPI answers 403 itself for a request it does not let through,
+	 * and that must stay an outage. The refusal of a foreign ExApp above carries
+	 * no header either.
+	 */
+	public const REFUSAL_HEADER = 'X-Findling-Refusal';
+	public const REFUSAL_POLICY = 'policy';
+
+	/**
 	 * The reader comes from the container like every other collaborator. Its
 	 * constructor takes nothing but closures and floats with defaults, and the
 	 * container of Nextcloud falls back to the default value of a parameter it
@@ -45,9 +54,8 @@ final class GatewayController extends OCSController {
 	 */
 	public function __construct(
 		IRequest $request,
-		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
-		private ReaderContext $readerContext,
+		private GatewayReader $gatewayReader,
 		private BoundedStreamReader $streamReader,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -94,34 +102,30 @@ final class GatewayController extends OCSController {
 			// already names a reader who may, so this refusal is the backstop for
 			// a permission that changed between the claim and the fetch.
 			//
-			// The folder and the lookup run with the named user as the active
-			// user of the request (second round of #14, see ReaderContext):
-			// groupfolders builds the mount of a member as "in share" when the
-			// active user is somebody else, here nobody, and a +read -share ACL
-			// then hides the file from the very member the queue chose.
-			$file = $this->readerContext->actAs(
-				$userId,
-				fn (): ?File => SearchService::readableFile($this->rootFolder->getUserFolder($userId), $fileId),
-			);
+			// GatewayReader resolves the file with the named user as the active
+			// user (second round of #14, see ReaderContext) and opens it after the
+			// restore, so read hooks (admin_audit, activity) see the identity of
+			// the request, as before. Only when the secure view of Nextcloud Office
+			// provably refused that open does it open the file once more inside
+			// actAs of a reader (issue #59, E1 and E2, see its docblock). The mode
+			// 'r' of every open is the entire read only guarantee at this spot.
+			$opened = $this->gatewayReader->open($fileId, $userId);
 			// Not visible to this user, not readable for them and not existing at
 			// all deliberately give the same answer, so the gateway cannot be used
 			// to probe for files the user is not allowed to see.
-			if ($file === null) {
+			if ($opened['outcome'] === GatewayReader::OUTCOME_NOT_FOUND) {
 				return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 			}
+			if ($opened['outcome'] === GatewayReader::OUTCOME_POLICY) {
+				return $this->blockedByARule($fileId, $opened['asked']);
+			}
+			if ($opened['asked'] > 0) {
+				// The file id and how many readers were asked, never who.
+				$this->logger->info('Findling: read a file as a reader of it after secure view refused the first open', ['fileId' => $fileId, 'asked' => $opened['asked']]);
+			}
 
-			// The 'r' is the entire read only guarantee at this spot. It must
-			// never become 'r+', 'w', 'a' or 'x'.
-			//
-			// Deliberately after the switch above has been undone. The mount is
-			// already built with the member's view, so the open does not need the
-			// switch, and read hooks (admin_audit, activity) must not attribute a
-			// read of Findling to the member: they see the same identity as
-			// before the fix.
-			//
-			// The size and the storage are asked before the open. The size is the
-			// one of the file cache and only tells an empty file from one whose
-			// open failed; it is never promised to the client (see
+			// The size is the one of the file cache and only tells an empty file
+			// from one whose open failed; it is never promised to the client (see
 			// BoundedStreamResponse).
 			//
 			// Non blocking only for an SMB storage without server side
@@ -132,15 +136,17 @@ final class GatewayController extends OCSController {
 			// the encryption stream down to the source, where the first empty read
 			// would cut a cipher block in half (B1). instanceOfStorage looks
 			// through the whole wrapper chain of the storage, Jail and Shared
-			// included. Every other storage is read blocking, as before.
-			$size = max(0, (int)$file->getSize());
-			$storage = $file->getStorage();
-			$nonBlocking = $storage->instanceOfStorage(self::SMB_STORAGE)
-				&& !$storage->instanceOfStorage(self::ENCRYPTED_STORAGE);
-			$stream = $file->fopen('r');
-			if (!$stream) {
+			// included. Every other storage is read blocking, as before. The
+			// storage is the one of the node that was opened, which after a
+			// second open is the node of its reader.
+			$size = $opened['size'] ?? 0;
+			$storage = $opened['storage'] ?? null;
+			$stream = $opened['stream'] ?? false;
+			if (!$stream || $storage === null) {
 				return $this->cannotOpen($fileId);
 			}
+			$nonBlocking = $storage->instanceOfStorage(self::SMB_STORAGE)
+				&& !$storage->instanceOfStorage(self::ENCRYPTED_STORAGE);
 
 			// The answer is decided after the first block and before any header.
 			// An SMB open that failed on the server does not fail in fopen in the
@@ -211,6 +217,21 @@ final class GatewayController extends OCSController {
 			$this->logger->error('Findling: unknown error reading a file', ['exception' => $e]);
 			return new DataResponse(['error' => 'Unknown error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * The 403 of a file a rule keeps from every reader that was asked (issue
+	 * #59): the secure view refused the owner as well, or no reader of the
+	 * file was let through, or another ForbiddenException ended the open.
+	 * A static sentence, the file id and how many readers were asked, never a
+	 * name or a path (security audit L6).
+	 */
+	private function blockedByARule(int $fileId, int $asked): DataResponse {
+		$this->logger->warning('Findling: reading a file was blocked by a rule', ['fileId' => $fileId, 'asked' => $asked]);
+		$response = new DataResponse(['error' => 'Reading this file is blocked by a rule.'], Http::STATUS_FORBIDDEN);
+		$response->addHeader(self::REFUSAL_HEADER, self::REFUSAL_POLICY);
+
+		return $response;
 	}
 
 	/**

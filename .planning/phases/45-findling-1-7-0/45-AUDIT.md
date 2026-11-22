@@ -565,3 +565,118 @@ Abweichung zwischen Quelle und Beobachtung: keine. Jede Beobachtung in M1 bis M5
 | I-45-17-03 | INFO, Korrektur einer Plan-Annahme | files_accesscontrol wirft beim fopen sehr wohl eine ForbiddenException ("Access denied by access control"), wenn der Knoten zuvor lesbar aufgelöst wurde | StorageWrapper.php v6.0.1 Z. 241-253, Operation.php Z. 118 | Keine Änderung am Entwurf: fällt unter "jede andere ForbiddenException -> 403 policy" (fail-closed); in 45-20 Schritt C echt prüfen |
 | I-45-17-04 | INFO, vorbestehend | Der Mount-Cache kennt eine Person erst nach ihrem ersten Dateisystem-Aufbau: carol fehlte für TF-lesen bis zu ihrer ersten Anmeldung, und ihre ACL im Index fehlte bis zum nächsten Lesen der Datei. Für 1.7.0: eine solche Person ist auch kein Kandidat in readingOrder | Mount-Probe vorher/nachher, Treffer carol bei 152 erst ab M3 | Kein Fix in 45-17; im Docblock von ReaderCandidates nennen |
 | I-45-17-05 | INFO, relevant für 45-20 Schritt 0 und Frage d | attempts trägt den Verlauf aller Modi: am Ende von M1 stehen 130, 133, 141, 142, 143 schon bei 4, 134 nach dem Abgleich bei 3; auch indexierte Dateien haben attempts > 1 (136: 4) | state.db nach M1 und nach dem Abgleich | Die Serie in 45-20 Schritt 0 beginnt nicht bei 1; vor Schritt 0 den Stand neu lesen und die Erwartung daran ausrichten |
+
+### RED und GREEN 45-17
+
+Plan 45-17 Task 3, 2026-11-22, nach den Owner-Entscheiden von 11:52 UTC (Texte wie im Entwurf, G1, c1, d1; G1 heißt: kein zusätzlicher Fall für allGroups). Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer; findling-59 lief zu keiner Zeit.
+
+Quellen zur Besitzererkennung (`gh api repos/nextcloud/server/contents/<pfad>?ref=stable3x`, abgelegt unter `<scratchpad>/nc-src/`): `lib/public/Files/Config/ICachedMountInfo.php` hat in stable33, stable34 und stable35 `getMountPoint(): string` (@since 9.0.0) und `getMountProvider(): string` (@since 24.0.0), stable33 und stable34 byte-gleich (SHA-256 b1567a04...), stable35 nur mit einer Zeile mehr im Kopf. `lib/private/Files/Mount/LocalHomeMountProvider.php` (stable33 Z. 27, stable34 Z. 31, stable35 Z. 32) und `ObjectHomeMountProvider.php` (Z. 43, 44, 45) bauen `new HomeMountPoint($user, ..., '/' . $user->getUID(), ..., self::class)`, Namensraum `OC\Files\Mount` in allen drei. Im Mount-Cache steht das als `/<uid>/` (Mount-Cache-Probe oben). Daraus `HOME_MOUNT_PROVIDERS` in ReaderCandidates mit genau diesen zwei Klassennamen als Strings.
+
+Schritt 1, reiner Refactor (Commit 92a662c7): `php/lib/Service/ReaderCandidates.php` neu mit `MAX_READER_TRIES = 20` (öffentlich, einzige Quelle), `MAX_USERS = 500`, `forFile()` (Körper von usersFor unverändert, owner null) und `readingOrder()` (array_slice); QueueService bekommt ReaderCandidates statt IUserMountCache im Konstruktor, usersFor() und readerOf() delegieren. Tests nur in der Konstruktion angepasst (QueueServiceTest zwei Stellen, QueueServiceReaderTest eine). Ergebnisse vor dem Commit: `bash scripts/dev/phpunit_docker.sh` -> `OK (1302 tests, 8363 assertions)`; `bash scripts/dev/php_gates_docker.sh all` -> Exit 0 (psalm, cs, zizmor, actionlint grün); sieben Strukturgates `819 passed`; ruff, ruff format (260 Dateien), pyright (0 errors), vulture grün. Baumhash php/: Rezept und unabhängige Pipeline `5b54386c...` mit 137 Dateien, Positivkontrolle `git archive 89cc8ddf` -> `85ba0c66...` mit 136.
+
+Schritt 2, RED (nicht committet, lokal grün vor jedem Commit): neue Fälle in `ReaderCandidatesTest.php` (neu), `GatewayReaderTest.php` (neu), `QueueServiceReaderTest.php` und `GatewayControllerTest.php`, dazu die Testhilfe `SecureViewRefusal.php` (die Ablehnungen als Ausnahmen mit gesetztem Trace, ohne richdocuments zu laden). Damit nur die neuen Fälle rot sind, lief RED gegen ein Gerüst: GatewayReader mit dem Öffnen von 1.6.5 (keine Erkennung, kein zweites Öffnen, `isSecureViewRefusal` immer false), GatewayController schon über GatewayReader, ReaderCandidates ohne Besitzererkennung. `bash scripts/dev/phpunit_docker.sh --filter 'ReaderCandidatesTest|QueueServiceReaderTest|GatewayReaderTest|GatewayControllerTest'` -> `Tests: 75, Assertions: 364, Errors: 12, Failures: 12.`, wörtlich:
+
+```
+Errors:
+1) GatewayReaderTest::testASecureViewRefusalOpensTheFileAgainAsTheOwnerInsideActAs
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+2) GatewayReaderTest::testAnOwnerTheSecureViewRefusesAsWellEndsWithPolicyAndNobodyElseIsAsked
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+3) GatewayReaderTest::testWithoutAnOwnerAtMostTwentyReadersAreAskedAndThenPolicy
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+4) GatewayReaderTest::testTheSameMessageWithTheFrameOnlyFurtherUpIsPolicyWithoutAnotherOpen
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+5) GatewayReaderTest::testTheRightFrameWithAnotherMessageIsPolicyWithoutAnotherOpen
+   OCP\Files\ForbiddenException: Access denied by access control
+6) GatewayReaderTest::testARefusalOfAccessControlIsPolicyWithoutAnotherOpen
+   OCP\Files\ForbiddenException: Access denied by access control
+7) GatewayReaderTest::testAnotherForbiddenExceptionAtTheSecondReaderEndsWithoutAThird
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+8) GatewayReaderTest::testAnOwnerWhoDoesNotResolveTheFileInActAsEndsWithPolicy
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+9) GatewayReaderTest::testAnOwnerWhoseFolderCannotBeBuiltEndsWithPolicy
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+10) GatewayReaderTest::testWithoutAnOwnerAReaderWhoDoesNotResolveIsPassedOver
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+11) GatewayReaderTest::testADeletedReaderIsPassedOverAndNeverTurnsIntoNotFound
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+12) GatewayReaderTest::testAStorageThatIsNotAvailableAtTheOpenOfTheOwnerTravelsUp
+   OCP\Files\ForbiddenException: Download blocked due the secure view policy
+Failures:
+1) GatewayControllerTest::testASecureViewRefusalIsReadAsTheOwnerAndLeavesOneInfoLine
+   Psr\Log\LoggerInterface::error('Findling: unknown error reading a file', [...]): void was not expected to be called.
+2) GatewayControllerTest::testARefusalForEveryoneAskedIsA403WithTheRefusalHeader
+   Psr\Log\LoggerInterface::error('Findling: unknown error reading a file', [...]): void was not expected to be called.
+3) GatewayControllerTest::testAnotherForbiddenExceptionAtTheFirstOpenIsA403PolicyWithoutAnotherOpen
+   Failed asserting that 500 is identical to 403.
+4) GatewayControllerTest::testASharingViolationAtTheOpenOfTheOwnerIsA422AsBefore
+   Psr\Log\LoggerInterface::error('Findling: unknown error reading a file', [...]): void was not expected to be called.
+5) GatewayControllerTest::testADeletedReaderOfTheSecondRoundIsNeverA404
+   Failed asserting that 500 is identical to 403.
+6) GatewayReaderTest::testAStorageThatIsNotAvailableAtTheOpenOfAReaderTravelsUp
+   Failed asserting that exception of type "OCP\Files\ForbiddenException" matches expected exception "OCP\Files\StorageNotAvailableException". Message was: "Download blocked due the secure view policy" at
+7) GatewayReaderTest::testTheRecognitionAsksForTheExceptionClassTheMessageAndTheFirstFrame
+   Failed asserting that false is true.
+8) QueueServiceReaderTest::testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient
+   Failed asserting that two strings are identical.
+9) ReaderCandidatesTest::testTheOwnerIsAskedFirstAndTheOthersKeepTheirOrder
+   Failed asserting that two arrays are identical.
+10) ReaderCandidatesTest::testAnOwnerBehindTheCapIsFirstAndTheOwnerCounts
+   Failed asserting that two arrays are identical.
+11) ReaderCandidatesTest::testTheHomeMountOfTheLocalProviderNamesTheOwner
+   Failed asserting that two arrays are identical.
+12) ReaderCandidatesTest::testTheHomeMountOfTheObjectStoreProviderNamesTheOwner
+   Failed asserting that null is identical to 'dave'.
+```
+
+Alle bestehenden Fälle der vier Dateien waren grün. Grün schon im RED, weil das Verhalten von 1.6.5 sie erfüllt (Regressionswächter, keine neuen Aussagen): GatewayReaderTest "Öffnen außerhalb actAs gelingt" (asked 0, keine Mount-Abfrage), "benannte Person löst nicht auf -> not_found", "unbekannte benannte Person -> NoUserException"; GatewayControllerTest "fremde ExApp -> 403 ohne Kopf", "StorageNotAvailable beim Besitzer -> 500" (im Gerüst 500 über die nicht abgefangene ForbiddenException, erst die Mutationen unten zeigen den Fall des Besitzers), "unbekannte benannte Person -> 404, kein zweites Öffnen"; QueueServiceReaderTest "Besitzer löst nicht auf -> alice"; ReaderCandidatesTest die Fälle ohne Besitzer (Freigabe, Team Folder, extern, Provider leer, fremder Home-Mount, 501 Mounts, Ausnahme im Mount-Cache, alphabetische Reihenfolge).
+
+Schritt 3, Fix: ReaderCandidates erkennt den Besitzer in derselben Schleife (Mount-Point exakt `'/' . $uid . '/'` und Provider in `HOME_MOUNT_PROVIDERS`, erster Treffer), Kappung beendet die Schleife auch für den Besitzer (Docblock), `Node::getOwner()` im Docblock bewertet und verworfen; `readingOrder()` Besitzer zuerst, Rest in gegebener Reihenfolge, höchstens 20 insgesamt. QueueService::readerOf() bekommt den Besitzer und fragt `readingOrder($userIds, $owner)`; userIds bleibt die sortierte Vorfilterliste. GatewayReader (neu) mit `open()`, `isSecureViewRefusal()` (instanceof ForbiddenException, Nachricht exakt, `$e->getTrace()[0]` class und function als Strings), zweitem Öffnen nur nach Secure-View-Ablehnung in actAs (Besitzer allein, E2; ohne Besitzer readingOrder bis 20, Überspringen bei Throwable oder null mit debug-Zeile nur `fileId` und `class`), jede andere ForbiddenException -> policy. GatewayController: rejectForeignCaller() erste Anweisung unverändert, Antwort `not_found` -> bestehender 404-Body, `policy` -> warning `Findling: reading a file was blocked by a rule` mit `fileId` und `asked`, 403 `['error' => 'Reading this file is blocked by a rule.']` und Kopf `X-Findling-Refusal: policy` (öffentliche Konstanten `REFUSAL_HEADER`, `REFUSAL_POLICY`); Erfolg nach zweitem Öffnen: info `Findling: read a file as a reader of it after secure view refused the first open` mit `fileId` und `asked`. Prime- und Stream-Logik, 422 und 500 unverändert.
+
+GREEN: `--filter 'ReaderCandidatesTest|QueueServiceReaderTest|GatewayReaderTest|GatewayControllerTest'` -> `OK (75 tests, 492 assertions)`; volle Suite `OK (1342 tests, 8601 assertions)` (`1342 tests executed, floor 28`).
+
+Mutationsgegenproben (`<scratchpad>/mutations.sh` mit `mutate.py`, je Mutation die vier Testdateien gefiltert, danach beide Quelldateien aus der Sicherung zurück und SHA-256 vorher/nachher verglichen):
+
+```
+== frame_removed (php/lib/Service/GatewayReader.php) exit=1 restored_identical=yes
+Tests: 75, Assertions: 488, Failures: 2.
+  1) GatewayReaderTest::testTheSameMessageWithTheFrameOnlyFurtherUpIsPolicyWithoutAnotherOpen
+  2) GatewayReaderTest::testTheRecognitionAsksForTheExceptionClassTheMessageAndTheFirstFrame
+== any_frame (php/lib/Service/GatewayReader.php) exit=1 restored_identical=yes
+Tests: 75, Assertions: 488, Failures: 2.
+  1) GatewayReaderTest::testTheSameMessageWithTheFrameOnlyFurtherUpIsPolicyWithoutAnotherOpen
+  2) GatewayReaderTest::testTheRecognitionAsksForTheExceptionClassTheMessageAndTheFirstFrame
+== no_stop_after_owner (php/lib/Service/GatewayReader.php) exit=1 restored_identical=yes
+Tests: 75, Assertions: 487, Failures: 4.
+  1) GatewayControllerTest::testARefusalForEveryoneAskedIsA403WithTheRefusalHeader
+  2) GatewayReaderTest::testAnOwnerTheSecureViewRefusesAsWellEndsWithPolicyAndNobodyElseIsAsked
+  3) GatewayReaderTest::testAnOwnerWhoDoesNotResolveTheFileInActAsEndsWithPolicy
+  4) GatewayReaderTest::testAnOwnerWhoseFolderCannotBeBuiltEndsWithPolicy
+== no_owner_first (php/lib/Service/ReaderCandidates.php) exit=1 restored_identical=yes
+Tests: 75, Assertions: 489, Failures: 3.
+  1) QueueServiceReaderTest::testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient
+  2) ReaderCandidatesTest::testTheOwnerIsAskedFirstAndTheOthersKeepTheirOrder
+  3) ReaderCandidatesTest::testAnOwnerBehindTheCapIsFirstAndTheOwnerCounts
+== open_outside_actas (php/lib/Service/GatewayReader.php) exit=1 restored_identical=yes
+Tests: 75, Assertions: 485, Failures: 7.
+  1) GatewayControllerTest::testASecureViewRefusalIsReadAsTheOwnerAndLeavesOneInfoLine
+  2) GatewayControllerTest::testARefusalForEveryoneAskedIsA403WithTheRefusalHeader
+  3) GatewayReaderTest::testASecureViewRefusalOpensTheFileAgainAsTheOwnerInsideActAs
+  4) GatewayReaderTest::testAnOwnerTheSecureViewRefusesAsWellEndsWithPolicyAndNobodyElseIsAsked
+  5) GatewayReaderTest::testWithoutAnOwnerAtMostTwentyReadersAreAskedAndThenPolicy
+  6) GatewayReaderTest::testAnotherForbiddenExceptionAtTheSecondReaderEndsWithoutAThird
+  7) GatewayReaderTest::testWithoutAnOwnerAReaderWhoDoesNotResolveIsPassedOver
+```
+
+Zuordnung zu den Vorgaben: Frame-Bedingung entfernt (`frame_removed`) -> "gleiche Nachricht ohne Frame an erster Stelle" rot; irgendein Frame statt `getTrace()[0]` (`any_frame`) -> "Frame nur weiter oben" rot; Abbruch nach dem Besitzer entfernt (`no_stop_after_owner`) -> allTags-Fall rot; Besitzer-Vorzug entfernt (`no_owner_first`) -> Reihenfolgefall rot; actAs um das fopen entfernt (`open_outside_actas`) -> "aktive Person ist bob" rot. Nach jeder der fünf Mutationen waren GatewayReader.php und ReaderCandidates.php wieder byte-gleich (restored_identical=yes).
+
+Gates am Stand des Fix-Commits: sieben Strukturgates `819 passed`; ruff check grün, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture grün; `bash scripts/dev/php_gates_docker.sh all` -> Exit 0 (`psalm taint gate green against 3 nextcloud/ocp tags`, je `No errors found!` und `0 findings, probe found 3` für v33.0.9, v34.0.6, v35.0.3; `php-cs-fixer: no violation`; zizmor und actionlint grün). Baumhash php/: Rezept und unabhängige Pipeline `ef4f5a19...` mit 141 Dateien, Positivkontrolle `git archive 92a662c7` -> `5b54386c...` mit 137.
+
+Hinweis zur verify-Zeile: Der grep auf `OCA\\\\Richdocuments\\\\Storage\\\\SecureViewWrapper` scheitert, wenn die Befehlszeile durch die Werkzeugschicht des Ausführers läuft (sie halbiert Backslashes: `printf '%s' "OCA\\\\Richdocuments"` gab `OCA\Richdocuments`). Aus einer Skriptdatei (`<scratchpad>/verify_greps.sh`, die Zeile wörtlich) gab dieselbe Kette `GREPS_OK`; die Datei enthält `'OCA\Richdocuments\Storage\SecureViewWrapper'` (Bytes per `od -c` geprüft).
+
+Befunde Task 3:
+
+| ID | Schwere | Befund | Beleg | Empfehlung |
+|---|---|---|---|---|
+| I-45-17-06 | INFO | Die Spalte `path` eines Auftrags folgt jetzt dem Leser: liest der Besitzer, ist der Pfad relativ zu seinem Ordner, nicht mehr zu dem der alphabetisch ersten Empfängerin. Gewollt (Behavior "path relativ zu bobs Ordner"); docKey kommt weiter aus oc_filecache und ist unberührt | QueueServiceReaderTest `testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient` | In 45-20 an einem echten Treffer (Titel, Pfad, Link) gegenprüfen |
+| I-45-17-07 | INFO | `asked` zählt die Leser der zweiten Runde einschließlich übersprungener; die benannte Person ohne Besitzer wird in der zweiten Runde in actAs erneut gefragt (sie steht in readingOrder) | GatewayReaderTest `testWithoutAnOwnerAReaderWhoDoesNotResolveIsPassedOver` (asked 3) | So belassen: ein Versuch mehr, dafür eine Reihenfolge für Claim und Gateway; Zeitmessung mit 20 Kandidaten in 45-20 (T-45-61) |

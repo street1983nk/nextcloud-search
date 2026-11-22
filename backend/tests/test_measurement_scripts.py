@@ -1397,8 +1397,19 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 5b54386c as well; the recipe and
 # the pipeline over git archive of 89cc8ddf, the last commit before this change, gave 85ba0c66 with
 # 136 files (positive control).
-PHP_FILES_TODAY = 137
-PHP_TREE_HASH_TODAY = "5b54386c1910c1c343b823b01809bca0fffb49f29ad933004418ab030b822003"
+# Moved on 2026-11-22 by plan 45-17, step 3 (the fix of issue #59): four files came,
+# lib/Service/GatewayReader.php (the open of the content gateway and the second open inside actAs
+# after a refusal of the secure view), tests/Unit/GatewayReaderTest.php, tests/Unit/
+# ReaderCandidatesTest.php and tests/Unit/SecureViewRefusal.php (the refusals as test doubles);
+# lib/Service/ReaderCandidates.php recognises the owner and orders the readers,
+# lib/Service/QueueService.php passes the owner to readerOf(), lib/Controller/GatewayController.php
+# answers a refusal by a rule with 403 and X-Findling-Refusal: policy, and GatewayControllerTest.php
+# and QueueServiceReaderTest.php follow. No file went, so PHP_FILES_TODAY moves to 141. The recipe
+# gave ef4f5a19; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# ef4f5a19 as well; the recipe and the pipeline over git archive of 92a662c7, the last commit before
+# this change, gave 5b54386c with 137 files (positive control).
+PHP_FILES_TODAY = 141
+PHP_TREE_HASH_TODAY = "ef4f5a19056a7fd94531d9a28679ff6c2ce026d910ea9e73aa01f2a359a2e996"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

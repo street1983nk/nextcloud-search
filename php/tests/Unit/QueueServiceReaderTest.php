@@ -250,6 +250,83 @@ final class QueueServiceReaderTest extends TestCase {
 		self::assertSame('anna', $sources[self::ROW_ID]['fetchAs'] ?? null);
 	}
 
+	/**
+	 * The mount list of the file with the shape of each mount: name, mount
+	 * point, provider class (issue #59, the owner is recognised by it).
+	 *
+	 * @param list<array{string, string, string}> $mounts
+	 */
+	private function mountsWithShape(array $mounts): void {
+		$list = [];
+		foreach ($mounts as [$userId, $mountPoint, $provider]) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($userId);
+			$mount = $this->createMock(ICachedMountFileInfo::class);
+			$mount->method('getUser')->willReturn($user);
+			$mount->method('getMountPoint')->willReturn($mountPoint);
+			$mount->method('getMountProvider')->willReturn($provider);
+			$list[] = $mount;
+		}
+
+		$this->mountCache->method('getMountsForFileId')->with(self::FILE_ID)->willReturn($list);
+	}
+
+	/**
+	 * A home folder per name with its own relative path of the file.
+	 *
+	 * @param array<string, array{?File, string}> $nodes
+	 */
+	private function foldersWithPaths(array $nodes): void {
+		$folders = [];
+		foreach ($nodes as $userId => [$node, $relative]) {
+			$folder = $this->createMock(Folder::class);
+			$folder->method('getFirstNodeById')->with(self::FILE_ID)->willReturn($node);
+			$folder->method('getRelativePath')->willReturn($relative);
+			$folders[$userId] = $folder;
+		}
+
+		$this->rootFolder->method('getUserFolder')->willReturnCallback(
+			static fn (string $userId): Folder => $folders[$userId],
+		);
+	}
+
+	public function testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient(): void {
+		// The case of #59: alice sees the file through a share without download,
+		// bob owns it. bob reads it, through his own folder, and the access list
+		// still names both in alphabetical order.
+		$this->mountsWithShape([
+			['alice', '/alice/files/wz59-b1.odt/', 'OCA\\Files_Sharing\\MountProvider'],
+			['bob', '/bob/', 'OC\\Files\\Mount\\LocalHomeMountProvider'],
+		]);
+		$this->foldersWithPaths([
+			'alice' => [$this->file(true), '/wz59-b1.odt'],
+			'bob' => [$this->file(true), '/Dokumente/wz59-b1.odt'],
+		]);
+
+		$sources = $this->service()->claim(32, 1_000_000);
+
+		self::assertSame('bob', $sources[self::ROW_ID]['fetchAs'] ?? null);
+		self::assertSame('Dokumente/wz59-b1.odt', $sources[self::ROW_ID]['path'] ?? null);
+		self::assertSame(['alice', 'bob'], $sources[self::ROW_ID]['userIds'] ?? null);
+	}
+
+	public function testAnOwnerWhoCannotResolveTheFileIsFollowedByTheOthers(): void {
+		$this->mountsWithShape([
+			['alice', '/alice/files/wz59-b1.odt/', 'OCA\\Files_Sharing\\MountProvider'],
+			['bob', '/bob/', 'OC\\Files\\Mount\\LocalHomeMountProvider'],
+		]);
+		$this->foldersWithPaths([
+			'alice' => [$this->file(true), '/wz59-b1.odt'],
+			'bob' => [null, '/Dokumente/wz59-b1.odt'],
+		]);
+
+		$sources = $this->service()->claim(32, 1_000_000);
+
+		self::assertSame('alice', $sources[self::ROW_ID]['fetchAs'] ?? null);
+		self::assertSame('wz59-b1.odt', $sources[self::ROW_ID]['path'] ?? null);
+		self::assertSame(['alice', 'bob'], $sources[self::ROW_ID]['userIds'] ?? null);
+	}
+
 	public function testAFileThereAndClosedToEveryoneAskedIsUnreadableAndNotGone(): void {
 		// The new sentence. Nobody asked may read it, somebody reaches it, so
 		// the remedy is a permission setting and not "it was deleted".

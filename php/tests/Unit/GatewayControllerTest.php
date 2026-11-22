@@ -8,10 +8,14 @@ use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Controller\GatewayController;
 use OCA\Findling\Http\BoundedStreamReader;
 use OCA\Findling\Http\BoundedStreamResponse;
+use OCA\Findling\Service\GatewayReader;
+use OCA\Findling\Service\ReaderCandidates;
 use OCA\Findling\Service\ReaderContext;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\IOutput;
+use OCP\Files\Config\ICachedMountFileInfo;
+use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -52,6 +56,7 @@ use Psr\Log\LoggerInterface;
 #[CoversClass(GatewayController::class)]
 final class GatewayControllerTest extends TestCase {
 	private IRootFolder&MockObject $rootFolder;
+	private IUserMountCache&MockObject $mountCache;
 	private LoggerInterface&MockObject $logger;
 	private IUserSession&MockObject $session;
 	private IUserManager&MockObject $userManager;
@@ -65,6 +70,7 @@ final class GatewayControllerTest extends TestCase {
 
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->mountCache = $this->createMock(IUserMountCache::class);
 
 		// Stateful, so the cases can observe who is active at each step.
 		$this->session = $this->createMock(IUserSession::class);
@@ -116,9 +122,13 @@ final class GatewayControllerTest extends TestCase {
 
 		return new GatewayController(
 			$request,
-			$this->rootFolder,
 			$this->logger,
-			new ReaderContext($this->session, $this->userManager),
+			new GatewayReader(
+				$this->rootFolder,
+				new ReaderContext($this->session, $this->userManager),
+				new ReaderCandidates($this->mountCache, $this->logger),
+				$this->logger,
+			),
 			// The reader on a fake clock, so the thirty second deadline of the
 			// first block costs no real time in the cases that run into it.
 			new BoundedStreamReader(
@@ -515,5 +525,193 @@ final class GatewayControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
 
 		self::assertTheCannotOpenAnswer($response);
+	}
+
+	/**
+	 * The mounts of file 11 for issue #59: alice through a share, bob through
+	 * his home mount, so bob is the owner.
+	 */
+	private function sharedByBob(): void {
+		$mounts = [];
+		foreach ([['alice', '/alice/files/a.odt/', 'OCA\\Files_Sharing\\MountProvider'], ['bob', '/bob/', 'OC\\Files\\Mount\\LocalHomeMountProvider']] as [$uid, $point, $provider]) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			$mount = $this->createMock(ICachedMountFileInfo::class);
+			$mount->method('getUser')->willReturn($user);
+			$mount->method('getMountPoint')->willReturn($point);
+			$mount->method('getMountProvider')->willReturn($provider);
+			$mounts[] = $mount;
+		}
+		$this->mountCache->method('getMountsForFileId')->with(11)->willReturn($mounts);
+	}
+
+	/**
+	 * Each user's view of file 11: the open returns a stream or throws, and
+	 * records who was active.
+	 *
+	 * @param array<string, \Closure(): mixed> $opens
+	 * @param list<array{string, ?string}> $steps
+	 */
+	private function filesOpeningAs(array $opens, array &$steps): void {
+		$folders = [];
+		foreach ($opens as $uid => $open) {
+			$file = $this->createMock(File::class);
+			$file->method('isReadable')->willReturn(true);
+			$file->method('getSize')->willReturn(10);
+			$file->method('getStorage')->willReturn($this->storage(false, false));
+			$file->method('fopen')->with('r')->willReturnCallback(function () use ($uid, $open, &$steps) {
+				$steps[] = [$uid, $this->active?->getUID()];
+
+				return $open();
+			});
+			$folder = $this->createMock(Folder::class);
+			$folder->method('getFirstNodeById')->willReturn($file);
+			$folders[$uid] = $folder;
+		}
+		$this->rootFolder->method('getUserFolder')->willReturnCallback(
+			static fn (string $uid): Folder => $folders[$uid] ?? throw new \OC\User\NoUserException($uid),
+		);
+	}
+
+	public function testASecureViewRefusalIsReadAsTheOwnerAndLeavesOneInfoLine(): void {
+		$this->sharedByBob();
+		$stream = ScriptedStream::open('owner', ['bobs bytes', ScriptedStream::EOF]);
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw SecureViewRefusal::real(),
+			'bob' => static fn () => $stream,
+		], $steps);
+		$this->logger->expects(self::once())->method('info')->with(
+			'Findling: read a file as a reader of it after secure view refused the first open',
+			['fileId' => 11, 'asked' => 1],
+		);
+		$this->logger->expects(self::never())->method('warning');
+		$this->logger->expects(self::never())->method('error');
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame('bobs bytes', $this->body($response));
+		self::assertSame([['alice', null], ['bob', 'bob']], $steps);
+		self::assertNull($this->active);
+	}
+
+	public function testARefusalForEveryoneAskedIsA403WithTheRefusalHeader(): void {
+		$this->sharedByBob();
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw SecureViewRefusal::real(),
+			'bob' => static fn () => throw SecureViewRefusal::real(),
+		], $steps);
+		$this->logger->expects(self::once())->method('warning')->with(
+			'Findling: reading a file was blocked by a rule',
+			['fileId' => 11, 'asked' => 1],
+		);
+		$this->logger->expects(self::never())->method('error');
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertSame(['error' => 'Reading this file is blocked by a rule.'], $response->getData());
+		self::assertSame('policy', $response->getHeaders()['X-Findling-Refusal'] ?? null);
+		self::assertSame('X-Findling-Refusal', GatewayController::REFUSAL_HEADER);
+		self::assertSame('policy', GatewayController::REFUSAL_POLICY);
+		self::assertSame([['alice', null], ['bob', 'bob']], $steps);
+	}
+
+	public function testAnotherForbiddenExceptionAtTheFirstOpenIsA403PolicyWithoutAnotherOpen(): void {
+		$this->sharedByBob();
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw SecureViewRefusal::accessControl(),
+			'bob' => static fn () => 'never',
+		], $steps);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertSame('policy', $response->getHeaders()['X-Findling-Refusal'] ?? null);
+		self::assertSame([['alice', null]], $steps);
+	}
+
+	public function testTheRefusalOfAForeignExAppCarriesNoRefusalHeader(): void {
+		$response = $this->controller('some_other_backend')->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayNotHasKey('X-Findling-Refusal', $response->getHeaders());
+	}
+
+	public function testAStorageThatIsNotAvailableAtTheOpenOfTheOwnerIsA500AsBefore(): void {
+		$this->sharedByBob();
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw SecureViewRefusal::real(),
+			'bob' => static fn () => throw new StorageNotAvailableException('down'),
+		], $steps);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertSame(['error' => 'Unknown error occurred.'], $response->getData());
+		self::assertNull($this->active);
+	}
+
+	public function testASharingViolationAtTheOpenOfTheOwnerIsA422AsBefore(): void {
+		$class = 'Icewind\\SMB\\Exception\\FileInUseException';
+		if (!class_exists($class)) {
+			self::markTestSkipped('icewind/smb is not in the autoload space of this server checkout');
+		}
+		$this->sharedByBob();
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw SecureViewRefusal::real(),
+			'bob' => static fn () => throw new $class('/secret/share/path.docx'),
+		], $steps);
+		$this->expectTheCannotOpenAnswer();
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertTheCannotOpenAnswer($response);
+	}
+
+	public function testADeletedReaderOfTheSecondRoundIsNeverA404(): void {
+		// No owner, two members: anna is refused by the secure view, bert is
+		// gone since the mount cache was written. The answer is the 403 of the
+		// policy and never the 404 of a missing user (T-45-58).
+		$mounts = [];
+		foreach (['anna', 'bert'] as $uid) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			$mount = $this->createMock(ICachedMountFileInfo::class);
+			$mount->method('getUser')->willReturn($user);
+			$mount->method('getMountPoint')->willReturn('/' . $uid . '/files/TF/');
+			$mount->method('getMountProvider')->willReturn('OCA\\GroupFolders\\Mount\\MountProvider');
+			$mounts[] = $mount;
+		}
+		$this->mountCache->method('getMountsForFileId')->with(11)->willReturn($mounts);
+		$steps = [];
+		$this->filesOpeningAs(['anna' => static fn () => throw SecureViewRefusal::real()], $steps);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'anna');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertNotSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testAnUnknownNamedUserIsNeverOpenedAgain(): void {
+		$this->mountCache->expects(self::never())->method('getMountsForFileId');
+		$this->rootFolder->method('getUserFolder')->willThrowException(new \OC\User\NoUserException('ghost'));
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'ghost');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		self::assertSame(['error' => 'Node is not a file or could not be found.'], $response->getData());
 	}
 }
