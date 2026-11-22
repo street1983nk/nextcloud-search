@@ -6,10 +6,24 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-22
+
 ### Added
 
+- Single external storages set up by an admin can be kept out of the index,
+  next to the switch for external storage. Documents of an excluded storage
+  leave the index at the next comparison run; a storage included again is
+  indexed on the next regular run (#45).
+- The admin page shows how many slots are free for excluded folders and for
+  excluded patterns (#45).
 - Traditional Chinese (Taiwan) for the user interface, contributed by
   foolfitz (#56).
+
+### Changed
+
+- A folder entry with * or ? is refused with a pointer to "Excluded
+  patterns"; earlier entries with * or ? stay in force and are marked. The
+  message for a pattern without * or ? names both ways (#45).
 
 ### Fixed
 
@@ -382,6 +396,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.7.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.5...v1.7.0
+[1.6.5]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2

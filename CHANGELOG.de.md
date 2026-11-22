@@ -7,10 +7,25 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-22
+
 ### Hinzugefügt
 
+- Einzelne von einem Admin eingerichtete externe Speicher lassen sich neben
+  dem Schalter für externen Speicher vom Index ausnehmen. Dokumente eines
+  ausgenommenen Speichers verlassen den Index beim nächsten Abgleich; ein
+  wieder aufgenommener Speicher wird beim nächsten regulären Durchlauf
+  indexiert (#45).
+- Die Verwaltungsseite zeigt, wie viele Plätze für ausgeschlossene Ordner
+  und für ausgeschlossene Muster frei sind (#45).
 - Traditionelles Chinesisch (Taiwan) für die Oberfläche, beigetragen von
   foolfitz (#56).
+
+### Geändert
+
+- Ein Ordnereintrag mit * oder ? wird mit einem Hinweis auf "Ausgeschlossene
+  Muster" abgelehnt; frühere Einträge mit * oder ? gelten weiter und sind
+  markiert. Die Meldung für ein Muster ohne * oder ? nennt beide Wege (#45).
 
 ### Behoben
 

@@ -8,10 +8,26 @@ dans [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-22
+
 ### Ajouté
 
+- Les stockages externes configurés par un administrateur peuvent être
+  exclus de l'index un par un, à côté de l'interrupteur du stockage externe.
+  Les documents d'un stockage exclu quittent l'index lors de la prochaine
+  comparaison ; un stockage de nouveau inclus est indexé lors du prochain
+  passage régulier (#45).
+- La page d'administration indique combien de places restent libres pour
+  les dossiers exclus et pour les motifs exclus (#45).
 - Chinois traditionnel (Taïwan) pour l'interface, contribution de
   foolfitz (#56).
+
+### Modifié
+
+- Une entrée de dossier contenant * ou ? est refusée avec un renvoi vers
+  « Motifs exclus » ; les entrées antérieures avec * ou ? restent en vigueur
+  et sont signalées. Le message pour un motif sans * ni ? indique les deux
+  voies (#45).
 
 ### Corrigé
 
