@@ -380,6 +380,72 @@ final class ExclusionServiceTest extends TestCase {
 		self::assertFalse($service->isExcluded('Archivar.pdf'));
 	}
 
+	// -- * or ? in the folder field (D-45-08) ---------------------------------
+
+	/**
+	 * New folder entries with a wildcard, each refused on its own.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function newFolderEntriesWithAWildcard(): array {
+		return [
+			'trailing star' => ['Archiv*'],
+			'question mark inside' => ['Proj?kt'],
+			'star in a deeper segment' => ['Team/*/Export'],
+		];
+	}
+
+	#[DataProvider('newFolderEntriesWithAWildcard')]
+	public function testANewFolderEntryWithAWildcardEarnsItsCodeAndNotItsValue(string $value): void {
+		$service = $this->service([], []);
+
+		$answer = $service->validate([$value]);
+
+		self::assertSame([ExclusionService::ERROR_WILDCARD], $answer);
+		self::assertStringNotContainsString($value, json_encode($answer, JSON_THROW_ON_ERROR));
+		self::assertNotSame([], $this->logLines, 'a refusal is counted');
+		foreach ($this->logLines as $line) {
+			self::assertStringNotContainsString($value, $line['message']);
+			self::assertStringNotContainsString($value, json_encode($line['context'], JSON_THROW_ON_ERROR));
+		}
+	}
+
+	#[DataProvider('newFolderEntriesWithAWildcard')]
+	public function testANewFolderEntryWithAWildcardIsNotWritten(string $value): void {
+		$service = $this->service(['Archiv'], []);
+
+		self::assertSame([ExclusionService::ERROR_WILDCARD], $service->save(['Archiv', $value]));
+		self::assertSame([], $this->written);
+	}
+
+	public function testAStoredFolderEntryWithAStarIsToleratedOnSave(): void {
+		$service = $this->service(['a*b'], []);
+
+		self::assertSame([], $service->validate(['a*b']));
+		self::assertSame([], $this->logLines);
+		self::assertSame([], $service->save(['a*b', 'Backups']));
+		self::assertSame(['a*b', 'Backups'], $this->written[SettingsService::KEY_EXCLUSIONS]);
+	}
+
+	public function testOnlyTheNewEntryWithAStarIsRefusedNextToAStoredOne(): void {
+		$service = $this->service(['a*b'], []);
+
+		self::assertSame([ExclusionService::ERROR_WILDCARD], $service->validate(['a*b', 'c*']));
+	}
+
+	public function testAStoredEntryIsToleratedAlsoWhenSentInAnotherSpelling(): void {
+		$service = $this->service(['a*b'], []);
+
+		self::assertSame([], $service->validate(['/a*b/']));
+	}
+
+	public function testAFolderEntryWithoutAWildcardStaysAllowed(): void {
+		$service = $this->service([], []);
+
+		self::assertSame([], $service->validate(['Backups']));
+		self::assertSame([], $service->validate(['Fotos (2024)/Urlaub']));
+	}
+
 	public function testSavingPatternsLeavesThePrefixesAlone(): void {
 		$service = $this->service(['Archiv'], []);
 

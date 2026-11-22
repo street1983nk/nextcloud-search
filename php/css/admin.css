@@ -418,10 +418,44 @@
    never shortened and never cut off. */
 .findling-rules__row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: calc(var(--default-grid-baseline) * 2);
 	min-height: var(--default-clickable-area);
 	border-bottom: 1px solid var(--color-border);
+}
+
+/* The marking of a stored folder entry with * or ? (D-45-08): a sentence of its
+   own line under the path, in the warning text colour with the warning icon and
+   on the normal surface, because it is a hint about one row and not an alarm
+   about the page. The icon and the sentence carry the meaning, not the colour. */
+.findling-rules__row-warning {
+	display: flex;
+	flex: 1 1 100%;
+	align-items: flex-start;
+	gap: var(--default-grid-baseline);
+	margin-block: 0 calc(var(--default-grid-baseline) * 2);
+	font-size: var(--font-size-small);
+	color: var(--color-warning-text);
+}
+
+.findling-rules__row-warning svg {
+	flex: 0 0 auto;
+	margin-block-start: calc(var(--default-grid-baseline) / 2);
+	color: var(--color-element-warning);
+}
+
+/* The places a list has left (D-45-07), muted like every hint, and in the
+   warning text colour once one or none is left; the sentence changes with it,
+   so the colour is never the only signal. */
+.findling-rules__slots {
+	margin-block: var(--default-grid-baseline);
+	font-size: var(--font-size-small);
+	color: var(--color-text-maxcontrast);
+}
+
+.findling-rules__slots--low {
+	color: var(--color-warning-text);
 }
 
 .findling-rules__prefix {

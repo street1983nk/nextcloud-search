@@ -3648,6 +3648,25 @@ RULES_SCRIPT_START = " * Block five, the four rules, and the one part of this pa
 LIMITS_SCRIPT_START = " * One line of the limits per file (plan 33-06)"
 LIMITS_SCRIPT_END = "  function cadence (view) {"
 
+# Plan 45-04 (EXCL-05, EXCL-06, D-45-07 to D-45-09): the places each list has
+# left, the refusal of * or ? in the folder field, the marking of a stored
+# folder entry with one, and the sharper sentence of no_wildcard, which replaces
+# the one of 1.6 in every catalogue and every language table.
+SLOTS_SENTENCES = (
+    "%1$s of %2$s slots free",
+    "1 of %s slots free. This is the last one.",
+    "0 of %s slots free. Remove an entry to add another one.",
+)
+WILDCARD_SENTENCE = 'Folders take no * or ?. For a pattern like Backup* use "Excluded patterns".'
+NO_WILDCARD_SENTENCE = (
+    'This entry has no * or ?. Add whole folders under "Excluded folders", or use a pattern like Name*.'
+)
+NO_WILDCARD_SENTENCE_BEFORE = 'This entry has no * or ?. Add it under "Excluded folders" instead.'
+WILDCARD_ROW_WARNING = (
+    "This entry contains * or ?, which folders do not support, so it only matches that exact text. "
+    'Remove it and add it under "Excluded patterns".'
+)
+
 
 def rules_block_sentences() -> set[str]:
     """Every catalogue key the template and the script of the rules block ask for."""
@@ -3705,7 +3724,10 @@ def test_every_sentence_of_the_rules_block_is_in_every_catalogue() -> None:
         "A leading ! is not supported. Patterns only exclude.",
         "The entry contains a control character.",
         "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.",
-        'This entry has no * or ?. Add it under "Excluded folders" instead.',
+        NO_WILDCARD_SENTENCE,
+        WILDCARD_SENTENCE,
+        WILDCARD_ROW_WARNING,
+        *SLOTS_SENTENCES,
         (
             "Remove indexed content? Excluding %s also removes the already indexed documents that match that "
             "pattern from the index. The files themselves stay untouched on disk."
@@ -3722,6 +3744,12 @@ def test_every_sentence_of_the_rules_block_is_in_every_catalogue() -> None:
     ):
         assert sentence in sentences, sentence
     assert len(sentences) >= 50, len(sentences)
+    # The sentence of 1.6 sent a pattern typed without a wildcard to the folder
+    # list and said nothing about the way back (D-45-09); it is gone from the
+    # page and from every catalogue, not left behind as a dead key.
+    assert NO_WILDCARD_SENTENCE_BEFORE not in sentences
+    for path in L10N_CATALOGUES:
+        assert NO_WILDCARD_SENTENCE_BEFORE not in catalogue_of(path), path.name
 
     catalogues = {path.name: frozenset(catalogue_of(path)) for path in L10N_CATALOGUES}
     findings = scan_missing_sentences(sentences, catalogues)
@@ -4064,8 +4092,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     sixteen files moved together, the five language documents carry the rows;
     the German and French wording goes to the owner with block V of 43-TEXTE.md
     in the round of plan 43-12, the five other languages are machine drafts
-    under the same dated reservation as the rest. Whoever moves it next writes
-    the next paragraph.
+    under the same dated reservation as the rest.
+
+    It stands at 371 since 2026-11-22, plan 45-04 (EXCL-05, EXCL-06): five
+    more, because six keys came and one went. New are the refusal of * or ? in
+    the folder field (D-45-08), the marking of a stored folder entry with one,
+    and the three sentences of the places a list has left (D-45-07); the
+    sentence of no_wildcard changed its key (D-45-09), so the old key left
+    every catalogue and every language table. All eighteen files moved
+    together, zh_TW included (D-45-12), and the six language documents carry
+    the rows. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4120,8 +4156,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # four of plan 43-06 (the one time hint, the counting sentence, the files
     # not readable and the visible fallback, D-43-06, D-43-11, W10); one of
     # plan 43-19 (the SMB hint behind the remedy of unreadable, D-43-16; the
-    # remedy of unreadable changed its key and so moved nothing)
-    assert len(keys_of["de.json"]) == 366
+    # remedy of unreadable changed its key and so moved nothing); five of plan
+    # 45-04 (six new sentences of the two lists, D-45-07 and D-45-08, less the
+    # old key of no_wildcard, whose sentence changed its key, D-45-09)
+    assert len(keys_of["de.json"]) == 371
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -4787,6 +4825,29 @@ def prefix_validation_codes(source: str) -> set[str]:
     return {codes[name] for name in names}
 
 
+def method_body(source: str, name: str) -> str:
+    """The body of one ``function name(...): array`` of ExclusionService.php."""
+    body = re.search(rf"(?:public|private) function {name}\([^)]*\): array \{{(.*?)\n\t\}}\n", source, re.DOTALL)
+    assert body is not None, f"ExclusionService::{name} is no longer where this test looks for it"
+    return body.group(1)
+
+
+def pattern_validation_codes(source: str) -> set[str]:
+    """The codes the pattern validation can answer with, read off its two bodies.
+
+    validatePatterns() judges the list and normalisePattern() the shape of one
+    entry; together they are every code a refused pattern can earn. Until plan
+    45-04 this map had to cover every ``ERROR_*`` constant of the service, which
+    stopped being true the day the folder list earned a code of its own
+    (``wildcard``, D-45-08) that no pattern can ever get.
+    """
+    names = set(re.findall(r"self::(ERROR_[A-Z_]+)", method_body(source, "validatePatterns")))
+    names |= set(re.findall(r"self::(ERROR_[A-Z_]+)", method_body(source, "normalisePattern")))
+    codes = exclusion_error_codes(source)
+    assert names <= set(codes)
+    return {codes[name] for name in names}
+
+
 def scan_rule_error_map(
     name: str,
     in_template: Mapping[str, str],
@@ -4820,7 +4881,7 @@ def rule_error_maps() -> dict[str, tuple[dict[str, str], dict[str, str], set[str
         "patternErrorSentences": (
             template_map(template, "patternErrorSentences"),
             script_map(script, "patternErrorSentences"),
-            set(exclusion_error_codes(service).values()),
+            pattern_validation_codes(service),
         ),
     }
 
@@ -4857,6 +4918,94 @@ def test_the_rules_block_carries_the_pattern_list_under_the_folder_list() -> Non
     )
 
 
+def scan_slots_and_row_warning(block: str) -> list[str]:
+    """Findings of the slot lines and the row marking of plan 45-04 in one block.
+
+    ``block`` is the rules block of the template from its own div to the end of
+    the file, so the row template is part of it.
+    """
+    findings: list[str] = []
+    for slots, add, error in (
+        ("findling-rules-slots", 'id="findling-rules-add"', 'id="findling-rules-new-error"'),
+        ("findling-rules-patterns-slots", 'id="findling-rules-patterns-add"', 'id="findling-rules-patterns-new-error"'),
+    ):
+        marker = f'id="{slots}"'
+        if block.count(marker) != 1:
+            findings.append(f"{slots}: not exactly once")
+            continue
+        at = block.index(marker)
+        if not block.index(add) < at < block.index(error):
+            findings.append(f"{slots}: not between the add button and the field error")
+        opening = block[block.rindex("<p ", 0, at) : block.index(">", at)]
+        if "findling-rules__slots" not in opening or "aria-live" in opening:
+            findings.append(f"{slots}: not a quiet line of class findling-rules__slots")
+    warnings = [match.start() for match in re.finditer(r'class="findling-rules__row-warning"', block)]
+    if len(warnings) != 2:
+        findings.append(f"row warning: {len(warnings)} elements, expected the stored row and the row template")
+    for start in warnings:
+        element = block[start : block.index("</p>", start)]
+        if "findling-rules__prefix" in element:
+            findings.append("row warning: carries the class the script reads entries from")
+        if "<?php p($wildcardRowWarning); ?>" not in element or "<?php p($alertIcon); ?>" not in element:
+            findings.append("row warning: lacks its sentence or its icon")
+    if "<?php if (str_contains($prefix, '*') || str_contains($prefix, '?')) { ?>" not in block:
+        findings.append("row warning: the stored row is not marked by its own value")
+    if (
+        '<span class="hidden-visually" id="findling-rules-announce" role="status" aria-live="polite"></span>'
+        not in block
+    ):
+        findings.append("announce: the status span of the slot lines is missing")
+    return findings
+
+
+def test_the_slots_lines_and_the_row_warning_stand_where_the_ui_spec_puts_them() -> None:
+    """EXCL-05, EXCL-06: two slot lines, one marking per stored row and in the row template."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    block = template[template.index(RULES_BLOCK_START) :]
+
+    assert scan_slots_and_row_warning(block) == []
+    assert f"$wildcardRowWarning = $l->t('{WILDCARD_ROW_WARNING}');" in template
+    for sentence in SLOTS_SENTENCES:
+        assert f"$l->t('{sentence}'" in template, sentence
+        assert f"t('findling', '{sentence}')" in SCRIPT.read_text(encoding="utf-8"), sentence
+
+    # Fail samples (B8), each built by hand from the clean block: the folder line
+    # under its error element, the marking with the class of an entry, and a
+    # page without the status span are one finding each.
+    folder_line = block[block.index('<p class="settings-hint findling-rules__slots') :]
+    folder_line = folder_line[: folder_line.index("</p>") + len("</p>")]
+    moved = block.replace(folder_line, "", 1).replace(
+        '<p class="findling-rules__error" id="findling-rules-new-error" hidden></p>',
+        '<p class="findling-rules__error" id="findling-rules-new-error" hidden></p>' + folder_line,
+        1,
+    )
+    assert scan_slots_and_row_warning(moved) == ["findling-rules-slots: not between the add button and the field error"]
+    wrong_class = block.replace(
+        '<p class="findling-rules__row-warning" hidden>',
+        '<p class="findling-rules__row-warning" hidden data-x="findling-rules__prefix">',
+        1,
+    )
+    assert scan_slots_and_row_warning(wrong_class) == ["row warning: carries the class the script reads entries from"]
+    silent = block.replace('id="findling-rules-announce"', 'id="findling-rules-quiet"', 1)
+    assert scan_slots_and_row_warning(silent) == ["announce: the status span of the slot lines is missing"]
+
+
+def test_the_folder_field_refuses_a_wildcard_and_keeps_what_was_typed() -> None:
+    """D-45-08: the local check names ``wildcard``, the field keeps its value and is marked invalid."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    body = cut_between(script, "  function setupExclusionList () {", "  /** Remove the row a remove button sits in")
+
+    order = ["code = 'empty'", "code = 'wildcard'", "code = 'duplicate'", "code = 'too_long'", "code = 'too_many'"]
+    assert [body.index(step) for step in order] == sorted(body.index(step) for step in order)
+    refusal = body[body.index("if (code !== '') {") : body.index("clearFieldError(FOLDER_ERROR)")]
+    assert "field.value = ''" not in refusal
+    assert "refusalSentence(code, folderErrorSentences(), FOLDER_FIELD)" in refusal
+    assert "field.setAttribute('aria-invalid', 'true')" in script
+    assert "field.removeAttribute('aria-invalid')" in script
+    # The slot lines follow every place the empty sentences follow.
+    assert "    refreshSlots()\n  }" in script
+
+
 def test_both_halves_name_every_refusal_code_of_both_lists_alike() -> None:
     """Success criterion 3: every code of either list is a sentence on the page."""
     findings = [
@@ -4868,7 +5017,54 @@ def test_both_halves_name_every_refusal_code_of_both_lists_alike() -> None:
 
     maps = rule_error_maps()
     assert len(maps["patternErrorSentences"][2]) == 11
-    assert maps["folderErrorSentences"][2] == {"empty", "too_long", "too_many", "duplicate", "traversal"}
+    assert "wildcard" not in maps["patternErrorSentences"][2]
+    assert maps["folderErrorSentences"][2] == {"empty", "too_long", "too_many", "duplicate", "traversal", "wildcard"}
+    # Every constant of the service is a code of at least one list, so the
+    # narrowing of plan 45-04 leaves no code without a sentence anywhere.
+    service = EXCLUSION_SERVICE.read_text(encoding="utf-8")
+    assert (
+        set(exclusion_error_codes(service).values())
+        == maps["patternErrorSentences"][2] | maps["folderErrorSentences"][2]
+    )
+    assert len(exclusion_error_codes(service)) == 12
+
+
+def test_the_code_readers_see_a_code_the_server_learns() -> None:
+    """B8: the two readers of the service go red on a code a list learns tomorrow.
+
+    The samples are built by hand and not out of the service, so this test does
+    not share the regular expressions it checks with the code it checks.
+    """
+    sample = (
+        "\tpublic const ERROR_EMPTY = 'empty';\n"
+        "\tpublic const ERROR_WILDCARD = 'wildcard';\n"
+        "\tpublic const ERROR_NEW_ONE = 'new_one';\n"
+        "\tpublic function validate(array $prefixes): array {\n"
+        "\t\t$errors[] = self::ERROR_EMPTY;\n"
+        "\t\t$errors[] = self::ERROR_WILDCARD;\n"
+        "\t}\n"
+        "\tpublic function validatePatterns(array $patterns): array {\n"
+        "\t\t$errors[] = self::ERROR_EMPTY;\n"
+        "\t}\n"
+        "\tprivate function normalisePattern(string $pattern): array {\n"
+        "\t\treturn [null, self::ERROR_NEW_ONE];\n"
+        "\t}\n"
+    )
+    assert prefix_validation_codes(sample) == {"empty", "wildcard"}
+    assert pattern_validation_codes(sample) == {"empty", "new_one"}
+
+    # The pattern map of the page today, held against the sample: the new code
+    # is one finding, and the folder code is not asked of the pattern list.
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    findings = scan_rule_error_map(
+        "patternErrorSentences",
+        template_map(template, "patternErrorSentences"),
+        script_map(script, "patternErrorSentences"),
+        pattern_validation_codes(sample) | {"too_many"},
+    )
+    assert "patternErrorSentences: has no sentence for the code new_one" in findings
+    assert "patternErrorSentences: has no sentence for the code wildcard" not in findings
 
 
 def test_no_refusal_sentence_carries_a_placeholder_but_the_bound() -> None:

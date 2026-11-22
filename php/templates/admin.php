@@ -1034,6 +1034,7 @@ $folderErrorSentences = [
 	'too_many' => $l->t('At most %s folders can be excluded.', [$count($maxPrefixes)]),
 	'duplicate' => $l->t('This path is already excluded.'),
 	'traversal' => $l->t('The entry must not contain . or .. as a folder name.'),
+	'wildcard' => $l->t('Folders take no * or ?. For a pattern like Backup* use "Excluded patterns".'),
 ];
 $patternErrorSentences = [
 	'empty' => $l->t('Enter a pattern.'),
@@ -1046,8 +1047,35 @@ $patternErrorSentences = [
 	'negation' => $l->t('A leading ! is not supported. Patterns only exclude.'),
 	'control_character' => $l->t('The entry contains a control character.'),
 	'no_literal' => $l->t('A pattern needs at least one character besides * and ?, otherwise it would exclude everything.'),
-	'no_wildcard' => $l->t('This entry has no * or ?. Add it under "Excluded folders" instead.'),
+	'no_wildcard' => $l->t('This entry has no * or ?. Add whole folders under "Excluded folders", or use a pattern like Name*.'),
 ];
+
+// The places each list has left (D-45-07), rendered here so the page says it
+// without a script; the script words the same three sentences after every add
+// and remove. Three keys and not a plural, because one place left and none left
+// are statements of their own and the rules block carries no plural call. A
+// bound of nought means the view did not deliver one, and then the line stays
+// hidden rather than claiming that no place is left. A stored list above its
+// bound (occ is a second way in) is counted as full, never as a negative count.
+$slotsLine = static function (int $bound, int $taken) use ($l, $count): array {
+	$free = max(0, $bound - $taken);
+	if ($free === 0) {
+		return [$l->t('0 of %s slots free. Remove an entry to add another one.', [$count($bound)]), true];
+	}
+	if ($free === 1) {
+		return [$l->t('1 of %s slots free. This is the last one.', [$count($bound)]), true];
+	}
+
+	return [$l->t('%1$s of %2$s slots free', [$count($free), $count($bound)]), false];
+};
+[$folderSlots, $folderSlotsLow] = $slotsLine($maxPrefixes, count($prefixes));
+[$patternSlots, $patternSlotsLow] = $slotsLine($maxPatterns, count($patterns));
+
+// A stored folder entry with * or ? stays in force (ExclusionService::validate
+// tolerates it so an upgrade locks nobody out of saving) and is marked in its
+// row, because a prefix takes the star literally and the entry most likely
+// meant a pattern (D-45-08). The row template carries the same sentence hidden.
+$wildcardRowWarning = $l->t('This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under "Excluded patterns".');
 
 // The help sentence of the pattern list names two examples, and the examples
 // are code and not words: they sit in code elements of their own, and the
@@ -1489,6 +1517,12 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 				<button type="button" class="findling-rules__remove" aria-label="<?php p($l->t('Remove exclusion %s', [$prefix])); ?>">
 					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
 				</button>
+				<?php if (str_contains($prefix, '*') || str_contains($prefix, '?')) { ?>
+				<p class="findling-rules__row-warning">
+					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+					<span><?php p($wildcardRowWarning); ?></span>
+				</p>
+				<?php } ?>
 			</li>
 		<?php } ?>
 	</ul>
@@ -1496,9 +1530,10 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<div class="findling-rules__add">
 		<input type="text" id="findling-rules-new" name="exclusion" autocomplete="off"
 			data-max-entries="<?php p((string)$maxPrefixes); ?>" data-max-length="<?php p((string)$maxPrefixLength); ?>"
-			aria-describedby="findling-rules-exclusions-help findling-rules-new-error" placeholder="Backups">
+			aria-describedby="findling-rules-exclusions-help findling-rules-slots findling-rules-new-error" placeholder="Backups">
 		<button type="button" id="findling-rules-add"><?php p($l->t('Add exclusion')); ?></button>
 	</div>
+	<p class="settings-hint findling-rules__slots<?php if ($folderSlotsLow) { ?> findling-rules__slots--low<?php } ?>" id="findling-rules-slots"<?php if ($maxPrefixes === 0) { ?> hidden<?php } ?>><?php p($folderSlots); ?></p>
 	<p class="findling-rules__error" id="findling-rules-new-error" hidden></p>
 
 	<?php
@@ -1539,9 +1574,10 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 		<input type="text" id="findling-rules-patterns-new" name="exclusionPattern" autocomplete="off"
 			maxlength="<?php p((string)$maxPatternLength); ?>"
 			data-max-entries="<?php p((string)$maxPatterns); ?>" data-max-length="<?php p((string)$maxPatternLength); ?>"
-			aria-describedby="findling-rules-patterns-help findling-rules-patterns-new-error" placeholder="*.photoslibrary">
+			aria-describedby="findling-rules-patterns-help findling-rules-patterns-slots findling-rules-patterns-new-error" placeholder="*.photoslibrary">
 		<button type="button" id="findling-rules-patterns-add"><?php p($l->t('Add pattern')); ?></button>
 	</div>
+	<p class="settings-hint findling-rules__slots<?php if ($patternSlotsLow) { ?> findling-rules__slots--low<?php } ?>" id="findling-rules-patterns-slots"<?php if ($maxPatterns === 0) { ?> hidden<?php } ?>><?php p($patternSlots); ?></p>
 	<p class="findling-rules__error" id="findling-rules-patterns-new-error" hidden></p>
 
 	<div class="findling-rules__field">
@@ -1651,6 +1687,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<button type="button" class="primary" id="findling-rules-save"><?php p($l->t('Save rules')); ?></button>
 
 	<p class="findling-rules__feedback" id="findling-rules-feedback" role="status" aria-live="polite" hidden></p>
+	<span class="hidden-visually" id="findling-rules-announce" role="status" aria-live="polite"></span>
 
 	<template id="findling-rules-row">
 		<li class="findling-rules__row">
@@ -1658,6 +1695,10 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 			<button type="button" class="findling-rules__remove">
 				<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
 			</button>
+			<p class="findling-rules__row-warning" hidden>
+				<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+				<span><?php p($wildcardRowWarning); ?></span>
+			</p>
 		</li>
 	</template>
 </div>

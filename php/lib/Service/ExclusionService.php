@@ -128,6 +128,19 @@ final class ExclusionService {
 	public const ERROR_TOO_MANY = 'too_many';
 
 	/**
+	 * A folder entry with * or ? that is not in force yet (D-45-08).
+	 *
+	 * A prefix is matched as it is written, so a star in it is a literal star and
+	 * never a wildcard: an admin who types ``Archiv*`` into the folder field
+	 * excludes a folder of that exact name and nothing else, which is the silent
+	 * misuse issue #45 ran into. A new entry like that is refused and the page
+	 * points at the pattern field. An entry that is already stored stays in force
+	 * and the page marks it, because every save sends the whole list and refusing
+	 * it here would lock an admin out of saving after an upgrade.
+	 */
+	public const ERROR_WILDCARD = 'wildcard';
+
+	/**
 	 * The field of the pattern list in the answer of the write route, and its
 	 * bounds: thirty two patterns of sixty characters each (D-33-03, a planner
 	 * decision the owner confirmed on 13.10.2026 as G1). Thirty two because
@@ -382,6 +395,7 @@ final class ExclusionService {
 			$errors[] = self::ERROR_TOO_MANY;
 		}
 
+		$inForce = null;
 		$seen = [];
 		foreach ($prefixes as $entry) {
 			if (!is_string($entry) || trim($entry) === '') {
@@ -400,6 +414,16 @@ final class ExclusionService {
 				// admin: this is not a folder path.
 				$errors[] = self::ERROR_TRAVERSAL;
 				continue;
+			}
+
+			// The same comparison newPrefixes() makes: only an entry that is not
+			// in force yet can earn the code, a stored one is tolerated (D-45-08).
+			if (str_contains($normalised, self::STAR) || str_contains($normalised, self::ANY)) {
+				$inForce ??= $this->prefixes();
+				if (!in_array($normalised, $inForce, true)) {
+					$errors[] = self::ERROR_WILDCARD;
+					continue;
+				}
 			}
 
 			if (isset($seen[$normalised])) {

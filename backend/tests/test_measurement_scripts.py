@@ -1337,8 +1337,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the independent pipeline of find, sort, sed and sha256sum over the same tree gave c0a27412 as
 # well; the recipe over git archive of 873c3e9d, the commit of task 1, gave 4d13bae1 with 135 files
 # (positive control).
+# Moved on 2026-11-22 by plan 45-04 (EXCL-05, EXCL-06, free slots and * or ? in the folder field):
+# lib/Service/ExclusionService.php refuses a new folder entry with * or ? with the code wildcard and
+# tolerates a stored one, templates/admin.php renders the slot lines, the marking of a stored entry
+# and the sentence of the new code, and tests/Unit/ExclusionServiceTest.php follows; the eighteen
+# catalogues and the six language documents moved as well, but the recipe globs **/*.php. No file
+# came or went, so PHP_FILES_TODAY stays at 136. The recipe gave 47251647; the independent pipeline
+# of find, sort, sed and sha256sum over the same tree gave 47251647 as well; the recipe over git
+# archive of a6965647, the last commit before the plan, gave c0a27412 with 136 files (positive
+# control).
 PHP_FILES_TODAY = 136
-PHP_TREE_HASH_TODAY = "c0a27412df40770687d9f85ac9028d40e64db51e568799edfa0a41aa54fa0124"
+PHP_TREE_HASH_TODAY = "472516478f01facdf5535be5e18217b2c31d0e101022218c63920d2cd37cf401"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

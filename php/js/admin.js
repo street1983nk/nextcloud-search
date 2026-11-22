@@ -1061,6 +1061,54 @@
   function refreshEmptyState () {
     shown('findling-rules-exclusions-empty', currentPrefixes().length === 0)
     shown('findling-rules-patterns-empty', currentPatterns().length === 0)
+    refreshSlots()
+  }
+
+  /**
+   * The places a list has left, in the three sentences of the template
+   * (D-45-07). Counted over the rows the list shows right now, saved or not,
+   * against the bound the field carries, so neither number is a copy. One place
+   * left and none left are sentences of their own in the warning colour, and
+   * the change onto one of them is said once in the status span of the block;
+   * the line itself has no live region, which would read it out after every
+   * add. A bound of nought means the page has none, and the line stays hidden.
+   */
+  const slotsLeft = {}
+
+  function slotsSentence (free, bound) {
+    const total = numbers.format(bound)
+    if (free === 0) {
+      return t('findling', '0 of %s slots free. Remove an entry to add another one.').replace('%s', function () { return total })
+    }
+    if (free === 1) {
+      return t('findling', '1 of %s slots free. This is the last one.').replace('%s', function () { return total })
+    }
+    const left = numbers.format(free)
+    return t('findling', '%1$s of %2$s slots free')
+      .replace('%1$s', function () { return left })
+      .replace('%2$s', function () { return total })
+  }
+
+  function refreshSlotsOf (slotsId, fieldId, taken) {
+    const line = document.getElementById(slotsId)
+    const bound = boundOf(fieldId, 'data-max-entries')
+    if (line === null || bound === 0) {
+      return
+    }
+    const free = Math.max(0, bound - taken)
+    const sentence = slotsSentence(free, bound)
+    text(slotsId, sentence)
+    line.classList.toggle('findling-rules__slots--low', free <= 1)
+    const before = slotsLeft[slotsId]
+    slotsLeft[slotsId] = free
+    if (before !== undefined && before !== free && free <= 1) {
+      text('findling-rules-announce', sentence)
+    }
+  }
+
+  function refreshSlots () {
+    refreshSlotsOf('findling-rules-slots', FOLDER_FIELD, currentPrefixes().length)
+    refreshSlotsOf('findling-rules-patterns-slots', PATTERN_FIELD, currentPatterns().length)
   }
 
   /**
@@ -1075,7 +1123,8 @@
       too_long: t('findling', 'A folder path may be at most %s bytes long.'),
       too_many: t('findling', 'At most %s folders can be excluded.'),
       duplicate: t('findling', 'This path is already excluded.'),
-      traversal: t('findling', 'The entry must not contain . or .. as a folder name.')
+      traversal: t('findling', 'The entry must not contain . or .. as a folder name.'),
+      wildcard: t('findling', 'Folders take no * or ?. For a pattern like Backup* use "Excluded patterns".')
     }
   }
 
@@ -1091,7 +1140,7 @@
       negation: t('findling', 'A leading ! is not supported. Patterns only exclude.'),
       control_character: t('findling', 'The entry contains a control character.'),
       no_literal: t('findling', 'A pattern needs at least one character besides * and ?, otherwise it would exclude everything.'),
-      no_wildcard: t('findling', 'This entry has no * or ?. Add it under "Excluded folders" instead.')
+      no_wildcard: t('findling', 'This entry has no * or ?. Add whole folders under "Excluded folders", or use a pattern like Name*.')
     }
   }
 
@@ -1156,23 +1205,42 @@
     }
   }
 
-  /** One error at one field, with the focus moved into it. */
+  /**
+   * One error at one field, with the focus moved into it. The field is marked
+   * invalid for a screen reader as well, and the mark goes with the error.
+   */
   function fieldError (errorId, fieldId, message) {
     text(errorId, message)
     shown(errorId, true)
     const field = document.getElementById(fieldId)
     if (field !== null) {
+      field.setAttribute('aria-invalid', 'true')
       field.focus()
     }
   }
 
+  /** The field of each error element, so the invalid mark is cleared with it. */
+  const FIELD_OF_ERROR = {
+    'findling-rules-new-error': FOLDER_FIELD,
+    'findling-rules-patterns-new-error': PATTERN_FIELD
+  }
+
   function clearFieldError (errorId) {
     shown(errorId, false)
+    const field = Object.prototype.hasOwnProperty.call(FIELD_OF_ERROR, errorId)
+      ? document.getElementById(FIELD_OF_ERROR[errorId])
+      : null
+    if (field !== null) {
+      field.removeAttribute('aria-invalid')
+    }
   }
 
   /**
    * One row of either list, cloned from the one row template of the page. The
-   * remove label arrives translated with its placeholder still in it.
+   * remove label arrives translated with its placeholder still in it. The row
+   * template carries the marking of a folder entry with * or ? hidden; it is
+   * shown for a folder row only, so a row the server answer rebuilds after a
+   * save keeps the marking the template rendered for it (D-45-08).
    */
   function addRow (listId, value, removeLabel) {
     const list = document.getElementById(listId)
@@ -1193,7 +1261,16 @@
     // and a folder named with $& or $' in it would be mangled (review finding
     // WR-04).
     remove.setAttribute('aria-label', removeLabel.replace('%s', function () { return value }))
+    const warning = row.querySelector('.findling-rules__row-warning')
+    if (warning !== null) {
+      warning.hidden = !(listId === FOLDER_LIST && hasWildcard(value))
+    }
     list.appendChild(row)
+  }
+
+  /** Whether an entry carries one of the two wildcards of the pattern list. */
+  function hasWildcard (value) {
+    return value.indexOf('*') !== -1 || value.indexOf('?') !== -1
   }
 
   /** One row of the exclusion list. */
@@ -1215,23 +1292,39 @@
    * unsaved state is announced.
    */
   function setupExclusionList () {
-    const field = document.getElementById('findling-rules-new')
+    const field = document.getElementById(FOLDER_FIELD)
     const add = document.getElementById('findling-rules-add')
-    const list = document.getElementById('findling-rules-list')
+    const list = document.getElementById(FOLDER_LIST)
 
     if (add !== null && field !== null) {
       add.addEventListener('click', function () {
         const value = field.value.trim()
+        const prefixes = currentPrefixes()
+        const maxLength = boundOf(FOLDER_FIELD, 'data-max-length')
+        const maxEntries = boundOf(FOLDER_FIELD, 'data-max-entries')
+        // A wildcard is named before a duplicate, because "already excluded"
+        // would send the admin to the wrong list (D-45-08). The bound of a
+        // folder path counts bytes, like strlen() in ExclusionService::validate.
+        let code = ''
         if (value === '') {
-          fieldError('findling-rules-new-error', 'findling-rules-new', t('findling', 'Enter a folder path.'))
-          return
+          code = 'empty'
+        } else if (hasWildcard(value)) {
+          code = 'wildcard'
+        } else if (prefixes.indexOf(value) !== -1) {
+          code = 'duplicate'
+        } else if (maxLength > 0 && new TextEncoder().encode(value).length > maxLength) {
+          code = 'too_long'
+        } else if (maxEntries > 0 && prefixes.length >= maxEntries) {
+          code = 'too_many'
         }
-        if (currentPrefixes().indexOf(value) !== -1) {
-          fieldError('findling-rules-new-error', 'findling-rules-new', t('findling', 'This path is already excluded.'))
+        if (code !== '') {
+          // The entry stays in the field, so a pattern typed into the wrong
+          // list can be carried over instead of typed again.
+          fieldError(FOLDER_ERROR, FOLDER_FIELD, refusalSentence(code, folderErrorSentences(), FOLDER_FIELD))
           return
         }
 
-        clearFieldError('findling-rules-new-error')
+        clearFieldError(FOLDER_ERROR)
         addPrefixRow(value)
         field.value = ''
         field.focus()
