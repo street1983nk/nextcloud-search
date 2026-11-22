@@ -159,6 +159,36 @@ def test_a_value_that_is_no_tag_falls_back_without_a_throw(tmp_path: Path) -> No
     assert [entry["tag"] for entry in report] == ["zh-TW", "de", "fr", "en", "en"]
 
 
+def test_the_page_language_is_rewritten_the_same_way(tmp_path: Path) -> None:
+    function = function_of(SCRIPT.read_text(encoding="utf-8"))
+    cases: list[tuple[str | None, str]] = [
+        (None, "zh_Hant_TW"),  # no attribute, the page language in underscore notation
+        ("", "sr_Latn_RS"),  # an empty attribute, the same
+        ("not a tag", "pt_BR"),  # no tag, a two part page language
+        ("pt_BR", "en"),  # its own two part locale still wins
+    ]
+    report = run_locale(function, cases, tmp_path)
+
+    assert [entry for entry in report if entry["error"] is not None] == []
+    assert [entry["tag"] for entry in report] == ["zh-Hant-TW", "sr-Latn-RS", "pt-BR", "pt-BR"]
+
+
+def test_a_page_language_left_as_is_is_caught(tmp_path: Path) -> None:
+    # The positive control for the test above: with root.lang handed on
+    # unchanged, or with its first underscore rewritten only, zh_Hant_TW
+    # falls through to English instead of becoming its own tag.
+    function = function_of(SCRIPT.read_text(encoding="utf-8"))
+    rewritten = "(root.lang || '').replace(/_/g, '-')"
+    assert rewritten in function
+
+    unchanged = function.replace(rewritten, "root.lang")
+    first_only = function.replace(rewritten, "(root.lang || '').replace('_', '-')")
+    for mutated in (unchanged, first_only):
+        report = run_locale(mutated, [(None, "zh_Hant_TW")], tmp_path)
+        assert report[0]["error"] is None
+        assert report[0]["tag"] == "en"
+
+
 def test_the_harness_sees_the_fault_of_the_old_function(tmp_path: Path) -> None:
     # The positive control: the old line throws for every three part code and
     # for no two part code, so the two tests above can fail.

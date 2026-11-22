@@ -139,16 +139,18 @@
    * for the same thing: those two are deprecated, and this attribute is where
    * the layout puts the value they would have returned.
    *
-   * Every underscore becomes a dash, not only the first: 42 of the 750 locales
-   * of Nextcloud 34 have three parts (zh_Hant_TW, sr_Latn_RS), and zh-Hant_TW
-   * is no language tag. Each candidate is still checked before it is handed
-   * on, because a tag Intl refuses makes the two constructors below throw, and
-   * a throw there ends this whole script: no button, no form and no poll of
-   * the page would work.
+   * Every underscore becomes a dash, not only the first, in both sources: 42
+   * of the 750 locales of Nextcloud 34 have three parts (zh_Hant_TW,
+   * sr_Latn_RS), and zh-Hant_TW is no language tag. The page language gets the
+   * same rewrite, so a fallback that carries the underscore notation is not
+   * lost to English. Each candidate is still checked before it is handed on,
+   * because a tag Intl refuses makes the two constructors below throw, and a
+   * throw there ends this whole script: no button, no form and no poll of the
+   * page would work.
    */
   function locale () {
     const root = document.documentElement
-    const candidates = [(root.dataset.locale || '').replace(/_/g, '-'), root.lang]
+    const candidates = [(root.dataset.locale || '').replace(/_/g, '-'), (root.lang || '').replace(/_/g, '-')]
     for (const candidate of candidates) {
       if (!candidate) {
         continue
