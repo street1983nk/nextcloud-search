@@ -9,9 +9,9 @@ last_activity: "2026-11-22, 45-10 pausiert: Freigaben 5d9cc54e, CHANGELOG-Zeile 
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 26
+  total_plans: 27
   completed_plans: 19
-  percent: 73
+  percent: 70
 ---
 
 # Project State
@@ -323,6 +323,7 @@ Resume file: None
 
 ## Operator Next Steps
 
+- REIHENFOLGE (Owner-Entscheid 22.11.2026, ohne Umnummerieren): zuerst 45-17 (Plan liegt vor: Fix #59 plus Volltest-Befunde V-45-10-02/03, Owner-Freigabe 08:40 UTC), erst danach 45-10 komplett neu auf dem neuen audited_head. 45-17 und 45-10 tragen beide wave 9 und teilen 45-AUDIT.md/45-FREIGABEN.md: nie gleichzeitig, 45-17 einzeln ausführen. depends_on von 45-10 bleibt formal [45-09]. Kein Push in 45-17; der nächste Push kommt mit eigener Freigabe in 45-10 Task 3 bzw. 45-12. 45-15 bekommt die #59-Antwort (Freigabe 08:28 UTC, Claude postet nach dem Store-Release).
 - Erst Fix #59 (Secure-View-Ablehnung bei Freigaben ohne Download, readerOf), dann 45-10 neu: Volltest komplett auf dem neuen Kopf. Lokal und ungepusht über cb2038b9: 5d9cc54e, c3885795, 10d9707e und dieser Pausen-Commit. Owner-Fragen V-45-10-02 und V-45-10-03 (siehe 45-10-Eintrag oben). Owner-Entscheide aus 45-09 erledigt: Guard L-03 bleibt eng, CHANGELOG-Zeile drin. 45-14: CHANGELOG-Datum [1.7.0] in drei Sprachen auf das Tag-Datum ziehen, falls später als 2026-11-22 (von Freigabe A gedeckt)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten

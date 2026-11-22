@@ -24,6 +24,10 @@
 - [x] **EXCL-05**: Admin sieht auf der Admin-Seite, wie viele Ausschluss-Plätze für Ordner und für Muster noch frei sind
 - [x] **EXCL-06**: Gibt der Admin im Ordnerfeld ein Platzhalterzeichen ein, sagt die Fehlermeldung, was er stattdessen eingeben kann (Musterfeld), in allen 16 Katalogen
 
+### Lesepfad der Begleit-App (COMP, Issue #59)
+
+- [ ] **COMP-05**: Eine Datei, die eine Richtlinie für einzelne Personen am Lesen hindert (z. B. Freigabe ohne Download bei aktivem Wasserzeichen von richdocuments), wird als ihr Besitzer (zuerst) oder als eine andere Person gelesen, die sie öffnen darf; lehnt die Richtlinie für alle Gefragten ab, steht die Datei mit eigenem Grund und eigener Abhilfe auf der Admin-Seite statt als "nicht abrufbar"; Altzustände aus 1.6.x kommen nach dem Update erneut an die Reihe (Owner-Entscheid 22.11.2026, "Der fix soll in 1.7")
+
 ### Store-Texte (STORE, Owner-Regel 20.11.2026)
 
 - [ ] **STORE-03**: Die Store-Beschreibungen beider Apps (findling, findling_backend) sind in DE, EN und FR kurz: Kern bleibt (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die Doku auf GitHub); der Entwurf ist vor dem Einbau vom Owner freigegeben
@@ -58,8 +62,9 @@
 | STORE-03 | Phase 45 | Pending |
 | STORE-04 | Phase 45 | Complete |
 | REL-07 | Phase 45 | Pending |
+| COMP-05 | Phase 45 | Pending |
 
-**Coverage:** 11/11 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt.
+**Coverage:** 12/12 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt (COMP-05 am 22.11.2026 ergänzt, Issue #59).
 
 ---
 *Requirements definiert: 2026-11-21. Traceability gefüllt mit der v1.7-Roadmap: 2026-11-21.*
