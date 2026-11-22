@@ -10,6 +10,7 @@ use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\ReaderCandidates;
 use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\StorageService;
 use OCP\BackgroundJob\IJobList;
@@ -244,7 +245,7 @@ final class QueueServiceTest extends TestCase {
 				$this->createMock(LoggerInterface::class),
 			),
 			$storageService,
-			$this->createMock(IUserMountCache::class),
+			new ReaderCandidates($this->createMock(IUserMountCache::class), $this->createMock(LoggerInterface::class)),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(IDBConnection::class),
 			$this->createMock(LoggerInterface::class),
@@ -463,7 +464,7 @@ final class QueueServiceTest extends TestCase {
 				$logger,
 			),
 			$storageService,
-			$mountCache,
+			new ReaderCandidates($mountCache, $logger),
 			$rootFolder,
 			$this->createMock(IDBConnection::class),
 			$logger,

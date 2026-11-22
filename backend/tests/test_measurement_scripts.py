@@ -1389,8 +1389,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # 85ba0c66; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # 85ba0c66 as well; the recipe and the pipeline over git archive of c3885795, the last commit before
 # this change, gave a2b061ac with 136 files (positive control).
-PHP_FILES_TODAY = 136
-PHP_TREE_HASH_TODAY = "85ba0c6637baa27e466543627e787f9d5d3f8b30be8c40c395269fb3701c2fd3"
+# Moved on 2026-11-22 by plan 45-17, step 1 (a pure refactor for issue #59): one file came,
+# lib/Service/ReaderCandidates.php, which now holds the user list of a file from the mount cache
+# and MAX_READER_TRIES; lib/Service/QueueService.php delegates to it, and
+# tests/Unit/QueueServiceTest.php and QueueServiceReaderTest.php only changed how they build the
+# service. No file went, so PHP_FILES_TODAY moves to 137. The recipe gave 5b54386c; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 5b54386c as well; the recipe and
+# the pipeline over git archive of 89cc8ddf, the last commit before this change, gave 85ba0c66 with
+# 136 files (positive control).
+PHP_FILES_TODAY = 137
+PHP_TREE_HASH_TODAY = "5b54386c1910c1c343b823b01809bca0fffb49f29ad933004418ab030b822003"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
