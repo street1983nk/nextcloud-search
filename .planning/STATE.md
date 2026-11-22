@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-18-PLAN.md; nächster Plan 45-19"
-last_updated: "2026-11-22T17:45:00.000Z"
-last_activity: "2026-11-22, Pläne 45-23 und 45-24 zu #25 angelegt (Owner-Go etwa 17:00 UTC), nach der Planprüfung von 65528c7b 45-25 aus 45-24 Task 4 gezogen, Kette 17, 18, 19, 22, 23, 24, 25, 20, 21, 10, 11, 12, 13, 16, 14, 15; davor 45-18 fertig 7198db12, 5b1de936 (lokal, nicht gepusht)"
+stopped_at: "Completed 45-19-PLAN.md; nächster Plan 45-22"
+last_updated: "2026-11-22T19:45:00.000Z"
+last_activity: "2026-11-22, 45-19 fertig: V-02-Regel c (Owner 18:37 UTC) cf53cfd8, Bestätigung mit ID bei gleichem Einhängepunkt c33103fe, Platzhalter der Diagnose aus dem Katalog 1b31b281 (lokal, nicht gepusht)"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 35
-  completed_plans: 21
-  percent: 60
+  completed_plans: 22
+  percent: 63
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-01 bis 45-09, 45-17 und 45-18 von 25 fertig, 45-10 pausiert; als Nächstes 45-19, dann 45-22, 45-23, 45-24, 45-25, 45-20, 45-21, 45-10 komplett neu
+Plan: 45-01 bis 45-09, 45-17, 45-18 und 45-19 von 25 fertig, 45-10 pausiert; als Nächstes 45-22, dann 45-23, 45-24, 45-25, 45-20, 45-21, 45-10 komplett neu
 Status: Ready to execute
-Last activity: 2026-11-22, 45-18 fertig: policy_blocked in drei Vokabularlisten, Reason-Tabelle und 18 Katalogen, unreadable-Abhilfe "Besitzer zuerst" (c1: alter Schlüssel entfernt, SUPERSEDED_IN_1_7_0), Generation 4 beidseitig mit Rückfall gateway_error (W3), Zahl-Gates an MAX_READER_TRIES und GATEWAY_ERROR_RETRIES 7198db12; GatewayPolicyRefused (403 mit X-Findling-Refusal: policy), Urteil ohne Ausfallzählung (I-45-17-01), Serie bis 3 Nächte, Erneuerung refusal_streaks_1_7_0 5b1de936; kein Push
+Last activity: 2026-11-22, 45-19 fertig: Owner-Entscheid V-02-Regel c (18:37 UTC, "Go mit den Empfehlungen") cf53cfd8; ExternalMountService setzt duplicate nur nach dem Einhängepunkt, data-mount-duplicate am Haken, Bestätigung "/Share (ID 5), /Share (ID 8), /Share (ID 17)" in Form i c33103fe; Platzhalter der Diagnose aus dem Katalog in 18 Dateien, Schlüsselzahl 383 1b31b281; kein Push. Davor 45-18 fertig: policy_blocked in drei Vokabularlisten, Reason-Tabelle und 18 Katalogen, unreadable-Abhilfe "Besitzer zuerst" (c1: alter Schlüssel entfernt, SUPERSEDED_IN_1_7_0), Generation 4 beidseitig mit Rückfall gateway_error (W3), Zahl-Gates an MAX_READER_TRIES und GATEWAY_ERROR_RETRIES 7198db12; GatewayPolicyRefused (403 mit X-Findling-Refusal: policy), Urteil ohne Ausfallzählung (I-45-17-01), Serie bis 3 Nächte, Erneuerung refusal_streaks_1_7_0 5b1de936; kein Push
 
 ## Performance Metrics
 
@@ -109,6 +109,7 @@ Last activity: 2026-11-22, 45-18 fertig: policy_blocked in drei Vokabularlisten,
 - v1.7: 45-09 ab Task 2 in ca. 150 min laut Systemzeit inkl. Instanz-Nachstellung, dreimal PHPUnit und PHP-Gates und ca. 35 min CI (3 Tasks, 12 Dateien)
 - v1.7: 45-17 ab Task 2 in ca. 190 min laut Systemzeit inkl. ca. 90 min Docker (PHPUnit, PHP-Gates, fünf Mutationen) (3 Tasks, 14 Dateien)
 - v1.7: 45-18 in ca. 80 min laut Systemzeit inkl. ca. 35 min Docker und zwei vollen pytest-Läufen (2 Tasks, 55 Dateien)
+- v1.7: 45-19 in ca. 40 min laut Systemzeit inkl. ca. 25 min Docker, ohne die Pause nach dem Speicher-Abbruch (3 Tasks, 39 Dateien)
 
 ## Accumulated Context
 
@@ -140,6 +141,7 @@ Last activity: 2026-11-22, 45-18 fertig: policy_blocked in drei Vokabularlisten,
 - 45-09 (22.11.2026, fcfa50b2, 2b623a3f, af0e5e13, cb2038b9): Audit 45-AUDIT.md, Digest-Gate 92fd028a. Owner "Ok" (05:36 UTC, nach "Qualität hat Vorrang"): alle drei LOW behoben. L-45-09-03: excludedStorageIds() liest ohne Tabelle oc_external_mounts eine leere Menge (auf frischer NC 34.0.3 vorher DbalException und Stillstand, nachher Crawl und Ereignisse ok); bewusst kein Guard auf "App deaktiviert". L-45-09-01: Obergrenze 1000 auch beim Lesen. L-45-09-02: Regelrouten lehnen Objekt und Liste mit Lücke in allen drei Listen ab (empty bzw. out_of_range), Lesen bleibt duldsam; ersetzt H-33-01. Push 612b7c9e..cb2038b9, neun Workflows grün, Update-Probe 1.6.5 -> 1.7.0 und HaRP 1.5.0 -> 1.7.0 belegt; audited_head af0e5e13.
 - 45-10 PAUSIERT (22.11.2026): Owner-Entscheide "Ok" 07:26 UTC in 45-FREIGABEN.md (L-45-09-03 enge Form behalten; CHANGELOG-Zeile Objekt-Ablehnung) als 5d9cc54e, CHANGELOG-Zeile EN/DE/FR c3885795. Volltest-Teilstand: DE Admin-Seite (Pause, Diagnose, Profil) und Regelblock mit allen Feldmeldungen (empty, wildcard, duplicate, too_long, too_many, no_wildcard, double_star, unsupported_character, negation, no_literal, traversal), Zähler 2/1/0, Bestätigungen, Hauptschalter aus/an und XSS-Probe (Markup als Text, 0 img, kein Dialog) per Playwright gemessen. Befund V-45-10-01 (Typ "Local" unter DE) per TDD behoben: 10d9707e, Baumhash PHP 136/85ba0c66. Offen für Owner: V-45-10-02 Bestätigung nennt doppelte Einhängepunkte zweimal ohne ID ("/Gemeinsam, /Gemeinsam"); V-45-10-03 Platzhalter "alice/files/Vertraege/Miete.pdf" der Diagnose fest im Template (ASCII-Umlaut unter DE, Deutsch unter EN/FR, Bestand vor 1.7.0). Nicht gelaufen: EN/FR, Nutzersuche, Ausschluss mit Abgleich, zh_TW/zh_Hant_TW, Playwright-Matrix, impeccable critique/audit über CDP, Sprachprüfung mit Kontrolle; Umlaut-Vorfilter v1.6.5..HEAD ohne Befund. audited_head bleibt af0e5e13, Code seitdem geändert (10d9707e). Skripte im Scratchpad der Sitzung fda96efc (pw/, abgleich.py, montage.py).
 - 45-18 (22.11.2026, 7198db12, 5b1de936): failed(policy_blocked) mit Label "Blocked by a rule" und Abhilfe (Owner-Texte 11:52) in 18 Katalogen und sechs Sprachtabellen, Schlüsselzahl 382; unreadable-Abhilfe nennt den Besitzer zuerst, alter Schlüssel nach c1 überall entfernt, 1.6.3-Gate prüft ihn nur noch gegen docs/store-listing.md (SUPERSEDED_IN_1_7_0). Generation 4 (ProfileController und queue.py), skipped-Tabelle 4 leer (W3), policy_blocked zu 3/2/None als gateway_error; Nachlauf 1.5 ab Generation 3 (CATCHUP_MIN_GENERATION, sonst vor einer 1.6-Begleit-App abgeschaltet). Container: 403 mit X-Findling-Refusal: policy -> GatewayPolicyRefused -> failed(policy_blocked), nie zur Ausfallschwelle (I-45-17-01, Mutation rot); Serie mit gateway_error und skipped(unreadable), Kappe 3; einmalige Erneuerung refusal_streaks_1_7_0 (attempts > 1 -> 1, Logzeile rows=N mark=...). Baumhash PHP 141/34d00c1f, Paket 83/9fa6c443. Lokal, nicht gepusht.
+- 45-19 (22.11.2026, cf53cfd8, c33103fe, 1b31b281): Owner-Entscheid V-02-Regel c ("Go mit den Empfehlungen", 18:37 UTC): ExternalMountService setzt duplicate nur nach dem Einhängepunkt, gleich welcher Typ (PHP-Fall testMountsThatShareAMountPointAreDuplicatesWhateverTheBackend ersetzt den alten); das Template setzt data-mount-duplicate="true" unter demselben Merkmal, admin.js liest nur den genauen Wert (mountDuplicateOf) und schreibt die Bestätigung in Form i ("/Share (ID 5), /Share (ID 8), /Share (ID 17)") mit einer Regex-Ersetzung samt Callback als Text (confirmedMounts). Platzhalter der Diagnose über $l->t('alice/files/Contracts/Rent.pdf') in 18 Katalogen und sechs Sprachtabellen (DE "alice/files/Verträge/Miete.pdf"), Schlüsselzahl 383. Mutationen V1 bis V4 und Gegenprobe Task 2 je rot. Baumhash PHP 141/a6c5f8d1. Befund I-45-19-01 (INFO): Regelfelder mit festen Platzhaltern "Backups" und "*.photoslibrary", nicht behoben. Lokal, nicht gepusht.
 
 ### Decisions (Roadmap v1.6)
 
@@ -320,8 +322,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-22T16:55:00.000Z
-Stopped at: Completed 45-18-PLAN.md (7198db12, 5b1de936, lokal); Pläne 45-23 und 45-24 zu #25 angelegt; nächster Plan 45-19, 45-10 bleibt pausiert bis nach 45-21
+Last session: 2026-11-22T19:45:00.000Z
+Stopped at: Completed 45-19-PLAN.md (cf53cfd8, c33103fe, 1b31b281, lokal); nächster Plan 45-22, 45-10 bleibt pausiert bis nach 45-21
 Resume file: None
 
 ## Operator Next Steps

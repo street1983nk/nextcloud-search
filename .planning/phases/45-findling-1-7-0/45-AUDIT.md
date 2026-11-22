@@ -851,4 +851,6 @@ Gegenprobe (`<scratchpad>/mut19_t2.sh`): fester Text `placeholder="alice/files/V
 
 Baumhash php/: Rezept und Pipeline `a6c5f8d1...` mit 141 Dateien; Positivkontrolle über `git archive c33103fe` -> `233c6ab1...` mit 141.
 
+GREEN Task 2 (Commit 1b31b281): verify-Zeile wörtlich aus `<scratchpad>/v19_t2.sh`, seriell, Docker vorher leer -> `VERIFY_EXIT=0`: `STATIC_OK`, PHPUnit `OK (1347 tests, 8616 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen ocp v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs grün; zizmor und actionlint grün), pytest der drei Dateien `810 passed`, ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund. Docker danach leer.
+
 Nicht im Plan, nur festgehalten: die Felder der Ausschlussregeln tragen weiter feste Platzhalter (`placeholder="Backups"`, `placeholder="*.photoslibrary"`, admin.php Z. ~1562 und ~1606); der Gate dieses Plans prüft nur das Feld der Diagnose.
