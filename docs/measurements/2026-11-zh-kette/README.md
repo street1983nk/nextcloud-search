@@ -21,9 +21,9 @@ vouch for German prose.
 
 ## The corpora
 
-**Taiwanese statutes.** Twelve laws and one regulation from the law database of
-the Ministry of Justice, which are not protected by copyright (Copyright Act of
-Taiwan, article 9). The pages were saved with
+**Taiwanese statutes.** The constitution, ten laws and one regulation, twelve
+pages from the law database of the Ministry of Justice, which are not protected
+by copyright (Copyright Act of Taiwan, article 9). The pages were saved with
 
 ```bash
 for p in B0000001 C0000001 J0070017 I0050021 N0030001 A0000001 D0050001 B0010001 C0010001 G0340003 K0020047 H0020001; do
@@ -34,9 +34,12 @@ done
 and turned into one text file per article by `skripte/zh_corpus.py`.
 `rohdaten/korpus-gesetze.txt` carries per page the pcode, the title, the number
 of articles, the characters and the sha256 of the saved page: 4306 articles,
-411564 characters. The pages themselves are not checked in; the manifest is
-what makes a later fetch comparable, and a law that was amended since will show
-up there as another digest.
+411564 characters. That is the text of the articles alone. Section 1 counts
+478164 characters, the documents as they went into the index: every article
+starts with a line of its own that carries the title of its law and its number,
+and the line breaks count as well. The pages themselves are not checked in; the
+manifest is what makes a later fetch comparable, and a law that was amended since
+will show up there as another digest.
 
 **Word list text.** 2000 documents of 450 words each, drawn from
 `/usr/share/dict/american-english` (Debian `wamerican`, sha256 at the end of
