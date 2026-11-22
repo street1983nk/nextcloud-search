@@ -1095,6 +1095,35 @@ $ceilingBytes = $whole($rules['maxFileBytesCeiling'] ?? 0);
 $teamFolders = ($rules['indexTeamFolders'] ?? false) === true;
 $externalStorage = ($rules['indexExternalStorage'] ?? false) === true;
 
+// The external storage an admin set up (EXCL-04, plan 45-05), one box each,
+// checked when the storage is indexed (D-45-01). The list arrives as a template
+// parameter of Admin::getForm() and never through the initial state; every
+// part of it is read defensively, because a mount point is a value an admin
+// typed and a row without a whole id would be a box that saves nothing. The
+// stored ids come from the rules, and a stored id without a row is a storage
+// that is gone (D-45-06): it is not shown and not mentioned. Storage a user set
+// up alone is not in the list (D-45-03), the help sentence says so.
+$externalMountsData = is_array($_['externalMounts'] ?? null) ? $_['externalMounts'] : [];
+$externalMountsEnabled = ($externalMountsData['enabled'] ?? false) === true;
+$externalMounts = [];
+foreach ((is_array($externalMountsData['mounts'] ?? null) ? $externalMountsData['mounts'] : []) as $externalMount) {
+	if (!is_array($externalMount) || !is_int($externalMount['id'] ?? null)) {
+		continue;
+	}
+	$externalMounts[] = [
+		'id' => $externalMount['id'],
+		'mountPoint' => is_string($externalMount['mountPoint'] ?? null) ? $externalMount['mountPoint'] : '',
+		'backend' => is_string($externalMount['backend'] ?? null) ? $externalMount['backend'] : '',
+		'duplicate' => ($externalMount['duplicate'] ?? false) === true,
+	];
+}
+$excludedExternalMounts = [];
+foreach ((is_array($rules['excludedExternalMounts'] ?? null) ? $rules['excludedExternalMounts'] : []) as $excludedMountId) {
+	if (is_int($excludedMountId)) {
+		$excludedExternalMounts[] = $excludedMountId;
+	}
+}
+
 // The two halves of the one sentence this block owes an admin about time. A new
 // exclusion clears the index within a cron round, and taking one back waits for
 // the comparison run, which holds itself back for this many hours. Naming the
@@ -1626,6 +1655,43 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	</div>
 	<p class="settings-hint" id="findling-rules-external-help"><?php p($l->t('External storage can be slow or charged per request. Indexing reads every file once.')); ?></p>
 
+	<?php
+	/*
+	 * The external storage an admin set up, one box each (EXCL-04, plan 45-05).
+	 * Every state is rendered here and the script only flips hidden and
+	 * disabled: with the main switch off the fieldset is disabled and keeps the
+	 * stored boxes (D-45-04), an empty list says so, and without files_external
+	 * there is one sentence and no list at all. A mount point is a text node in
+	 * a span of its own and never part of a translated sentence.
+	 */
+?>
+	<?php if (!$externalMountsEnabled) { ?>
+		<p class="settings-hint" id="findling-rules-mounts-disabled"><?php p($l->t('External storage is not enabled on this server.')); ?></p>
+	<?php } else { ?>
+		<fieldset id="findling-rules-mounts" class="findling-rules__mounts"<?php if (!$externalStorage) { ?> disabled<?php } ?>>
+			<legend class="findling-rules__label"><?php p($l->t('External storage to index')); ?></legend>
+			<p class="settings-hint" id="findling-rules-mounts-help"<?php if (!$externalStorage) { ?> hidden<?php } ?>><?php p($l->t('Storage set up by an admin. Clear the tick of a storage to keep it out of the index. New external storage is included automatically. Storage that users add themselves follows the switch above.')); ?></p>
+			<p class="settings-hint" id="findling-rules-mounts-off"<?php if ($externalStorage) { ?> hidden<?php } ?>><?php p($l->t('"Index external storage" is off, so no external storage is indexed. The choices below stay saved and apply again once it is on.')); ?></p>
+			<?php if ($externalMounts === []) { ?>
+				<p class="settings-hint" id="findling-rules-mounts-empty"><?php p($l->t('No external storage has been set up by an admin.')); ?></p>
+			<?php } ?>
+			<ul class="findling-rules__list" id="findling-rules-mounts-list" aria-describedby="findling-rules-mounts-help"<?php if ($externalMounts === []) { ?> hidden<?php } ?>>
+				<?php foreach ($externalMounts as $externalMount) {
+					$mountId = (string)(int)$externalMount['id'];
+					?>
+					<li class="findling-rules__row findling-rules__mount">
+						<input type="checkbox" class="checkbox" id="findling-rules-mount-<?php p($mountId); ?>" data-mount-id="<?php p($mountId); ?>"<?php if (!in_array($externalMount['id'], $excludedExternalMounts, true)) { ?> checked<?php } ?>>
+						<label for="findling-rules-mount-<?php p($mountId); ?>"><span class="findling-path"><?php p($externalMount['mountPoint']); ?></span>
+							<span class="findling-rules__mount-type"><?php p($externalMount['backend']); ?><?php if ($externalMount['duplicate']) { ?> <?php p($l->t('ID %s', [$mountId])); ?><?php } ?></span></label>
+					</li>
+				<?php } ?>
+			</ul>
+			<?php if ($externalMounts !== []) { ?>
+				<p class="settings-hint" id="findling-rules-mounts-again"><?php p($l->t('A storage you include again is indexed on the next regular comparison run.')); ?></p>
+			<?php } ?>
+		</fieldset>
+	<?php } ?>
+
 	<p class="settings-hint" id="findling-rules-effect"><?php p($l->t('The next run applies the new rules. Nothing restarts.')); ?></p>
 
 	<?php if ($latencyHours > 0 && $restartCommand !== '') { ?>
@@ -1668,6 +1734,11 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
  * could count under. Its patterns stand in a code element of their own,
  * between the two halves of the translated sentence, which the script cuts
  * at its placeholder.
+ *
+ * A third line since plan 45-05: the external storage a save newly keeps out
+ * of the index, without a number like the patterns (counting a whole storage
+ * would stop at the cap of the preview almost every time). The mount points
+ * stand in the code element, cut the same way.
  */
 ?>
 	<div class="findling-rules__confirm" id="findling-rules-confirm" role="group" aria-labelledby="findling-rules-confirm-text" hidden>
@@ -1676,6 +1747,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 			<span class="findling-rules__confirm-lines">
 				<span class="findling-rules__confirm-line" id="findling-rules-confirm-message"></span>
 				<span class="findling-rules__confirm-line" id="findling-rules-confirm-patterns" hidden><span id="findling-rules-confirm-patterns-before"></span><code class="findling-path" id="findling-rules-confirm-patterns-value"></code><span id="findling-rules-confirm-patterns-after"></span></span>
+				<span class="findling-rules__confirm-line" id="findling-rules-confirm-mounts" hidden><span id="findling-rules-confirm-mounts-before"></span><code class="findling-path" id="findling-rules-confirm-mounts-value"></code><span id="findling-rules-confirm-mounts-after"></span></span>
 			</span>
 		</p>
 		<div class="findling-rules__confirm-actions">

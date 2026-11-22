@@ -530,6 +530,58 @@
 	min-height: var(--default-clickable-area);
 }
 
+/* The external storage an admin set up (EXCL-04, plan 45-05), indented under
+   the switch it belongs to: no frame, no surface, no card inside the card. The
+   whole row is the click target through its label, and the mount point wraps
+   rather than being cut, because it is the payload of the row. */
+.findling-rules__mounts {
+	margin: 0;
+	padding-block: 0;
+	padding-inline-start: calc(var(--default-grid-baseline) * 4);
+	padding-inline-end: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.findling-rules__mount:hover {
+	background-color: var(--color-background-hover);
+}
+
+.findling-rules__mount label {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	min-height: var(--default-clickable-area);
+	min-width: 0;
+}
+
+.findling-rules__mount .findling-path {
+	overflow-wrap: anywhere;
+}
+
+.findling-rules__mount-type {
+	font-size: var(--font-size-small);
+	color: var(--color-text-maxcontrast);
+}
+
+/* Below 640 pixels the type goes under the mount point instead of beside it. */
+@media (max-width: 639px) {
+	.findling-rules__mount-type {
+		flex: 1 1 100%;
+	}
+}
+
+/* Forty four pixels for a thumb, a multiple of four and so still on the grid,
+   the same number the result page grows its controls to. */
+@media (pointer: coarse) {
+	.findling-rules__mount,
+	.findling-rules__mount label {
+		min-height: 44px;
+	}
+}
+
 /* An error belongs to its field and is therefore next to it, in the error text
    colour on the plain surface: a filled error surface for one sentence at a
    field would read as a failure of the page rather than of the value. */

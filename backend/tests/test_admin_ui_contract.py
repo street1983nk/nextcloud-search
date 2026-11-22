@@ -653,6 +653,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         # Since plan 36-06 (answer O3 of 36-WORTLAUT.md): the detail line of a
         # refused file, accepted by the owner as "Detail: %s" in German.
         "Detail: %s": "the same noun in German, accepted word for word by the owner",
@@ -669,6 +672,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Italian, read off the file on 25.09.2026 rather than guessed: the gate was
@@ -690,6 +696,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Dutch, read off the file on 25.09.2026 rather than guessed: the gate was
@@ -712,6 +721,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         # Since plan 36-06: the detail line of a refused file; Dutch writes the
         # noun detail and the colon exactly as English does.
         "Detail: %s": "detail is the same word in Dutch, and an invented difference would be a mistranslation",
@@ -732,6 +744,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Brazilian Portuguese, read off the file on 25.09.2026 rather than guessed
@@ -747,6 +762,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Traditional Chinese (Taiwan), read off the file on 15.11.2026 rather than
@@ -760,6 +778,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     # of zh_TW.json carries Han characters.
     "zh_TW": {
         "Findling": "the name of the app, the same word in every language of this tree",
+        # Since plan 45-05 (EXCL-04): no parentheses around it, so unlike
+        # %1$s (ID %2$s) the value equals its key, as Nextcloud writes ID.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
@@ -781,6 +802,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 45-05 (EXCL-04): the id that tells two external storages
+        # with the same mount point and type apart.
+        "ID %s": "a placeholder and the abbreviation ID, the same in every language of this tree",
     },
 }
 
@@ -3736,6 +3760,8 @@ def test_every_sentence_of_the_rules_block_is_in_every_catalogue() -> None:
             "Remove indexed content? Excluding %s also removes the already indexed documents that match these "
             "patterns from the index. The files themselves stay untouched on disk."
         ),
+        *MOUNT_TEMPLATE_SENTENCES,
+        *MOUNT_SENTENCES,
         "Limits per file",
         "Largest file the backend reads: %1$s (%2$s)",
         "Pages read per scanned document: %1$s, from the profile %2$s",
@@ -4101,7 +4127,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     sentence of no_wildcard changed its key (D-45-09), so the old key left
     every catalogue and every language table. All eighteen files moved
     together, zh_TW included (D-45-12), and the six language documents carry
-    the rows. Whoever moves it next writes the next paragraph.
+    the rows.
+
+    It stands at 380 since 2026-11-22, plan 45-05 (EXCL-04): nine more, the
+    list of the external storage an admin set up (label, help, the sentence
+    for the main switch off, the hint about including again, the empty
+    sentence, the sentence without files_external and the id that tells two
+    equal rows apart) and the two sentences of its line in the confirmation.
+    All eighteen files moved together, zh_TW included (D-45-12), and the six
+    language documents carry the rows. Whoever moves it next writes the next
+    paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4158,8 +4193,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # plan 43-19 (the SMB hint behind the remedy of unreadable, D-43-16; the
     # remedy of unreadable changed its key and so moved nothing); five of plan
     # 45-04 (six new sentences of the two lists, D-45-07 and D-45-08, less the
-    # old key of no_wildcard, whose sentence changed its key, D-45-09)
-    assert len(keys_of["de.json"]) == 371
+    # old key of no_wildcard, whose sentence changed its key, D-45-09); nine of
+    # plan 45-05 (the storage selection and its confirmation line, EXCL-04)
+    assert len(keys_of["de.json"]) == 380
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -5087,6 +5123,7 @@ def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it()
         "indexTeamFolders",
         "indexExternalStorage",
         "exclusionPatterns",
+        "excludedExternalMounts",
     ]
     assert "body: JSON.stringify({ exclusions: exclusions, exclusionPatterns: patterns })" in script
     assert "text('findling-rules-confirm-patterns-value', addedPatterns.join(', '))" in script
@@ -5102,6 +5139,162 @@ def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it()
     ):
         assert f"t('findling', '{sentence}')" in script
         assert f"t('findling', '{sentence}').replace" not in script
+
+
+MOUNT_SCRIPT_START = "  const MOUNT_LIST = 'findling-rules-mounts-list'"
+MOUNT_SCRIPT_END = '  /** Show or hide the two "nothing is set" sentences, after every change. */'
+MOUNT_SENTENCES = (
+    (
+        "Remove indexed content? Excluding the external storage %s also removes its already indexed documents from "
+        "the index. The files themselves stay untouched on the storage."
+    ),
+    (
+        "Remove indexed content? Excluding the external storages %s also removes their already indexed documents "
+        "from the index. The files themselves stay untouched on the storage."
+    ),
+)
+MOUNT_TEMPLATE_SENTENCES = (
+    "External storage to index",
+    (
+        "Storage set up by an admin. Clear the tick of a storage to keep it out of the index. New external storage "
+        "is included automatically. Storage that users add themselves follows the switch above."
+    ),
+    (
+        '"Index external storage" is off, so no external storage is indexed. The choices below stay saved and apply '
+        "again once it is on."
+    ),
+    "A storage you include again is indexed on the next regular comparison run.",
+    "No external storage has been set up by an admin.",
+    "External storage is not enabled on this server.",
+    "ID %s",
+)
+
+
+def scan_mount_script(script: str) -> list[str]:
+    """Findings of the storage selection in the script (EXCL-04, plan 45-05).
+
+    The id of a row comes out of its data-mount-id attribute and nowhere else,
+    a mount point is read as text out of its label and written as text into the
+    confirmation, and a page without the list sends the stored ids unchanged.
+    """
+    findings: list[str] = []
+    if script.count(MOUNT_SCRIPT_START) != 1 or script.count(MOUNT_SCRIPT_END) != 1:
+        return ["mounts: the part of the storage selection is not found exactly once"]
+    part = cut_between(script, MOUNT_SCRIPT_START, MOUNT_SCRIPT_END)
+    if "getAttribute('data-mount-id')" not in part:
+        findings.append("mounts: the id is not read out of data-mount-id")
+    if re.search(r"dataset|getAttribute\('(?!data-mount-id')", part) is not None:
+        findings.append("mounts: an id or a value is read out of another attribute")
+    for writer in ("innerHTML", "outerHTML", "insertAdjacent", "createElement", "innerText"):
+        if writer in part:
+            findings.append(f"mounts: uses {writer}")
+    if "return label === null ? '' : label.textContent" not in part:
+        findings.append("mounts: the mount point is not read as the text of its label")
+    if "text('findling-rules-confirm-mounts-value', newMounts.map(mountPointOf).join(', '))" not in script:
+        findings.append("mounts: the confirmation does not write the mount points as text")
+    if "const mounts = mountsListed() ? excludedMountsOf() : inForceMounts.slice()" not in script:
+        findings.append("mounts: a page without the list does not send the stored ids unchanged")
+    return findings
+
+
+def test_the_script_reads_a_mount_only_out_of_its_row_and_writes_it_as_text() -> None:
+    """T-45-19, T-45-21: the storage selection reads ids and names safely and keeps a hidden list."""
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert scan_mount_script(script) == []
+    for sentence in MOUNT_SENTENCES:
+        assert f"t('findling', '{sentence}')" in script, sentence
+        assert f"t('findling', '{sentence}').replace" not in script, sentence
+    assert "excludedExternalMounts" in script
+    assert "inForceMounts = mountIdsOf(rules.excludedExternalMounts)" in script
+
+    # Fail samples (B8), each built by hand from the clean script and not with
+    # the expressions above: the label read as markup, the id read out of the
+    # dataset, and an empty list sent for a page without the list.
+    as_markup = script.replace("label.textContent", "label.innerHTML", 1)
+    assert scan_mount_script(as_markup) == [
+        "mounts: uses innerHTML",
+        "mounts: the mount point is not read as the text of its label",
+    ]
+    from_dataset = script.replace("box.getAttribute('data-mount-id')", "box.dataset.mountId", 1)
+    assert scan_mount_script(from_dataset) == [
+        "mounts: the id is not read out of data-mount-id",
+        "mounts: an id or a value is read out of another attribute",
+    ]
+    wiped = script.replace("mountsListed() ? excludedMountsOf() : inForceMounts.slice()", "excludedMountsOf()", 1)
+    assert scan_mount_script(wiped) == ["mounts: a page without the list does not send the stored ids unchanged"]
+
+
+def scan_mount_template(block: str) -> list[str]:
+    """Findings of the storage selection in the rules block of the template."""
+    findings: list[str] = []
+    for element in (
+        "findling-rules-mounts",
+        "findling-rules-mounts-help",
+        "findling-rules-mounts-off",
+        "findling-rules-mounts-empty",
+        "findling-rules-mounts-list",
+        "findling-rules-mounts-again",
+        "findling-rules-mounts-disabled",
+        "findling-rules-confirm-mounts",
+        "findling-rules-confirm-mounts-value",
+    ):
+        if block.count(f'id="{element}"') != 1:
+            findings.append(f"mounts: {element} is not rendered exactly once")
+    if (
+        '<fieldset id="findling-rules-mounts" class="findling-rules__mounts"'
+        "<?php if (!$externalStorage) { ?> disabled<?php } ?>>" not in block
+    ):
+        findings.append("mounts: the fieldset does not follow the main switch")
+    printed_id = 'data-mount-id="<?php p($mountId); ?>"'
+    if printed_id not in block or "$mountId = (string)(int)$externalMount['id'];" not in block:
+        findings.append("mounts: the id of a box is not a whole number printed with p()")
+    if "<span class=\"findling-path\"><?php p($externalMount['mountPoint']); ?></span>" not in block:
+        findings.append("mounts: the mount point is not a text of its own")
+    if 'id="findling-rules-external-help"' in block and 'id="findling-rules-effect"' in block:
+        help_at = block.index('id="findling-rules-external-help"')
+        effect_at = block.index('id="findling-rules-effect"')
+        for element in ('id="findling-rules-mounts"', 'id="findling-rules-mounts-disabled"'):
+            if element in block and not help_at < block.index(element) < effect_at:
+                findings.append(f"mounts: {element} does not stand under the switch")
+    if (
+        'id="findling-rules-confirm-patterns"' in block
+        and 'id="findling-rules-confirm-mounts"' in block
+        and block.index('id="findling-rules-confirm-patterns"') > block.index('id="findling-rules-confirm-mounts"')
+    ):
+        findings.append("mounts: the confirmation line does not follow the pattern line")
+    return findings
+
+
+def test_the_template_renders_every_state_of_the_mount_list() -> None:
+    """EXCL-04, UI-SPEC section 1 and 2: four states, one confirmation line, all text through p()."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    block = template[template.index(RULES_BLOCK_START) :]
+
+    assert scan_mount_template(block) == []
+    for sentence in MOUNT_TEMPLATE_SENTENCES:
+        assert f"$l->t('{sentence}'" in template, sentence
+    assert "$_['externalMounts']" in template
+
+    # Fail samples (B8): a fieldset that ignores the switch, a mount point
+    # inside the label without a span of its own, and the list moved under the
+    # effect line are one finding each.
+    unlocked = block.replace("<?php if (!$externalStorage) { ?> disabled<?php } ?>>", ">", 1)
+    assert scan_mount_template(unlocked) == ["mounts: the fieldset does not follow the main switch"]
+    bare = block.replace(
+        "<span class=\"findling-path\"><?php p($externalMount['mountPoint']); ?></span>",
+        "<?php p($externalMount['mountPoint']); ?>",
+        1,
+    )
+    assert scan_mount_template(bare) == ["mounts: the mount point is not a text of its own"]
+    effect = '<p class="settings-hint" id="findling-rules-effect">'
+    moved = block.replace(effect, "<p hidden></p>", 1).replace(
+        "<?php if (!$externalMountsEnabled) { ?>", effect + "</p>\n\t<?php if (!$externalMountsEnabled) { ?>", 1
+    )
+    assert scan_mount_template(moved) == [
+        'mounts: id="findling-rules-mounts" does not stand under the switch',
+        'mounts: id="findling-rules-mounts-disabled" does not stand under the switch',
+    ]
 
 
 SETTINGS_CONTROLLER = REPO_ROOT / "php" / "lib" / "Controller" / "SettingsController.php"

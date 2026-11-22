@@ -389,6 +389,13 @@ this table cannot break on a wording.
 | `Index Team Folders` | Team Folders indexieren | 索引團隊資料夾 |
 | `Index external storage` | Externen Speicher indexieren | 索引外部儲存空間 |
 | `External storage can be slow or charged per request. Indexing reads every file once.` | Externer Speicher kann langsam oder pro Zugriff kostenpflichtig sein. Die Indexierung liest jede Datei einmal. | 外部儲存空間可能較慢，或按請求次數計費。建立索引時會讀取每個檔案一次。 |
+| `External storage to index` | Zu indexierende externe Speicher | 要建立索引的外部儲存空間 |
+| `Storage set up by an admin. Clear the tick of a storage to keep it out of the index. New external storage is included automatically. Storage that users add themselves follows the switch above.` | Von Admins angelegte Speicher. Haken entfernen, um diesen Speicher aus dem Index zu nehmen. Neue externe Speicher sind automatisch dabei. Speicher, die Nutzer selbst anlegen, folgen dem Schalter darüber. | 由管理員設定的儲存空間。取消勾選即可將該儲存空間排除在索引之外。新的外部儲存空間會自動納入。使用者自行新增的儲存空間則依照上方的開關處理。 |
+| `"Index external storage" is off, so no external storage is indexed. The choices below stay saved and apply again once it is on.` | "Externen Speicher indexieren" ist aus, daher wird kein externer Speicher indexiert. Die Auswahl darunter bleibt gespeichert und gilt wieder, sobald der Schalter an ist. | 「索引外部儲存空間」已關閉，因此不會為任何外部儲存空間建立索引。下方的選擇會保留，開關重新開啟後即再次生效。 |
+| `A storage you include again is indexed on the next regular comparison run.` | Ein wieder zugelassener Speicher wird beim nächsten regulären Abgleich nachindexiert. | 重新納入的儲存空間會在下一輪例行比對作業時建立索引。 |
+| `No external storage has been set up by an admin.` | Es gibt keinen von Admins angelegten externen Speicher. | 沒有由管理員設定的外部儲存空間。 |
+| `External storage is not enabled on this server.` | Externer Speicher ist auf diesem Server nicht aktiviert. | 此伺服器未啟用外部儲存空間。 |
+| `ID %s` | ID %s | ID %s |
 | `The next run applies the new rules. Nothing restarts.` | Der nächste Lauf übernimmt die neuen Regeln. Es startet nichts neu. | 下一輪會套用新規則。不會重新啟動任何東西。 |
 | `Save rules` | Regeln speichern | 儲存規則 |
 | `Rules saved. The next run applies them.` | Regeln gespeichert. Der nächste Lauf übernimmt sie. | 規則已儲存。下一輪會套用。 |
@@ -425,6 +432,8 @@ this table cannot break on a wording.
 | `Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將該路徑下已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the already indexed documents that match that pattern from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente, auf die dieses Muster passt, aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將符合該樣式的已索引文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the already indexed documents that match these patterns from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente, auf die diese Muster passen, aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將符合這些樣式的已索引文件從索引中移除。磁碟上的檔案本身不受影響。 |
+| `Remove indexed content? Excluding the external storage %s also removes its already indexed documents from the index. The files themselves stay untouched on the storage.` | Indexierte Inhalte entfernen? Der Ausschluss des externen Speichers %s entfernt außerdem seine bereits indexierten Dokumente aus dem Index. Die Dateien selbst bleiben unverändert auf dem Speicher. | 要移除已索引的內容嗎？排除外部儲存空間 %s 也會將其已索引的文件從索引中移除。儲存空間上的檔案本身不受影響。 |
+| `Remove indexed content? Excluding the external storages %s also removes their already indexed documents from the index. The files themselves stay untouched on the storage.` | Indexierte Inhalte entfernen? Der Ausschluss der externen Speicher %s entfernt außerdem ihre bereits indexierten Dokumente aus dem Index. Die Dateien selbst bleiben unverändert auf dem Speicher. | 要移除已索引的內容嗎？排除外部儲存空間 %s 也會將這些儲存空間中已索引的文件從索引中移除。儲存空間上的檔案本身不受影響。 |
 | `at least %s` | mindestens %s | 至少 %s |
 | `Exclude and remove` | Ausschließen und entfernen | 排除並移除 |
 | `Keep files indexed` | Dateien indexiert lassen | 保留這些檔案的索引 |
@@ -561,13 +570,15 @@ this table cannot break on a wording.
 ## Exceptions for the completeness gate G2
 
 Gate G2, today `test_every_catalogue_value_carries_a_wording_of_its_language`, demands that no
-value is empty and none equals its English source string. In Chinese eight keys do on purpose.
+value is empty and none equals its English source string. In Chinese nine keys do on purpose.
 It is a named list and deliberately not a threshold; every entry carries its reason.
 
 - `Findling`: the name of the app, the same word in every language.
 - `PDF`: the proper name of a file format, the same abbreviation in every language.
 - `B`, `KB`, `MB`, `GB`, `TB`, `PB`: the unit symbols of the sizes on the admin page, which
   Nextcloud's Traditional Chinese interface writes the English way.
+- `ID %s` (since plan 45-05): the id that tells two external storages with the same mount
+  point and type apart. It stands without parentheses, so the value equals its key.
 
 `%1$s (ID %2$s)` is **not** on the list, unlike in every other language of the tree, because
 the full width parentheses make the value `%1$s（ID %2$s）` differ from its key.
@@ -579,7 +590,7 @@ The list was not guessed. Two runs, in this order:
 | no entry for `zh_TW` in the table | `AssertionError: languages without a list of exceptions: ['zh_TW']` |
 | empty mapping `"zh_TW": {}` | sixteen findings, eight keys over two files, the first of them `zh_TW.json: 'Findling' is still the English source string` |
 
-The same eight keys with the same reasons stand in `VALUES_THAT_MAY_EQUAL_THEIR_KEY["zh_TW"]` in
+The eight keys of these two runs and `ID %s` stand with the same reasons in `VALUES_THAT_MAY_EQUAL_THEIR_KEY["zh_TW"]` in
 `backend/tests/test_admin_ui_contract.py`.
 
 ## Machine checks

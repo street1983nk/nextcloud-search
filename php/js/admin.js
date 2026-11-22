@@ -102,6 +102,14 @@
   // The patterns as they are stored, for the same reason and with the same
   // lifetime as the prefixes above (plan 33-05).
   let inForcePatterns = []
+  // The ids of the admin mounts kept out of the index as they are stored
+  // (EXCL-04, plan 45-05), with the same lifetime as the two lists above: read
+  // from the rendered boxes once, or out of the bootstrap when no box is
+  // rendered, and replaced out of the answer of a save.
+  let inForceMounts = []
+  // The ids the open confirmation would newly exclude, so that "Keep files
+  // indexed" can check exactly those boxes again.
+  let pendingMounts = []
   // The stored wish of the backup pause, which decides what the switch says and
   // sends. Taken from the template once and then out of every overview.
   let pauseWished = false
@@ -1057,6 +1065,106 @@
     return currentEntries(PATTERN_LIST)
   }
 
+  /*
+   * The external storage an admin set up (EXCL-04, plan 45-05). The rows are
+   * rendered by the template and never built here; the script reads the id of
+   * a row out of its data-mount-id attribute and the mount point out of the
+   * text of its label span, and writes neither anywhere but into text nodes.
+   */
+  const MOUNT_LIST = 'findling-rules-mounts-list'
+  const MOUNT_FIELDSET = 'findling-rules-mounts'
+  const EXTERNAL_SWITCH = 'findling-rules-external-storage'
+
+  /** Whether the page rendered the list at all (files_external is on). */
+  function mountsListed () {
+    return document.getElementById(MOUNT_LIST) !== null
+  }
+
+  /** Every box of the list, one per admin mount. */
+  function mountBoxes () {
+    return Array.prototype.slice.call(document.querySelectorAll('#' + MOUNT_LIST + ' input[data-mount-id]'))
+  }
+
+  /** The id of one box as a whole number, or null for a box without one. */
+  function mountIdOf (box) {
+    const raw = box.getAttribute('data-mount-id')
+    const id = raw !== null && /^[0-9]+$/.test(raw) ? Number(raw) : NaN
+    return Number.isSafeInteger(id) ? id : null
+  }
+
+  /** The ids of the boxes that are cleared, which are the storages kept out (D-45-02). */
+  function excludedMountsOf () {
+    return mountBoxes()
+      .filter(function (box) {
+        return box.checked !== true
+      })
+      .map(mountIdOf)
+      .filter(function (id) {
+        return id !== null
+      })
+      .sort(function (a, b) {
+        return a - b
+      })
+  }
+
+  /** Check every box whose id is not in the given list, clear the others. */
+  function setMountBoxes (excluded) {
+    mountBoxes().forEach(function (box) {
+      const id = mountIdOf(box)
+      if (id !== null) {
+        box.checked = excluded.indexOf(id) === -1
+      }
+    })
+  }
+
+  /** The mount point of a row, read as text out of its label. */
+  function mountPointOf (id) {
+    const box = mountBoxes().find(function (candidate) {
+      return mountIdOf(candidate) === id
+    })
+    const row = box === undefined ? null : box.closest('.findling-rules__mount')
+    const label = row === null ? null : row.querySelector('.findling-path')
+    return label === null ? '' : label.textContent
+  }
+
+  /** Ids of a stored list, whole numbers only, ascending. */
+  function mountIdsOf (value) {
+    return (Array.isArray(value) ? value : [])
+      .filter(function (id) {
+        return Number.isSafeInteger(id) && id >= 0
+      })
+      .sort(function (a, b) {
+        return a - b
+      })
+  }
+
+  /** The storages a save would newly keep out, measured against the stored ones. */
+  function newMountsOf (excluded) {
+    if (!checked(EXTERNAL_SWITCH)) {
+      // With the main switch off nothing external is indexed, so nothing is
+      // removed by clearing a box and there is nothing to confirm (D-45-04).
+      return []
+    }
+    return excluded.filter(function (id) {
+      return inForceMounts.indexOf(id) === -1
+    })
+  }
+
+  /**
+   * The main switch locks and unlocks the list without a reload (D-45-04): the
+   * fieldset is disabled while the switch is off, the boxes keep their state,
+   * and the help sentence trades places with the sentence about the switch.
+   */
+  function refreshMountLock () {
+    const fieldset = document.getElementById(MOUNT_FIELDSET)
+    const on = checked(EXTERNAL_SWITCH)
+    if (fieldset !== null) {
+      fieldset.disabled = !on
+    }
+    shown('findling-rules-mounts-help', on)
+    shown('findling-rules-mounts-off', !on)
+  }
+
   /** Show or hide the two "nothing is set" sentences, after every change. */
   function refreshEmptyState () {
     shown('findling-rules-exclusions-empty', currentPrefixes().length === 0)
@@ -1480,7 +1588,7 @@
    * the sentence appears without a figure instead of claiming nought documents,
    * which would be the one wrong thing this box could say.
    */
-  async function confirmNewExclusions (exclusions, patterns) {
+  async function confirmNewExclusions (exclusions, patterns, newMounts) {
     const box = document.getElementById('findling-rules-confirm')
     const cancel = document.getElementById('findling-rules-confirm-cancel')
     const save = document.getElementById('findling-rules-save')
@@ -1509,7 +1617,7 @@
     const answered = answer !== null && Array.isArray(answer.newPrefixes)
     const prefixes = answered ? answer.newPrefixes : newExclusionsOf(exclusions)
     const addedPatterns = answer !== null && Array.isArray(answer.newPatterns) ? answer.newPatterns : newPatternsOf(patterns)
-    if (prefixes.length === 0 && addedPatterns.length === 0) {
+    if (prefixes.length === 0 && addedPatterns.length === 0 && newMounts.length === 0) {
       return true
     }
 
@@ -1552,6 +1660,20 @@
     text('findling-rules-confirm-patterns-after', cut === -1 ? '' : patternSentence.slice(cut + 2))
     shown('findling-rules-confirm-patterns', addedPatterns.length > 0)
 
+    // The third line since plan 45-05: the external storage this save newly
+    // keeps out, without a number, cut at its placeholder like the patterns.
+    // The mount points are read as text out of their rows and stand in the
+    // code element only, never inside a translated string.
+    const mountSentence = newMounts.length === 1
+      ? t('findling', 'Remove indexed content? Excluding the external storage %s also removes its already indexed documents from the index. The files themselves stay untouched on the storage.')
+      : t('findling', 'Remove indexed content? Excluding the external storages %s also removes their already indexed documents from the index. The files themselves stay untouched on the storage.')
+    const mountCut = mountSentence.indexOf('%s')
+    text('findling-rules-confirm-mounts-before', mountCut === -1 ? mountSentence : mountSentence.slice(0, mountCut))
+    text('findling-rules-confirm-mounts-value', newMounts.map(mountPointOf).join(', '))
+    text('findling-rules-confirm-mounts-after', mountCut === -1 ? '' : mountSentence.slice(mountCut + 2))
+    shown('findling-rules-confirm-mounts', newMounts.length > 0)
+    pendingMounts = newMounts.slice()
+
     shown('findling-rules-confirm', true)
     if (save !== null) {
       // Disabled while the box stands, so the only way past it is one of its
@@ -1569,6 +1691,7 @@
 
   /** Take the confirmation off the screen and give the button back. */
   function hideConfirmation () {
+    pendingMounts = []
     shown('findling-rules-confirm', false)
     const save = document.getElementById('findling-rules-save')
     if (save !== null) {
@@ -1584,6 +1707,16 @@
    * focus leaves a keyboard user nowhere.
    */
   function dismissConfirmation () {
+    // "Keep files indexed" means it for the external storage as well: the
+    // boxes this save would have cleared for the first time are checked again.
+    // Setting checked from here fires no change event, so the form does not
+    // count as touched by it.
+    const keep = pendingMounts
+    mountBoxes().forEach(function (box) {
+      if (keep.indexOf(mountIdOf(box)) !== -1) {
+        box.checked = true
+      }
+    })
     hideConfirmation()
     const save = document.getElementById('findling-rules-save')
     if (save !== null) {
@@ -1637,8 +1770,13 @@
 
     const exclusions = currentPrefixes()
     const patterns = currentPatterns()
-    if (confirmed !== true && (newExclusionsOf(exclusions).length > 0 || newPatternsOf(patterns).length > 0)) {
-      const proceed = await confirmNewExclusions(exclusions, patterns)
+    // The ids of the cleared boxes, or the stored ids unchanged when the page
+    // rendered no list (files_external is off): a page without boxes must not
+    // send an empty list and thereby lift every stored exclusion (T-45-21).
+    const mounts = mountsListed() ? excludedMountsOf() : inForceMounts.slice()
+    const newMounts = newMountsOf(mounts)
+    if (confirmed !== true && (newExclusionsOf(exclusions).length > 0 || newPatternsOf(patterns).length > 0 || newMounts.length > 0)) {
+      const proceed = await confirmNewExclusions(exclusions, patterns, newMounts)
       if (!proceed) {
         return
       }
@@ -1656,7 +1794,8 @@
         maxFileBytes: megabytes * BYTES_PER_MEGABYTE,
         indexTeamFolders: checked('findling-rules-team-folders'),
         indexExternalStorage: checked('findling-rules-external-storage'),
-        exclusionPatterns: patterns
+        exclusionPatterns: patterns,
+        excludedExternalMounts: mounts
       })
 
       if (answer.ok && answer.body.saved === true) {
@@ -1754,6 +1893,13 @@
       refreshEmptyState()
       inForcePatterns = currentPatterns()
     }
+
+    if (Array.isArray(rules.excludedExternalMounts)) {
+      // The stored ids are the ones in force from now on, and the boxes show
+      // them, so a storage just confirmed does not ask a second time.
+      inForceMounts = mountIdsOf(rules.excludedExternalMounts)
+      setMountBoxes(inForceMounts)
+    }
   }
 
   /**
@@ -1774,6 +1920,23 @@
     // before any handler can change them.
     inForcePrefixes = currentPrefixes()
     inForcePatterns = currentPatterns()
+    // The stored external storage kept out: off the rendered boxes when there
+    // are any, otherwise out of the rules of the bootstrap, so that a save on
+    // a page without the list sends the list in force unchanged (T-45-21).
+    if (mountsListed()) {
+      inForceMounts = excludedMountsOf()
+    } else {
+      const state = initialState('bootstrap')
+      const stored = state !== null && state.rules !== null && typeof state.rules === 'object'
+        ? state.rules.excludedExternalMounts
+        : []
+      inForceMounts = mountIdsOf(stored)
+    }
+
+    const externalSwitch = document.getElementById(EXTERNAL_SWITCH)
+    if (externalSwitch !== null) {
+      externalSwitch.addEventListener('change', refreshMountLock)
+    }
 
     const save = document.getElementById('findling-rules-save')
     if (save !== null) {
