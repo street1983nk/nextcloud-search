@@ -26,6 +26,10 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 - Ein Ordnereintrag mit * oder ? wird mit einem Hinweis auf "Ausgeschlossene
   Muster" abgelehnt; frühere Einträge mit * oder ? gelten weiter und sind
   markiert. Die Meldung für ein Muster ohne * oder ? nennt beide Wege (#45).
+- Die Regel-Routen lehnen ein JSON-Objekt oder eine Liste mit Lücken statt
+  einer Liste mit 400 ab und speichern nichts, in allen drei Listen
+  (ausgeschlossene Ordner, ausgeschlossene Muster, ausgeschlossene externe
+  Speicher). Früher so gespeicherte Werte werden weiter gelesen.
 
 ### Behoben
 

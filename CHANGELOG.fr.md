@@ -28,6 +28,10 @@ dans [CHANGELOG.md](CHANGELOG.md).
   « Motifs exclus » ; les entrées antérieures avec * ou ? restent en vigueur
   et sont signalées. Le message pour un motif sans * ni ? indique les deux
   voies (#45).
+- Les routes des règles refusent avec 400, sans rien enregistrer, un objet
+  JSON ou une liste avec des trous à la place d'une liste, dans les trois
+  listes (dossiers exclus, motifs exclus, stockages externes exclus). Les
+  valeurs enregistrées auparavant sous cette forme restent lues.
 
 ### Corrigé
 

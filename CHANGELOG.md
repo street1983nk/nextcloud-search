@@ -24,6 +24,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - A folder entry with * or ? is refused with a pointer to "Excluded
   patterns"; earlier entries with * or ? stay in force and are marked. The
   message for a pattern without * or ? names both ways (#45).
+- The rule routes refuse a JSON object or a list with gaps in place of a
+  list with 400 and save nothing, in all three lists (excluded folders,
+  excluded patterns, excluded external storages). Values stored earlier in
+  that form are still read.
 
 ### Fixed
 
