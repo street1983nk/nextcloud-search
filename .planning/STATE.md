@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-09-PLAN.md"
-last_updated: "2026-11-22T07:20:00.000Z"
-last_activity: "2026-11-22, 45-09 fertig: drei LOW behoben (fcfa50b2, 2b623a3f, af0e5e13), Push bis cb2038b9, alle Workflows grün, audited_head af0e5e13"
+stopped_at: "45-10 pausiert (Owner: Fix #59 kommt vorher in 1.7.0)"
+last_updated: "2026-11-22T09:40:00.000Z"
+last_activity: "2026-11-22, 45-10 pausiert: Freigaben 5d9cc54e, CHANGELOG-Zeile c3885795, Fix V-45-10-01 10d9707e (lokal, nicht gepusht); Volltest teilweise, muss nach #59 neu laufen"
 progress:
   total_phases: 2
   completed_phases: 1
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-09 von 16 fertig, nächster 45-10
-Status: Executing
+Plan: 45-09 von 16 fertig, 45-10 pausiert (Owner-Entscheid: Fix für #59 noch in 1.7.0, Volltest danach komplett neu)
+Status: Paused
 Last activity: 2026-11-22, 45-09 fertig: Fixes L-45-09-03 fcfa50b2, L-45-09-01 2b623a3f, L-45-09-02 af0e5e13, Freigaben cb2038b9; Push 612b7c9e..cb2038b9, neun Workflows grün; audited_head af0e5e13
 
 ## Performance Metrics
@@ -136,6 +136,7 @@ Last activity: 2026-11-22, 45-09 fertig: Fixes L-45-09-03 fcfa50b2, L-45-09-01 2
 - 45-07 (22.11.2026, fdfe1b70, 907baa2f): READMEs DE/EN/FR mit Suchsprachen, Abschnitt Bekannte Grenzen direkt nach der Sprachzeile und den drei Neuerungen 1.7.0 ("ab 1.7.0"); Faktenprüfung 45-README-PRUEFUNG.md ohne Befund. Gates nach D-45-14: Messzahl genau einmal je README, info.xml nur noch höchstens eine; Grenzen, Sprachzeile, Doku-Vergleich, Share-Satz, Similar documents je README; Formatliste-gegen-Entwurf nur noch, wo eine Beschreibung die Liste trägt; Kern-Gates (Datenschutz, Connector, Umstiegs-Link) unverändert auf info.xml. docs/l10n-chinese.md: Schlüsselzahl 380, kein wörtliches U+2014. STORE-04 Complete, REL-07 README-Teil erledigt. Lokal, nicht gepusht.
 - 45-08 (22.11.2026, 93996a4b, 53a11d81, efd0deb3): Version 1.7.0 in beiden Apps (zwei version, image-tag, Doku-Links), Update-Probe FROM_TAGS ab v1.6.2 bis v1.6.5, deploy-harp "tree carries 1.7.0", CHANGELOG [1.7.0] DE/EN/FR. STOPP-Prüfung leer (keine Migration, kein Schema seit v1.6.5). Owner-Antwort "A" (2026-11-22 05:01 UTC): Version ja, CHANGELOG ja; Datum [1.7.0] wird in 45-14 auf das Tag-Datum gezogen, falls der Tag später liegt. Lokal, nicht gepusht.
 - 45-09 (22.11.2026, fcfa50b2, 2b623a3f, af0e5e13, cb2038b9): Audit 45-AUDIT.md, Digest-Gate 92fd028a. Owner "Ok" (05:36 UTC, nach "Qualität hat Vorrang"): alle drei LOW behoben. L-45-09-03: excludedStorageIds() liest ohne Tabelle oc_external_mounts eine leere Menge (auf frischer NC 34.0.3 vorher DbalException und Stillstand, nachher Crawl und Ereignisse ok); bewusst kein Guard auf "App deaktiviert". L-45-09-01: Obergrenze 1000 auch beim Lesen. L-45-09-02: Regelrouten lehnen Objekt und Liste mit Lücke in allen drei Listen ab (empty bzw. out_of_range), Lesen bleibt duldsam; ersetzt H-33-01. Push 612b7c9e..cb2038b9, neun Workflows grün, Update-Probe 1.6.5 -> 1.7.0 und HaRP 1.5.0 -> 1.7.0 belegt; audited_head af0e5e13.
+- 45-10 PAUSIERT (22.11.2026): Owner-Entscheide "Ok" 07:26 UTC in 45-FREIGABEN.md (L-45-09-03 enge Form behalten; CHANGELOG-Zeile Objekt-Ablehnung) als 5d9cc54e, CHANGELOG-Zeile EN/DE/FR c3885795. Volltest-Teilstand: DE Admin-Seite (Pause, Diagnose, Profil) und Regelblock mit allen Feldmeldungen (empty, wildcard, duplicate, too_long, too_many, no_wildcard, double_star, unsupported_character, negation, no_literal, traversal), Zähler 2/1/0, Bestätigungen, Hauptschalter aus/an und XSS-Probe (Markup als Text, 0 img, kein Dialog) per Playwright gemessen. Befund V-45-10-01 (Typ "Local" unter DE) per TDD behoben: 10d9707e, Baumhash PHP 136/85ba0c66. Offen für Owner: V-45-10-02 Bestätigung nennt doppelte Einhängepunkte zweimal ohne ID ("/Gemeinsam, /Gemeinsam"); V-45-10-03 Platzhalter "alice/files/Vertraege/Miete.pdf" der Diagnose fest im Template (ASCII-Umlaut unter DE, Deutsch unter EN/FR, Bestand vor 1.7.0). Nicht gelaufen: EN/FR, Nutzersuche, Ausschluss mit Abgleich, zh_TW/zh_Hant_TW, Playwright-Matrix, impeccable critique/audit über CDP, Sprachprüfung mit Kontrolle; Umlaut-Vorfilter v1.6.5..HEAD ohne Befund. audited_head bleibt af0e5e13, Code seitdem geändert (10d9707e). Skripte im Scratchpad der Sitzung fda96efc (pw/, abgleich.py, montage.py).
 
 ### Decisions (Roadmap v1.6)
 
@@ -316,13 +317,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-22T07:20:00.000Z
-Stopped at: Completed 45-09-PLAN.md
+Last session: 2026-11-22T09:40:00.000Z
+Stopped at: 45-10 pausiert vor Fix #59 (Volltest nach dem Fix komplett neu)
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:execute-phase 45: weiter mit 45-10 (alles bis cb2038b9 gepusht, audited_head af0e5e13; nur .planning-Commits danach). Owner-Hinweise aus 45-09: Guard L-03 nur auf fehlende Tabelle (enger als vorgeschlagen), CHANGELOG ohne Zeile zur Objekt-Ablehnung (Owner-Entscheid offen). 45-14: CHANGELOG-Datum [1.7.0] in drei Sprachen auf das Tag-Datum ziehen, falls später als 2026-11-22 (von Freigabe A gedeckt)
+- Erst Fix #59 (Secure-View-Ablehnung bei Freigaben ohne Download, readerOf), dann 45-10 neu: Volltest komplett auf dem neuen Kopf. Lokal und ungepusht über cb2038b9: 5d9cc54e, c3885795, 10d9707e und dieser Pausen-Commit. Owner-Fragen V-45-10-02 und V-45-10-03 (siehe 45-10-Eintrag oben). Owner-Entscheide aus 45-09 erledigt: Guard L-03 bleibt eng, CHANGELOG-Zeile drin. 45-14: CHANGELOG-Datum [1.7.0] in drei Sprachen auf das Tag-Datum ziehen, falls später als 2026-11-22 (von Freigabe A gedeckt)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
