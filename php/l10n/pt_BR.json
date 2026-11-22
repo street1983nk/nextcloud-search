@@ -155,6 +155,7 @@
         "The backend could not start Tesseract. Check the log of the External App.": "O serviço não conseguiu iniciar o Tesseract. Verifique o registro do aplicativo externo.",
         "Look up one file": "Consultar um arquivo",
         "Path or file ID": "Caminho ou ID do arquivo",
+        "alice/files/Contracts/Rent.pdf": "alice/files/Contratos/Aluguel.pdf",
         "A path as Nextcloud stores it, or the numeric ID from the list above.": "Um caminho como o Nextcloud o armazena, ou o número da lista acima.",
         "Look up file": "Consultar arquivo",
         "Looking up a single file needs JavaScript. Everything above stays complete without it.": "A consulta de um único arquivo precisa de JavaScript. Tudo o que está acima continua completo sem ele.",

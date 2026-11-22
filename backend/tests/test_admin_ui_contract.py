@@ -4344,7 +4344,14 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     eighteen files moved together, the six language documents carry the rows;
     the German and French wording is the one the owner approved on 2026-11-22
     11:52, the six other languages are drafts under the same dated reservation
-    as the rest. Whoever moves it next writes the next paragraph.
+    as the rest.
+
+    It stands at 383 since 2026-11-22, plan 45-19 (finding V-45-10-03): one
+    more, the example path in the field of "Look up one file", which stood in
+    the template as fixed German text with a spelled out umlaut. All eighteen
+    files moved together with the wordings the owner approved on 2026-11-22
+    (text 6 of plan 45-17), and the six language documents carry the row.
+    Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4405,7 +4412,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # plan 45-05 (the storage selection and its confirmation line, EXCL-04);
     # two of plan 45-18 (label and remedy of policy_blocked, #59; the remedy of
     # unreadable changed its key and so moved nothing)
-    assert len(keys_of["de.json"]) == 382
+    assert len(keys_of["de.json"]) == 383
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -5563,6 +5570,65 @@ def test_the_duplicate_mark_only_follows_the_server_flag() -> None:
         1,
     )
     assert scan_duplicate_mark(loose) == ["duplicate mark: the flag of the server is not read as a strict boolean"]
+
+
+# The example path of "Look up one file" (finding V-45-10-03 of the full test
+# of 45-10): it stood in the template as fixed German text with a spelled out
+# umlaut, "alice/files/Vertraege/Miete.pdf", under every language. Since plan
+# 45-19 it is a key of the catalogue, with the wordings the owner approved on
+# 2026-11-22 (text 6 of plan 45-17).
+LOOKUP_PLACEHOLDER_KEY = "alice/files/Contracts/Rent.pdf"
+LOOKUP_PLACEHOLDER = f"placeholder=\"<?php p($l->t('{LOOKUP_PLACEHOLDER_KEY}')); ?>\""
+LOOKUP_PLACEHOLDER_WORDINGS = {
+    "de": "alice/files/Verträge/Miete.pdf",
+    "de_DE": "alice/files/Verträge/Miete.pdf",
+    "fr": "alice/files/Contrats/Loyer.pdf",
+    "es": "alice/files/Contratos/Alquiler.pdf",
+    "it": "alice/files/Contratti/Affitto.pdf",
+    "nl": "alice/files/Contracten/Huur.pdf",
+    "pt_BR": "alice/files/Contratos/Aluguel.pdf",
+    "pt_PT": "alice/files/Contratos/Renda.pdf",
+    "zh_TW": "alice/files/合約/租金.pdf",
+}
+
+
+def scan_lookup_placeholder(template: str) -> list[str]:
+    """Findings of the example path in the field of the lookup (V-45-10-03)."""
+    findings: list[str] = []
+    # The field from its id to the button that follows it; the markup of PHP
+    # inside the attribute holds ">" itself, so no character class can end it.
+    start = template.find('<input type="text" id="findling-diagnosis-input"')
+    end = template.find('<button type="submit" id="findling-diagnosis-submit">', start)
+    if start == -1 or end == -1:
+        return ["lookup: the field of the lookup is not found"]
+    field = template[start:end]
+    if re.search(r'placeholder="(?!<\?php p\(\$l->t\()', field) is not None:
+        findings.append("lookup: a placeholder is fixed text and not a wording of the catalogue")
+    if template.count(LOOKUP_PLACEHOLDER) != 1 or LOOKUP_PLACEHOLDER not in field:
+        findings.append("lookup: the example path is not printed once with p() out of the catalogue")
+    return findings
+
+
+def test_the_example_path_of_the_lookup_comes_from_the_catalogue() -> None:
+    """V-45-10-03: the example path follows the language of the page, in all eighteen files."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert scan_lookup_placeholder(template) == []
+    assert 'id="findling-diagnosis-input"' in template
+
+    wordings = {path.name: catalogue_of(path).get(LOOKUP_PLACEHOLDER_KEY) for path in L10N_CATALOGUES}
+    assert wordings == {
+        f"{language}{suffix}": wording
+        for language, wording in LOOKUP_PLACEHOLDER_WORDINGS.items()
+        for suffix in (".json", ".js")
+    }
+
+    # Fail sample (B8), built by hand: the fixed text of 1.6.5 back in place.
+    fixed = template.replace(LOOKUP_PLACEHOLDER, 'placeholder="alice/files/Vertraege/Miete.pdf"', 1)
+    assert scan_lookup_placeholder(fixed) == [
+        "lookup: a placeholder is fixed text and not a wording of the catalogue",
+        "lookup: the example path is not printed once with p() out of the catalogue",
+    ]
 
 
 def test_the_template_renders_every_state_of_the_mount_list() -> None:

@@ -952,7 +952,7 @@ $magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.
 	<form class="findling-lookup" id="findling-diagnosis-form">
 		<label for="findling-diagnosis-input"><?php p($l->t('Path or file ID')); ?></label>
 		<input type="text" id="findling-diagnosis-input" name="ref" autocomplete="off"
-			aria-describedby="findling-diagnosis-help" placeholder="alice/files/Vertraege/Miete.pdf">
+			aria-describedby="findling-diagnosis-help" placeholder="<?php p($l->t('alice/files/Contracts/Rent.pdf')); ?>">
 		<button type="submit" id="findling-diagnosis-submit">
 			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($magnifyIcon); ?>"/></svg>
 			<span class="icon-loading-small" id="findling-diagnosis-spinner" hidden></span>

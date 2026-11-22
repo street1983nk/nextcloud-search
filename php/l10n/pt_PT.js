@@ -156,6 +156,7 @@ OC.L10N.register(
     "The backend could not start Tesseract. Check the log of the External App.": "O serviço não conseguiu iniciar o Tesseract. Verifique o registo da aplicação externa.",
     "Look up one file": "Consultar um ficheiro",
     "Path or file ID": "Caminho ou ID do ficheiro",
+    "alice/files/Contracts/Rent.pdf": "alice/files/Contratos/Renda.pdf",
     "A path as Nextcloud stores it, or the numeric ID from the list above.": "Um caminho tal como o Nextcloud o guarda, ou o número da lista acima.",
     "Look up file": "Consultar ficheiro",
     "Looking up a single file needs JavaScript. Everything above stays complete without it.": "A consulta de um único ficheiro precisa de JavaScript. Tudo o que está acima continua completo sem ele.",

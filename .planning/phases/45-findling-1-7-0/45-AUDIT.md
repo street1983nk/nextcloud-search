@@ -833,3 +833,22 @@ Je einzeln, danach Datei byte-gleich zurück (`restored_identical=yes`), Skripte
 (V4) das Attribut ohne die Bedingung, also an jeder Checkbox gesetzt -> rot: `test_the_duplicate_mark_only_follows_the_server_flag` (`1 failed, 236 passed`)
 
 Baumhash php/: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `233c6ab1...` mit 141 Dateien; Positivkontrolle Rezept und Pipeline über `git archive cf53cfd8` -> `34d00c1f...` mit 141 (gleich dem bisherigen PHP_TREE_HASH_TODAY).
+
+GREEN Task 1 (Commit c33103fe): verify-Zeile wörtlich aus `<scratchpad>/v19_t1.sh`, statische Prüfungen grün (`STATIC_OK`), `bash scripts/dev/phpunit_docker.sh` -> `OK (1347 tests, 8616 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint gegen ocp v33.0.9, v34.0.6, v35.0.3 je 0 Befunde, Probe 3; php-cs 0, Probe gesehen; zizmor und actionlint grün), pytest der drei Dateien `809 passed`, ruff `All checks passed!`, ruff format `260 files already formatted`. Der Hintergrundlauf wurde danach von Claude Code wegen Speichermangel beendet; pyright und vulture liefen auf Freigabe des Koordinators einzeln im Vordergrund: pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund. Zwischen dem Lauf und dem Commit blieb der Baum unverändert.
+
+#### V-45-10-03 (Task 2)
+
+RED (nicht committet, nur der neue Fall): `PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_admin_ui_contract.py -k "example_path"` -> `1 failed, 226 deselected in 0.60s`, wörtlich:
+
+```
+FAILED tests/test_admin_ui_contract.py::test_the_example_path_of_the_lookup_comes_from_the_catalogue
+E       AssertionError: assert ['lookup: a p...he catalogue'] == []
+```
+
+Fix: templates/admin.php `placeholder="<?php p($l->t('alice/files/Contracts/Rent.pdf')); ?>"`; der Schlüssel steht in allen 18 Katalogdateien direkt nach `Path or file ID`, mit den freigegebenen Werten (Text 6 aus 45-17): DE und de_DE `alice/files/Verträge/Miete.pdf`, FR `alice/files/Contrats/Loyer.pdf`, es `alice/files/Contratos/Alquiler.pdf`, it `alice/files/Contratti/Affitto.pdf`, nl `alice/files/Contracten/Huur.pdf`, pt_BR `alice/files/Contratos/Aluguel.pdf`, pt_PT `alice/files/Contratos/Renda.pdf`, zh_TW `alice/files/合約/租金.pdf`. "/" roh geschrieben, in .js und .json gleich (die Kataloge enthielten vorher kein "/", `json.loads` und Nextcloud lesen beide Formen). Unter EN bleibt der Schlüssel selbst. Sechs Sprachtabellen mit neuer Zeile, Schlüsselzahl 382 -> 383 (Gate mit neuem Absatz, Zähltabelle in docs/l10n-chinese.md), VALUES_THAT_MAY_EQUAL_THEIR_KEY unverändert (kein Wert gleich dem Schlüssel). Ausgabe nur über p(), `test_no_catalogue_value_can_break_the_page` deckt den Schlüssel mit (kein "%", kein "|").
+
+Gegenprobe (`<scratchpad>/mut19_t2.sh`): fester Text `placeholder="alice/files/Vertraege/Miete.pdf"` zurück im Template -> rot: `test_the_example_path_of_the_lookup_comes_from_the_catalogue` (`1 failed, 226 passed`), Datei danach byte-gleich (`restored_identical=yes`). Der Test hält dasselbe Fehl-Sample zusätzlich in sich.
+
+Baumhash php/: Rezept und Pipeline `a6c5f8d1...` mit 141 Dateien; Positivkontrolle über `git archive c33103fe` -> `233c6ab1...` mit 141.
+
+Nicht im Plan, nur festgehalten: die Felder der Ausschlussregeln tragen weiter feste Platzhalter (`placeholder="Backups"`, `placeholder="*.photoslibrary"`, admin.php Z. ~1562 und ~1606); der Gate dieses Plans prüft nur das Feld der Diagnose.

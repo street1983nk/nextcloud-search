@@ -281,6 +281,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `The backend could not start Tesseract. Check the log of the External App.` | Das Backend konnte Tesseract nicht starten. Das Protokoll der External App prüfen. | El servicio no pudo iniciar Tesseract. Compruebe el registro de la aplicación externa. |
 | `Look up one file` | Einzelne Datei prüfen | Consultar un archivo |
 | `Path or file ID` | Pfad oder Datei-ID | Ruta o ID de archivo |
+| `alice/files/Contracts/Rent.pdf` | alice/files/Verträge/Miete.pdf | alice/files/Contratos/Alquiler.pdf |
 | `A path as Nextcloud stores it, or the numeric ID from the list above.` | Ein Pfad, wie Nextcloud ihn führt, oder die Zahl aus der Liste oben. | Una ruta tal como la guarda Nextcloud, o el número de la lista de arriba. |
 | `Look up file` | Datei prüfen | Consultar archivo |
 | `Looking up a single file needs JavaScript. Everything above stays complete without it.` | Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar. | La consulta de un solo archivo necesita JavaScript. Todo lo de arriba sigue completo sin él. |

@@ -1425,8 +1425,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # 233c6ab1; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # 233c6ab1 as well; the recipe and the pipeline over git archive of cf53cfd8, the last commit
 # before this change, gave 34d00c1f with 141 files (positive control).
+# Moved on 2026-11-22 by plan 45-19, task 2 (V-45-10-03): templates/admin.php takes the example
+# path of the lookup out of the catalogue instead of a fixed German text. No file came or went,
+# so PHP_FILES_TODAY stays at 141. The recipe gave a6c5f8d1; the independent pipeline of find,
+# sort, sed and sha256sum over the same tree gave a6c5f8d1 as well; the recipe and the pipeline
+# over git archive of c33103fe, the last commit before this change, gave 233c6ab1 with 141 files
+# (positive control).
 PHP_FILES_TODAY = 141
-PHP_TREE_HASH_TODAY = "233c6ab115111c382e0ca8c6bf6638adfb54c538d548a6767ea45465d745eae5"
+PHP_TREE_HASH_TODAY = "a6c5f8d134451598cecec555cbdba323731307653c4141f930f8f4c56f5e581e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

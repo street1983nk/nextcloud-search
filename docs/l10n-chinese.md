@@ -27,17 +27,17 @@ PHP and the browser pick (section 4, with the dated addendum for `zh_TW` at the 
 Counted on 15.11.2026 with `json.load` over `php/l10n/de.json` and `php/l10n/zh_TW.json`, and counted
 again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added, one removed) and after
 plan 45-18 (three keys added, one removed: the reason policy_blocked of issue #59 and the remedy of
-unreadable that names the owner first):
+unreadable that names the owner first) and after plan 45-19 (one key added: the example path of the lookup):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **382** |
-| Keys in `zh_TW.json`, in the same order | **382** |
+| Keys in `de.json` | **383** |
+| Keys in `zh_TW.json`, in the same order | **383** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **382** |
+| rows in the table below | **383** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -344,6 +344,7 @@ this table cannot break on a wording.
 | `The backend could not start Tesseract. Check the log of the External App.` | Das Backend konnte Tesseract nicht starten. Das Protokoll der External App prüfen. | 後端無法啟動 Tesseract。請檢查外部應用程式的紀錄檔。 |
 | `Look up one file` | Einzelne Datei prüfen | 查詢單一檔案 |
 | `Path or file ID` | Pfad oder Datei-ID | 路徑或檔案 ID |
+| `alice/files/Contracts/Rent.pdf` | alice/files/Verträge/Miete.pdf | alice/files/合約/租金.pdf |
 | `A path as Nextcloud stores it, or the numeric ID from the list above.` | Ein Pfad, wie Nextcloud ihn führt, oder die Zahl aus der Liste oben. | Nextcloud 儲存的路徑，或上方清單中的數字 ID。 |
 | `Look up file` | Datei prüfen | 查詢檔案 |
 | `Looking up a single file needs JavaScript. Everything above stays complete without it.` | Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar. | 查詢單一檔案需要 JavaScript。即使沒有 JavaScript，上方的所有內容仍然完整。 |

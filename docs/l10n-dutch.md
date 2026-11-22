@@ -360,6 +360,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `The backend could not start Tesseract. Check the log of the External App.` | Das Backend konnte Tesseract nicht starten. Das Protokoll der External App prüfen. | De dienst kon Tesseract niet starten. Het logboek van de External App controleren. |
 | `Look up one file` | Einzelne Datei prüfen | Één bestand controleren |
 | `Path or file ID` | Pfad oder Datei-ID | Pad of bestands-ID |
+| `alice/files/Contracts/Rent.pdf` | alice/files/Verträge/Miete.pdf | alice/files/Contracten/Huur.pdf |
 | `A path as Nextcloud stores it, or the numeric ID from the list above.` | Ein Pfad, wie Nextcloud ihn führt, oder die Zahl aus der Liste oben. | Een pad zoals Nextcloud het bijhoudt, of het getal uit de lijst hierboven. |
 | `Look up file` | Datei prüfen | Bestand controleren |
 | `Looking up a single file needs JavaScript. Everything above stays complete without it.` | Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar. | De controle van één bestand heeft JavaScript nodig. Alles daarboven blijft ook zonder volledig leesbaar. |

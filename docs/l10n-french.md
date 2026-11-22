@@ -282,6 +282,7 @@ deutschen Übersetzung.
 | `The backend could not start Tesseract. Check the log of the External App.` | Das Backend konnte Tesseract nicht starten. Das Protokoll der External App prüfen. | Le service n'a pas pu démarrer Tesseract. Vérifier le journal de l'application externe. |
 | `Look up one file` | Einzelne Datei prüfen | Vérifier un fichier |
 | `Path or file ID` | Pfad oder Datei-ID | Chemin ou ID du fichier |
+| `alice/files/Contracts/Rent.pdf` | alice/files/Verträge/Miete.pdf | alice/files/Contrats/Loyer.pdf |
 | `A path as Nextcloud stores it, or the numeric ID from the list above.` | Ein Pfad, wie Nextcloud ihn führt, oder die Zahl aus der Liste oben. | Un chemin tel que Nextcloud le conserve, ou le nombre de la liste ci-dessus. |
 | `Look up file` | Datei prüfen | Vérifier le fichier |
 | `Looking up a single file needs JavaScript. Everything above stays complete without it.` | Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar. | La vérification d'un fichier nécessite JavaScript. Tout ce qui précède reste lisible en entier sans lui. |

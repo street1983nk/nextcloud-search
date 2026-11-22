@@ -156,6 +156,7 @@ OC.L10N.register(
     "The backend could not start Tesseract. Check the log of the External App.": "後端無法啟動 Tesseract。請檢查外部應用程式的紀錄檔。",
     "Look up one file": "查詢單一檔案",
     "Path or file ID": "路徑或檔案 ID",
+    "alice/files/Contracts/Rent.pdf": "alice/files/合約/租金.pdf",
     "A path as Nextcloud stores it, or the numeric ID from the list above.": "Nextcloud 儲存的路徑，或上方清單中的數字 ID。",
     "Look up file": "查詢檔案",
     "Looking up a single file needs JavaScript. Everything above stays complete without it.": "查詢單一檔案需要 JavaScript。即使沒有 JavaScript，上方的所有內容仍然完整。",

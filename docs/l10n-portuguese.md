@@ -443,6 +443,7 @@ Erzeugung die dreispaltige Fassung zeichengleich reproduziert hatte (204 von 204
 | `The backend could not start Tesseract. Check the log of the External App.` | Das Backend konnte Tesseract nicht starten. Das Protokoll der External App prüfen. | O serviço não conseguiu iniciar o Tesseract. Verifique o registo da aplicação externa. | O serviço não conseguiu iniciar o Tesseract. Verifique o registro do aplicativo externo. |
 | `Look up one file` | Einzelne Datei prüfen | Consultar um ficheiro | Consultar um arquivo |
 | `Path or file ID` | Pfad oder Datei-ID | Caminho ou ID do ficheiro | Caminho ou ID do arquivo |
+| `alice/files/Contracts/Rent.pdf` | alice/files/Verträge/Miete.pdf | alice/files/Contratos/Renda.pdf | alice/files/Contratos/Aluguel.pdf |
 | `A path as Nextcloud stores it, or the numeric ID from the list above.` | Ein Pfad, wie Nextcloud ihn führt, oder die Zahl aus der Liste oben. | Um caminho tal como o Nextcloud o guarda, ou o número da lista acima. | Um caminho como o Nextcloud o armazena, ou o número da lista acima. |
 | `Look up file` | Datei prüfen | Consultar ficheiro | Consultar arquivo |
 | `Looking up a single file needs JavaScript. Everything above stays complete without it.` | Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar. | A consulta de um único ficheiro precisa de JavaScript. Tudo o que está acima continua completo sem ele. | A consulta de um único arquivo precisa de JavaScript. Tudo o que está acima continua completo sem ele. |

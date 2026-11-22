@@ -156,6 +156,7 @@ OC.L10N.register(
     "The backend could not start Tesseract. Check the log of the External App.": "De dienst kon Tesseract niet starten. Het logboek van de External App controleren.",
     "Look up one file": "Één bestand controleren",
     "Path or file ID": "Pad of bestands-ID",
+    "alice/files/Contracts/Rent.pdf": "alice/files/Contracten/Huur.pdf",
     "A path as Nextcloud stores it, or the numeric ID from the list above.": "Een pad zoals Nextcloud het bijhoudt, of het getal uit de lijst hierboven.",
     "Look up file": "Bestand controleren",
     "Looking up a single file needs JavaScript. Everything above stays complete without it.": "De controle van één bestand heeft JavaScript nodig. Alles daarboven blijft ook zonder volledig leesbaar.",
