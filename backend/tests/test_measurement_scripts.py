@@ -1315,8 +1315,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 033cb708 as well; the recipe
 # over git archive of def59579, the last commit before the plan, gave ab283cdd with 132 files
 # (positive control).
+# Moved on 2026-11-22 by plan 45-02 (EXCL-04, single external storages kept out): lib/Service/
+# SettingsService.php gets the key excluded_external_mounts with its reader, its validation and its
+# write, lib/Service/StorageService.php drops the storages of excluded admin mounts from the mount
+# list and reports them as deselected, and tests/Unit/SettingsServiceTest.php and
+# StorageServiceTest.php follow. No file came or went, so PHP_FILES_TODAY stays at 133. The recipe
+# gave a7d7a5c7; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# a7d7a5c7 as well; the recipe over git archive of a65ba841, the last commit before the plan, gave
+# 033cb708 with 133 files (positive control).
 PHP_FILES_TODAY = 133
-PHP_TREE_HASH_TODAY = "033cb708166e8b706400b4be1c34c2af704bf7acd4746033761d0063b19ec654"
+PHP_TREE_HASH_TODAY = "a7d7a5c72af919f3061672526086088261c2dbd131c4753d53a28203bb4f442a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

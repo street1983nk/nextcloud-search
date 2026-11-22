@@ -53,6 +53,10 @@ apart:
    refuses a dot segment with the traversal code like the prefixes do. The one
    fixed ``preg_replace`` in ``trimmed()`` is not part of this probe and stays
    allowed: a fixed pattern, linear, on the prefix path since 1.0.
+8. Since plan 45-02 (EXCL-04): a single admin mount of external storage that
+   the admin keeps out leaves the one mount list in ``getMounts()``, behind the
+   one call of the mount query, and ``deselected()`` reports its storages for
+   removal; the method that names them asks for admin mounts only.
 
 **Why this is a textual check and not a PHP test.** There is no PHP test
 environment on the development machine and none in this repository; the PHP side
@@ -992,3 +996,134 @@ def test_a_sweep_with_a_hand_rolled_comparison_is_reported() -> None:
 
     assert len(violations) == 1
     assert "fnmatch" in violations[0]
+
+
+# -- single admin mounts of external storage kept out (plan 45-02, EXCL-04) --
+#
+# The exclusion of one external storage has to act at the one mount list and
+# nowhere else: getMounts() drops the storages of excluded admin mounts behind
+# the one call of the mount query, so the crawl, the events and the reconcile
+# move together, and deselected() reports the same storages for removal without
+# a grace period (D-45-05). The method that names them has to ask for admin
+# mounts only (type ADMIN_MOUNT_TYPE, so an id of a personal mount has no
+# effect, D-45-03) and for the provider of files_external through the one
+# constant (never a second literal of the class name).
+
+EXCLUDED_STORAGES_CALL = "excludedStorageIds()"
+EXCLUDED_STORAGES_SIGNATURE = "function excludedStorageIds("
+EXCLUDED_STORAGES_NEEDS = ("ADMIN_MOUNT_TYPE", "EXTERNAL_STORAGE_MOUNT_PROVIDER")
+MOUNT_LIST_SIGNATURE = "public function getMounts("
+DESELECTED_SIGNATURE = "function deselected("
+
+
+def scan_excluded_mounts(name: str, source: str) -> list[str]:
+    """Findings about the exclusion of single admin mounts, empty when clean."""
+    violations: list[str] = []
+
+    mount_list = [line for _, line in statements(method_body(name, source, MOUNT_LIST_SIGNATURE))]
+    if not any(MOUNT_QUERY in line for line in mount_list):
+        violations.append(f"{name}: getMounts() no longer asks {MOUNT_QUERY}, so it is not the one mount list")
+    if not any(EXCLUDED_STORAGES_CALL in line for line in mount_list):
+        violations.append(
+            f"{name}: getMounts() never applies {EXCLUDED_STORAGES_CALL}, so an excluded admin mount "
+            "stays in the crawl, the events and the reconcile"
+        )
+
+    deselected = [line for _, line in statements(method_body(name, source, DESELECTED_SIGNATURE))]
+    if not any(EXCLUDED_STORAGES_CALL in line for line in deselected):
+        violations.append(
+            f"{name}: deselected() never asks {EXCLUDED_STORAGES_CALL}, so an excluded admin mount "
+            "waits for the grace period instead of going at once"
+        )
+
+    resolver = [line for _, line in statements(method_body(name, source, EXCLUDED_STORAGES_SIGNATURE))]
+    violations.extend(
+        f"{name}: {EXCLUDED_STORAGES_SIGNATURE.removeprefix('function ')}) never names {needed}"
+        for needed in EXCLUDED_STORAGES_NEEDS
+        if not any(needed in line for line in resolver)
+    )
+
+    return violations
+
+
+def test_the_mount_list_drops_the_storages_of_excluded_admin_mounts() -> None:
+    source = STORAGE_SERVICE.read_text(encoding="utf-8")
+
+    assert scan_excluded_mounts(STORAGE_SERVICE.name, source) == []
+
+
+_CLEAN_EXCLUDED_MOUNTS = """<?php
+
+class ExampleService {
+\tpublic function getMounts(): iterable {
+\t\t$mounts = $this->fileAccess->getDistinctMounts($this->providers(), true);
+\t\t$out = array_flip($this->excludedStorageIds());
+
+\t\treturn array_filter($mounts, static fn (array $m): bool => !isset($out[$m['storage_id']]));
+\t}
+
+\tprivate function excludedStorageIds(): array {
+\t\t// ADMIN_MOUNT_TYPE and EXTERNAL_STORAGE_MOUNT_PROVIDER in a comment count for nothing.
+\t\t$qb->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(self::ADMIN_MOUNT_TYPE)));
+\t\t$qb->andWhere($qb->expr()->eq('provider', $qb->createNamedParameter(self::EXTERNAL_STORAGE_MOUNT_PROVIDER)));
+
+\t\treturn [];
+\t}
+
+\tprivate function deselected(array $existing): array {
+\t\treturn array_values(array_intersect($existing, $this->excludedStorageIds()));
+\t}
+}
+"""
+
+
+def test_the_clean_excluded_mounts_sample_is_clean() -> None:
+    assert scan_excluded_mounts("ExampleService.php", _CLEAN_EXCLUDED_MOUNTS) == []
+
+
+def test_a_mount_list_without_the_exclusion_filter_is_reported() -> None:
+    # The regression itself: the filter goes and getMounts() is the call of
+    # 1.6.5 again, so the excluded storage stays in the index.
+    source = _CLEAN_EXCLUDED_MOUNTS.replace(
+        "\t\t$out = array_flip($this->excludedStorageIds());\n\n"
+        "\t\treturn array_filter($mounts, static fn (array $m): bool => !isset($out[$m['storage_id']]));\n",
+        "\t\treturn $mounts;\n",
+    )
+
+    violations = scan_excluded_mounts("ExampleService.php", source)
+
+    assert len(violations) == 1
+    assert "never applies excludedStorageIds()" in violations[0]
+
+
+def test_a_deselection_without_the_excluded_storages_is_reported() -> None:
+    source = _CLEAN_EXCLUDED_MOUNTS.replace(
+        "return array_values(array_intersect($existing, $this->excludedStorageIds()));",
+        "return [];",
+    )
+
+    violations = scan_excluded_mounts("ExampleService.php", source)
+
+    assert len(violations) == 1
+    assert "deselected() never asks" in violations[0]
+
+
+def test_a_resolver_that_takes_personal_mounts_too_is_reported() -> None:
+    # Without the type every id of a personal mount would act as well, and a
+    # literal class name instead of the constant would be a second spelling.
+    source = _CLEAN_EXCLUDED_MOUNTS.replace(
+        "\t\t$qb->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(self::ADMIN_MOUNT_TYPE)));\n", ""
+    ).replace("self::EXTERNAL_STORAGE_MOUNT_PROVIDER)", "'OCA\\Files_External\\Config\\ConfigAdapter')")
+
+    violations = scan_excluded_mounts("ExampleService.php", source)
+
+    assert len(violations) == 2
+    assert any("ADMIN_MOUNT_TYPE" in message for message in violations)
+    assert any("EXTERNAL_STORAGE_MOUNT_PROVIDER" in message for message in violations)
+
+
+def test_a_resolver_that_disappeared_is_not_a_pass() -> None:
+    source = _CLEAN_EXCLUDED_MOUNTS.replace("private function excludedStorageIds(", "private function other(")
+
+    with pytest.raises(AssertionError, match="excludedStorageIds"):
+        scan_excluded_mounts("ExampleService.php", source)

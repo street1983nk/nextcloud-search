@@ -7,19 +7,22 @@ namespace OCA\Findling\Service;
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Exceptions\AppConfigTypeConflictException;
 use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
 /**
- * The four things an admin may change, and the only four (ADM-04, D-08).
+ * The five things an admin may change, and the only five (ADM-04, D-08,
+ * EXCL-04).
  *
- * Folder exclusions, the size cap, Team Folders on or off and external storage
- * on or off. Nothing else on the page writes, and there is no "advanced"
+ * Folder exclusions, the size cap, Team Folders on or off, external storage
+ * on or off and, since 1.7.0, single admin mounts of external storage kept out
+ * (D-45-01). Nothing else on the page writes, and there is no "advanced"
  * section: a settings screen with twenty options contradicts the zero config
  * promise this app is built on, so the number of switches is a decision and not
  * an omission.
  *
- * None of the four needs a transport into the container, which is the central
+ * None of the five needs a transport into the container, which is the central
  * finding of the phase research (pattern 8). Every one of them sits at a PHP
  * source the container pulls from: the mount list behind ``GET /mounts``, the
  * file slice behind ``GET /files/slice`` and the work stock behind
@@ -47,8 +50,9 @@ use Psr\Log\LoggerInterface;
  */
 final class SettingsService {
 	/**
-	 * The four keys of D-08, and the fifth that makes the clamping of the cap
-	 * survive a silent container.
+	 * The four keys of D-08 (the fifth rule, the excluded external mounts,
+	 * follows below), and the key that makes the clamping of the cap survive a
+	 * silent container.
 	 *
 	 * Public because ExclusionService reads and writes the exclusion list and
 	 * the admin view reads the rest: one place names the keys, so a typo in a
@@ -68,6 +72,30 @@ final class SettingsService {
 	public const KEY_MAX_FILE_BYTES = 'max_file_bytes';
 	public const KEY_INDEX_TEAM_FOLDERS = 'index_team_folders';
 	public const KEY_INDEX_EXTERNAL_STORAGE = 'index_external_storage';
+
+	/**
+	 * The admin mounts of external storage that are kept out of the index
+	 * (D-45-01, D-45-02), a list of positive ints, without doubles and
+	 * ascending.
+	 *
+	 * An opt-out list: what is stored is the EXCLUDED ids, so an external
+	 * storage the admin adds later is in without anybody ticking it. A missing
+	 * key reads as an empty list, so an upgrade from 1.6.5 keeps every admin
+	 * mount in and no migration exists for it. The ids are the configuration
+	 * ids of files_external (oc_external_mounts.mount_id, the same number as
+	 * oc_mounts.mount_id) and not the mount points, so renaming a mount point
+	 * does not break the exclusion. StorageService decides which of them are
+	 * admin mounts and still exist; an id of a personal mount (D-45-03) or of a
+	 * deleted one (D-45-06) has no effect. With the switch for external storage
+	 * off the list has no effect either and stays as it is (D-45-04).
+	 */
+	public const KEY_EXCLUDED_EXTERNAL_MOUNTS = 'excluded_external_mounts';
+
+	/** The name of the list in the form and in the answers of the page. */
+	public const FIELD_EXCLUDED_EXTERNAL_MOUNTS = 'excludedExternalMounts';
+
+	/** The most entries the list takes on writing (T-45-06). */
+	public const MAX_EXCLUDED_EXTERNAL_MOUNTS = 1000;
 
 	/**
 	 * The ceiling the container last reported, remembered so that the clamping
@@ -291,6 +319,14 @@ final class SettingsService {
 
 	/** Counter of everything that was refused, for the log line below. */
 	private int $rejected = 0;
+
+	/**
+	 * The excluded external mounts of this request, read once; save() clears
+	 * it, so the answer follows a write of the same request.
+	 *
+	 * @var list<int>|null
+	 */
+	private ?array $excludedMounts = null;
 
 	public function __construct(
 		private IAppConfig $appConfig,
@@ -557,6 +593,81 @@ final class SettingsService {
 	}
 
 	/**
+	 * The admin mounts of external storage the admin keeps out, as stored:
+	 * positive ints, without doubles, ascending (D-45-01, D-45-02).
+	 *
+	 * Read defensively like ExclusionService::prefixes(), because occ
+	 * config:app:set is a second writer without any check (T-45-05): a key of
+	 * another type reads as an empty list, every entry that is not a positive
+	 * int is dropped, and both are named in one warning with counters and never
+	 * with a value. Read whatever the switch says, so the page shows the stored
+	 * list while the switch is off (D-45-04); whether it applies is decided in
+	 * StorageService. Once per request, see the field.
+	 *
+	 * @return list<int>
+	 */
+	public function excludedExternalMounts(): array {
+		if ($this->excludedMounts !== null) {
+			return $this->excludedMounts;
+		}
+
+		try {
+			$stored = $this->appConfig->getValueArray(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS, []);
+		} catch (AppConfigTypeConflictException) {
+			// The exception stays out of the log, its trace carries the
+			// arguments of the call (finding H-33-02 of audit 33-11).
+			$this->logger->warning(
+				'Findling: the stored list of excluded external storages is not a list, so none is excluded',
+				['unusable' => 1, 'inForce' => 0],
+			);
+			$this->excludedMounts = [];
+
+			return $this->excludedMounts;
+		}
+
+		$ids = [];
+		$unusable = 0;
+		foreach ($stored as $id) {
+			if (is_int($id) && $id > 0) {
+				$ids[$id] = true;
+			} else {
+				$unusable++;
+			}
+		}
+		$ids = array_keys($ids);
+		sort($ids);
+
+		if ($unusable > 0) {
+			$this->logger->warning(
+				'Findling: stored entries of the excluded external storages are not mount ids, so they are ignored',
+				['unusable' => $unusable, 'inForce' => count($ids)],
+			);
+		}
+
+		$this->excludedMounts = $ids;
+
+		return $this->excludedMounts;
+	}
+
+	/**
+	 * Whether a value of the form is a usable list of excluded mounts: a list
+	 * of positive ints with at most MAX_EXCLUDED_EXTERNAL_MOUNTS entries.
+	 * Strict on purpose, a numeric string or a float is refused and not cast.
+	 */
+	private static function usableMountList(mixed $value): bool {
+		if (!is_array($value) || !array_is_list($value) || count($value) > self::MAX_EXCLUDED_EXTERNAL_MOUNTS) {
+			return false;
+		}
+		foreach ($value as $id) {
+			if (!is_int($id) || $id <= 0) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * The profile in force, always a name out of PROFILES.
 	 *
 	 * Validated on read and not only on write, because the write path of phase
@@ -819,9 +930,11 @@ final class SettingsService {
 	 * and the exclusions did not, and the answer says so in as many words.
 	 *
 	 * The two booleans cannot be invalid: the route declares them as bool, so the
-	 * framework has already decided what arrived. Only the cap has a range.
+	 * framework has already decided what arrived. The cap has a range, and the
+	 * list of excluded external mounts, when it is there and not null, has to be
+	 * a list of positive ints with at most MAX_EXCLUDED_EXTERNAL_MOUNTS entries.
 	 *
-	 * @param array{maxFileBytes?: int} $input
+	 * @param array{maxFileBytes?: int, excludedExternalMounts?: list<int>|null} $input
 	 * @return array<string, string> field name to error code, empty when it fits
 	 */
 	public function validate(array $input): array {
@@ -832,24 +945,45 @@ final class SettingsService {
 			return [self::FIELD_MAX_FILE_BYTES => self::ERROR_OUT_OF_RANGE];
 		}
 
+		$mounts = $input[self::FIELD_EXCLUDED_EXTERNAL_MOUNTS] ?? null;
+		if ($mounts !== null && !self::usableMountList($mounts)) {
+			$this->reject();
+
+			return [self::FIELD_EXCLUDED_EXTERNAL_MOUNTS => self::ERROR_OUT_OF_RANGE];
+		}
+
 		return [];
 	}
 
 	/**
-	 * Write the three values this class owns, or none of them.
+	 * Write the values this class owns, or none of them.
 	 *
 	 * Validates again rather than trusting the caller. The route validates first
 	 * so that it can refuse the whole form, and ``occ config:app:set`` is a second
 	 * way in that this method never sees, so a method that wrote whatever it was
 	 * handed would be one code path away from an unchecked value in appconfig.
 	 *
-	 * @param array{maxFileBytes?: int, indexTeamFolders?: bool, indexExternalStorage?: bool} $input
+	 * The list of excluded external mounts is written only when the field is
+	 * there and not null. A missing field means "leave it as it is" and not
+	 * "clear it": an admin.js of 1.6.5 in the cache of a browser does not know
+	 * the field, and saving with it must not drop the exclusions silently. An
+	 * empty list clears them.
+	 *
+	 * @param array{maxFileBytes?: int, indexTeamFolders?: bool, indexExternalStorage?: bool, excludedExternalMounts?: list<int>|null} $input
 	 * @return array<string, string> field name to error code, empty when it was written
 	 */
 	public function save(array $input): array {
 		$errors = $this->validate($input);
 		if ($errors !== []) {
 			return $errors;
+		}
+
+		$mounts = $input[self::FIELD_EXCLUDED_EXTERNAL_MOUNTS] ?? null;
+		if (is_array($mounts)) {
+			$ids = array_values(array_unique($mounts));
+			sort($ids);
+			$this->appConfig->setValueArray(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS, $ids);
+			$this->excludedMounts = null;
 		}
 
 		$this->appConfig->setValueInt(
@@ -868,8 +1002,9 @@ final class SettingsService {
 			($input['indexExternalStorage'] ?? false) === true,
 		);
 
-		// The cap and both switches decide what the denominator holds (and the
-		// exclusions saved next to this call as well), so the next recount has
+		// The cap, both switches and the excluded external mounts decide what
+		// the denominator holds (and the exclusions saved next to this call as
+		// well), so the next recount has
 		// to measure again instead of waiting a day.
 		$this->markScanStale();
 

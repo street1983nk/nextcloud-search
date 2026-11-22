@@ -30,7 +30,12 @@ use Psr\Log\LoggerInterface;
  * be right rather than adjustable. Which mounts are looked at was a constant
  * until plan 04-08 and is now the default of two switches (ADM-04, D-08): the
  * three provider lists below are the documented default and providers()
- * composes the list in force out of them.
+ * composes the list in force out of them. Since 1.7.0 (plan 45-02, EXCL-04)
+ * single admin mounts of external storage can be kept out while that switch
+ * is on: getMounts() drops the storages that only such mounts carry
+ * (excludedStorageIds(), read only from oc_external_mounts and oc_mounts),
+ * and classifyAbsent() reports them as deselected, so they leave the index
+ * without a grace period (D-45-05).
  *
  * One question is answered with two queries of their own, and neither of them
  * touches the file cache: classifyAbsent() reads oc_storages and oc_mounts to
@@ -88,6 +93,20 @@ class StorageService {
 	 * written next to the switch (T-04-52).
 	 */
 	private const EXTERNAL_STORAGE_MOUNT_PROVIDER = 'OCA\Files_External\Config\ConfigAdapter';
+
+	/**
+	 * The type of an admin mount in oc_external_mounts.type (a personal mount
+	 * is 2).
+	 *
+	 * The value of files_external DBConfigService::MOUNT_TYPE_ADMIN, read in
+	 * nextcloud/server stable33, stable34 and stable35 (22.11.2026),
+	 * apps/files_external/lib/Service/DBConfigService.php :34 on all three.
+	 * A constant of its own and not that class: files_external may not be
+	 * installed, and the companion never imports it. Public because the route
+	 * that lists the admin mounts for the page (plan 45-03) asks for the same
+	 * type.
+	 */
+	public const ADMIN_MOUNT_TYPE = 1;
 
 	/**
 	 * The document allowlist of the zero config guard rails: PDF, the OOXML
@@ -189,6 +208,15 @@ class StorageService {
 	 * @var array<string, string>
 	 */
 	private array $rootPaths = [];
+
+	/**
+	 * The storage ids the excluded admin mounts take out of the mount list,
+	 * resolved once per request like the lookup above, and for the same
+	 * reason: the event listener asks for every write.
+	 *
+	 * @var list<int>|null
+	 */
+	private ?array $excludedStorages = null;
 
 	/**
 	 * Storage ids per IN query of classifyAbsent().
@@ -304,10 +332,144 @@ class StorageService {
 	 * place. That is a deletion of an entire class of wrong index entries, not
 	 * an optimisation.
 	 *
+	 * Since 1.7.0 (plan 45-02, EXCL-04) the storages of the admin mounts the
+	 * admin keeps out leave the list here, behind the one mount query and not
+	 * in a second one: excludedStorageIds() names them, and because the crawl,
+	 * the events (isIndexedStorage()) and the mounts route of the reconcile all
+	 * read this method, the exclusion moves all three together.
+	 *
 	 * @return iterable<array{storage_id: int, root_id: int, overridden_root: int}>
 	 */
 	public function getMounts(): iterable {
-		return $this->fileAccess->getDistinctMounts($this->providers(), true);
+		$mounts = $this->fileAccess->getDistinctMounts($this->providers(), true);
+		$excluded = $this->excludedStorageIds();
+		if ($excluded === []) {
+			return $mounts;
+		}
+
+		$out = array_flip($excluded);
+		$kept = [];
+		foreach ($mounts as $mount) {
+			if (!isset($out[(int)$mount['storage_id']])) {
+				$kept[] = $mount;
+			}
+		}
+
+		return $kept;
+	}
+
+	/**
+	 * The storages that only excluded admin mounts carry (D-45-01, D-45-05).
+	 *
+	 * Empty, and without a single query, when the switch for external storage
+	 * is off (then the switch decides, D-45-04) or the stored list is empty.
+	 * Otherwise three banded questions, each answered row by row again so the
+	 * decision does not rest on the dialect:
+	 * 1. oc_external_mounts: which of the stored ids are admin mounts
+	 *    (type ADMIN_MOUNT_TYPE). An id of a personal mount (D-45-03) or of a
+	 *    deleted one (D-45-06) drops out here, silently.
+	 * 2. oc_mounts: the storages these mounts carry through the provider of
+	 *    files_external, one per user for credentials per user.
+	 * 3. oc_mounts: every mount of these storages. A storage stays as soon as
+	 *    one of its rows comes from another provider or from a mount id outside
+	 *    the excluded admin mounts, or carries none (T-45-08): a share that an
+	 *    included mount shows as well is not taken away from it.
+	 *
+	 * No log line: an unknown id is the ordinary state after a deletion, and an
+	 * id is a value of the instance (T-45-07).
+	 *
+	 * @return list<int>
+	 */
+	private function excludedStorageIds(): array {
+		if ($this->excludedStorages !== null) {
+			return $this->excludedStorages;
+		}
+
+		$wanted = $this->settingsService->indexExternalStorage()
+			? $this->settingsService->excludedExternalMounts()
+			: [];
+		if ($wanted === []) {
+			$this->excludedStorages = [];
+
+			return $this->excludedStorages;
+		}
+
+		$adminMounts = [];
+		foreach (array_chunk($wanted, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('mount_id', 'type')
+				->from('external_mounts')
+				->where($qb->expr()->in('mount_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(self::ADMIN_MOUNT_TYPE, IQueryBuilder::PARAM_INT)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$mountId = (int)($row['mount_id'] ?? 0);
+					if ($mountId > 0 && (int)($row['type'] ?? 0) === self::ADMIN_MOUNT_TYPE) {
+						$adminMounts[$mountId] = true;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$candidates = [];
+		$adminIds = array_keys($adminMounts);
+		sort($adminIds);
+		foreach (array_chunk($adminIds, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->selectDistinct(['storage_id', 'mount_id', 'mount_provider_class'])
+				->from('mounts')
+				->where($qb->expr()->in('mount_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->eq('mount_provider_class', $qb->createNamedParameter(self::EXTERNAL_STORAGE_MOUNT_PROVIDER, IQueryBuilder::PARAM_STR)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$storageId = (int)($row['storage_id'] ?? 0);
+					if ($storageId > 0
+						&& isset($adminMounts[(int)($row['mount_id'] ?? 0)])
+						&& (string)($row['mount_provider_class'] ?? '') === self::EXTERNAL_STORAGE_MOUNT_PROVIDER) {
+						$candidates[$storageId] = true;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$storageIds = array_keys($candidates);
+		sort($storageIds);
+		foreach (array_chunk($storageIds, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->selectDistinct(['storage_id', 'mount_id', 'mount_provider_class'])
+				->from('mounts')
+				->where($qb->expr()->in('storage_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$storageId = (int)($row['storage_id'] ?? 0);
+					$mountId = $row['mount_id'] ?? null;
+					$carriedElsewhere = (string)($row['mount_provider_class'] ?? '') !== self::EXTERNAL_STORAGE_MOUNT_PROVIDER
+						|| $mountId === null
+						|| !isset($adminMounts[(int)$mountId]);
+					if ($carriedElsewhere) {
+						unset($candidates[$storageId]);
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$excluded = array_keys($candidates);
+		sort($excluded);
+		$this->excludedStorages = $excluded;
+
+		return $this->excludedStorages;
 	}
 
 	/**
@@ -436,7 +598,8 @@ class StorageService {
 	 *   Folders or external storage), and the mount list in force does not
 	 *   carry it through any other provider. D-36-14: a switch turned off is a
 	 *   decision of the admin like an exclusion, so it clears without a grace
-	 *   period.
+	 *   period. Since 1.7.0 also a storage that only admin mounts carry which
+	 *   the admin keeps out (D-45-05).
 	 *
 	 * Everything else stays out of both lists, and the container keeps its
 	 * grace period for it (D-36-05): a storage that exists and is mounted
@@ -1127,12 +1290,17 @@ class StorageService {
 
 	/**
 	 * The existing storages among the asked ones that only a switched off
-	 * provider carries. The second half of classifyAbsent().
+	 * provider carries, or only excluded admin mounts (plan 45-02, D-45-05).
+	 * The second half of classifyAbsent().
 	 *
 	 * The provider filter travels into the query, so that a Team Folder with
 	 * hundreds of members comes back as one row and not as one row per member,
 	 * and it is checked once more on every row, so that the decision does not
-	 * rest on the dialect getting the comparison right.
+	 * rest on the dialect getting the comparison right. The storages of
+	 * excluded admin mounts come from excludedStorageIds(), the same answer
+	 * that took them out of the mount list, so the two cannot disagree. Both
+	 * kinds pass the same last check: a storage the mount list in force still
+	 * carries is never reported (T-45-09).
 	 *
 	 * @param list<int> $existing
 	 * @return list<int>
@@ -1147,12 +1315,20 @@ class StorageService {
 		}
 
 		$existing = array_values(array_filter($existing, static fn (int $storageId): bool => $storageId > 0));
-		if ($switchedOff === [] || $existing === []) {
+		if ($existing === []) {
 			return [];
 		}
 
 		$deselected = [];
-		foreach (array_chunk($existing, self::ABSENT_LOOKUP_BAND) as $band) {
+		foreach (array_intersect($existing, $this->excludedStorageIds()) as $storageId) {
+			$deselected[$storageId] = true;
+		}
+		if ($switchedOff === [] && $deselected === []) {
+			return [];
+		}
+
+		$bands = $switchedOff === [] ? [] : array_chunk($existing, self::ABSENT_LOOKUP_BAND);
+		foreach ($bands as $band) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->selectDistinct(['storage_id', 'mount_provider_class'])
 				->from('mounts')
