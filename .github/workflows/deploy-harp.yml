@@ -111,6 +111,9 @@ env:
   # migration that only sets an app config flag, and meta keys in state.db
   # for the storage sweep, the doc key backfill and the one time renewal of
   # refusal streaks (plan 43-20); "Store upgrade 5" demands them in 14 to 18.
+  # Release 1.7.0 keeps the start on v1.5.0 (plan 45-08): 1.7.0 adds no
+  # migration and no schema change; the exclusion of single external storages
+  # is one app config key that reads as an empty list when it is missing.
   # Every assurance that names the
   # behaviour of the start was derived anew for 1.5.0 in
   # .planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md,
@@ -3544,7 +3547,7 @@ jobs:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
       # it built survives that untouched. Since plan 40-03 that tag is v1.5.0
-      # and the jump is 1.5.0 to 1.6.3 (REL-06, 1.6.3 since 2026-11-08, 1.6.2 since 2026-11-04, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
+      # and the jump is 1.5.0 to 1.7.0 (REL-06, 1.7.0 since 2026-11-22, 1.6.5 since 2026-11-16, 1.6.4 since 2026-11-12, 1.6.3 since 2026-11-08, 1.6.2 since 2026-11-04, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
       # byte for byte, so the statements about 1.5.0 below hold for every 1.5.x
       # installation). From plan 36-13 the tag was v1.4.3 and the jump 1.4.3 to
       # 1.5.1 (D-36-13); from plan
@@ -5719,9 +5722,9 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 40-03 the tree carries 1.6.3 (1.6.2 until 2026-11-08, 1.6.1 until 2026-11-04, 1.6.0 until 2026-11-02) against the
+          # Since plan 40-03 the tree carries 1.7.0 (1.6.5 until 2026-11-22, 1.6.4 until 2026-11-16, 1.6.3 until 2026-11-12, 1.6.2 until 2026-11-08, 1.6.1 until 2026-11-04, 1.6.0 until 2026-11-02) against the
           # 1.5.0 of the tag, so the FIRST branch runs and has to see
-          # installed_version 1.6.3 after the upgrade. From plan 36-13 to 40-03
+          # installed_version 1.7.0 after the upgrade. From plan 36-13 to 40-03
           # the tree carried 1.5.1 (1.5.0 until 2026-10-22) against the 1.4.3
           # of the tag (first branch); from plan 30-06 to 36-13 tree and
           # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan

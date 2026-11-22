@@ -31,7 +31,7 @@
 #
 # Environment:
 #
-#     FROM_TAGS   releases the candidate is updated from (default "v1.6.2 v1.6.3")
+#     FROM_TAGS   releases the candidate is updated from (default "v1.6.2 v1.6.3 v1.6.4 v1.6.5")
 #     NC_IMAGE    the Nextcloud image (default nextcloud:33-apache, the lower
 #                 bound of the window in php/appinfo/info.xml)
 #     REPO_SLUG   owner/name of the repository with the releases
@@ -44,7 +44,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "${SCRIPT_DIR}/../.." && pwd)
 
-FROM_TAGS="${FROM_TAGS:-v1.6.2 v1.6.3}"
+FROM_TAGS="${FROM_TAGS:-v1.6.2 v1.6.3 v1.6.4 v1.6.5}"
 NC_IMAGE="${NC_IMAGE:-nextcloud:33-apache}"
 REPO_SLUG="${REPO_SLUG:-${GITHUB_REPOSITORY:-street1983nk/nextcloud-search}}"
 CONTROL_FROM="v1.6.2"
