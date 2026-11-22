@@ -5353,6 +5353,9 @@ def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it()
 
 MOUNT_SCRIPT_START = "  const MOUNT_LIST = 'findling-rules-mounts-list'"
 MOUNT_SCRIPT_END = '  /** Show or hide the two "nothing is set" sentences, after every change. */'
+MOUNT_ID_REPLACE = (
+    "t('findling', '%1$s (ID %2$s)').replace(/%([12])\\$s/g, function (_, n) { return n === '1' ? point : String(id) })"
+)
 MOUNT_SENTENCES = (
     (
         "Remove indexed content? Excluding the external storage %s also removes its already indexed documents from "
@@ -5393,15 +5396,23 @@ def scan_mount_script(script: str) -> list[str]:
     part = cut_between(script, MOUNT_SCRIPT_START, MOUNT_SCRIPT_END)
     if "getAttribute('data-mount-id')" not in part:
         findings.append("mounts: the id is not read out of data-mount-id")
-    if re.search(r"dataset|getAttribute\('(?!data-mount-id')", part) is not None:
+    # The one other attribute read is the mark of the server (V-45-10-02, rule
+    # c of 45-19), and only its exact value true counts.
+    if re.search(r"dataset(?!\.mountDuplicate === 'true')|getAttribute\('(?!data-mount-id')", part) is not None:
         findings.append("mounts: an id or a value is read out of another attribute")
     for writer in ("innerHTML", "outerHTML", "insertAdjacent", "createElement", "innerText"):
         if writer in part:
             findings.append(f"mounts: uses {writer}")
     if "return label === null ? '' : label.textContent" not in part:
         findings.append("mounts: the mount point is not read as the text of its label")
-    if "text('findling-rules-confirm-mounts-value', newMounts.map(mountPointOf).join(', '))" not in script:
+    if "text('findling-rules-confirm-mounts-value', confirmedMounts(newMounts))" not in script:
         findings.append("mounts: the confirmation does not write the mount points as text")
+    # The id goes into its sentence in one pass of one expression with a
+    # function, so a mount point holding $& or %2$s stays as it is (T-45-65).
+    if MOUNT_ID_REPLACE not in part:
+        findings.append("mounts: the id is not put into its sentence by one replace with a function")
+    if re.search(r"\.replace\('%[12]\$s'", part) is not None:
+        findings.append("mounts: the placeholders of the id are replaced one after the other")
     if "const mounts = mountsListed() ? excludedMountsOf() : inForceMounts.slice()" not in script:
         findings.append("mounts: a page without the list does not send the stored ids unchanged")
     return findings
@@ -5433,6 +5444,31 @@ def test_the_script_reads_a_mount_only_out_of_its_row_and_writes_it_as_text() ->
     ]
     wiped = script.replace("mountsListed() ? excludedMountsOf() : inForceMounts.slice()", "excludedMountsOf()", 1)
     assert scan_mount_script(wiped) == ["mounts: a page without the list does not send the stored ids unchanged"]
+
+    # V-45-10-02 (plan 45-19): the confirmation written as markup, the id put
+    # in by two string replaces one after the other, and the mark of the
+    # server read as anything but its exact value.
+    value_call = "text('findling-rules-confirm-mounts-value', confirmedMounts(newMounts))"
+    assert script.count(value_call) == 1
+    as_html = script.replace(
+        value_call,
+        "document.getElementById('findling-rules-confirm-mounts-value').innerHTML = confirmedMounts(newMounts)",
+        1,
+    )
+    assert scan_mount_script(as_html) == ["mounts: the confirmation does not write the mount points as text"]
+    assert script.count(MOUNT_ID_REPLACE) == 1
+    chained = script.replace(
+        MOUNT_ID_REPLACE,
+        "t('findling', '%1$s (ID %2$s)').replace('%1$s', point).replace('%2$s', String(id))",
+        1,
+    )
+    assert scan_mount_script(chained) == [
+        "mounts: the id is not put into its sentence by one replace with a function",
+        "mounts: the placeholders of the id are replaced one after the other",
+    ]
+    loose = script.replace("box.dataset.mountDuplicate === 'true'", "box.dataset.mountDuplicate !== undefined", 1)
+    assert loose != script
+    assert scan_mount_script(loose) == ["mounts: an id or a value is read out of another attribute"]
 
 
 def scan_mount_template(block: str) -> list[str]:
@@ -5474,6 +5510,59 @@ def scan_mount_template(block: str) -> list[str]:
     ):
         findings.append("mounts: the confirmation line does not follow the pattern line")
     return findings
+
+
+MOUNT_ID_ATTRIBUTE = 'data-mount-id="<?php p($mountId); ?>"'
+DUPLICATE_MARK = "<?php if ($externalMount['duplicate']) { ?> data-mount-duplicate=\"true\"<?php } ?>"
+
+
+def scan_duplicate_mark(template: str) -> list[str]:
+    """Findings of the mark the confirmation reads (V-45-10-02, rule c of 45-19).
+
+    The box of a row carries data-mount-duplicate="true" exactly when the
+    server marked the row, so the list and the confirmation follow one rule,
+    the one of ExternalMountService. Anywhere else, or under any other
+    condition, the confirmation would name an id the list does not show.
+    """
+    findings: list[str] = []
+    count = template.count("data-mount-duplicate")
+    if count != 1:
+        findings.append(f"duplicate mark: data-mount-duplicate stands {count} times, not once")
+    if MOUNT_ID_ATTRIBUTE + DUPLICATE_MARK not in template:
+        findings.append("duplicate mark: the mark does not follow the id of the box under the flag of the server")
+    if "'duplicate' => ($externalMount['duplicate'] ?? false) === true," not in template:
+        findings.append("duplicate mark: the flag of the server is not read as a strict boolean")
+    return findings
+
+
+def test_the_duplicate_mark_only_follows_the_server_flag() -> None:
+    """W6 of the plan check of 65528c7b: the mark stands once, under the flag of the server."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert scan_duplicate_mark(template) == []
+    # The list shows its id by the same flag.
+    assert "<?php if ($externalMount['duplicate']) { ?> <?php p($l->t('ID %s', [$mountId])); ?><?php } ?>" in template
+
+    # Fail samples (B8), built by hand: the mark without its condition, under
+    # another condition, and twice.
+    bare = template.replace(DUPLICATE_MARK, ' data-mount-duplicate="true"', 1)
+    assert scan_duplicate_mark(bare) == [
+        "duplicate mark: the mark does not follow the id of the box under the flag of the server"
+    ]
+    other = template.replace(
+        DUPLICATE_MARK, '<?php if ($externalStorage) { ?> data-mount-duplicate="true"<?php } ?>', 1
+    )
+    assert scan_duplicate_mark(other) == [
+        "duplicate mark: the mark does not follow the id of the box under the flag of the server"
+    ]
+    twice = template.replace(DUPLICATE_MARK, DUPLICATE_MARK + DUPLICATE_MARK, 1)
+    assert scan_duplicate_mark(twice) == ["duplicate mark: data-mount-duplicate stands 2 times, not once"]
+    loose = template.replace(
+        "'duplicate' => ($externalMount['duplicate'] ?? false) === true,",
+        "'duplicate' => (bool)($externalMount['duplicate'] ?? false),",
+        1,
+    )
+    assert scan_duplicate_mark(loose) == ["duplicate mark: the flag of the server is not read as a strict boolean"]
 
 
 def test_the_template_renders_every_state_of_the_mount_list() -> None:

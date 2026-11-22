@@ -1417,8 +1417,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # The recipe gave 34d00c1f; the independent pipeline of find, sort, sed and sha256sum over the
 # same tree gave 34d00c1f as well; the recipe and the pipeline over git archive of 006c2983, the
 # last commit before this change, gave ef4f5a19 with 141 files (positive control).
+# Moved on 2026-11-22 by plan 45-19, task 1 (V-45-10-02): lib/Service/ExternalMountService.php
+# marks a mount as a duplicate by its mount point alone, whatever the type (owner decision c),
+# templates/admin.php sets data-mount-duplicate="true" on the box of such a row so the
+# confirmation reads the same flag, and tests/Unit/ExternalMountServiceTest.php replaces the case
+# of the old rule. No file came or went, so PHP_FILES_TODAY stays at 141. The recipe gave
+# 233c6ab1; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# 233c6ab1 as well; the recipe and the pipeline over git archive of cf53cfd8, the last commit
+# before this change, gave 34d00c1f with 141 files (positive control).
 PHP_FILES_TODAY = 141
-PHP_TREE_HASH_TODAY = "34d00c1f0492eade5592ec7609157c6660d60ebc2fb98cc28f7084c2788c6974"
+PHP_TREE_HASH_TODAY = "233c6ab115111c382e0ca8c6bf6638adfb54c538d548a6767ea45465d745eae5"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

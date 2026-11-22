@@ -789,3 +789,47 @@ restored_identical=yes
 ```
 
 Baumhash backend/src/findling: Rezept und Pipeline `9fa6c443...` mit 83 Dateien, Positivkontrolle `git archive 7198db12` -> `7249fe45...` mit 83; php/ unverändert `34d00c1f...` (141).
+
+### RED und GREEN 45-19
+
+Plan 45-19, 2026-11-22, nach `Entscheid V-02-Regel 45-19` (Owner "Go mit den Empfehlungen", 18:37 UTC, Entscheid c, Commit cf53cfd8): eine Regel nur nach dem Einhängepunkt, gleich welcher Typ, gesetzt in ExternalMountService, gelesen von Liste und Bestätigung. Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer.
+
+#### V-45-10-02 (Task 1)
+
+RED (nicht committet, nur die neuen Fälle):
+
+`PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_admin_locale.py tests/test_admin_ui_contract.py -k "confirmation or duplicate_mark or reads_a_mount_only"` -> `5 failed, 1 passed, 231 deselected in 0.76s`, wörtlich:
+
+```
+FAILED tests/test_admin_locale.py::test_the_confirmation_names_the_id_of_storages_that_share_a_mount_point
+FAILED tests/test_admin_locale.py::test_the_confirmation_follows_the_duplicate_rule_across_backends
+FAILED tests/test_admin_locale.py::test_the_confirmation_keeps_markup_and_replacement_patterns_as_text
+FAILED tests/test_admin_ui_contract.py::test_the_script_reads_a_mount_only_out_of_its_row_and_writes_it_as_text
+FAILED tests/test_admin_ui_contract.py::test_the_duplicate_mark_only_follows_the_server_flag
+```
+
+Gründe: die drei node-Fälle fanden den Aufruf `text('findling-rules-confirm-mounts-value', confirmedMounts(newMounts))` nicht bzw. `admin.js holds 0 functions named mountDuplicateOf`; der Skript-Gate meldete die fehlende Ersetzung mit Funktion und den alten Aufruf; der Template-Gate `data-mount-duplicate stands 0 times, not once`. Der eine grüne Fall ist der vorhandene `test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it` (vom Filter erfasst, nicht neu).
+
+`bash scripts/dev/phpunit_docker.sh --filter ExternalMountServiceTest` -> `Tests: 11, Assertions: 52, Failures: 1.`, wörtlich:
+
+```
+1) OCA\Findling\Tests\Unit\ExternalMountServiceTest::testMountsThatShareAMountPointAreDuplicatesWhateverTheBackend
+Failed asserting that two arrays are identical.
+-        'duplicate' => true,
++        'duplicate' => false,      (id 8, /Share, SFTP)
+```
+
+Fix: ExternalMountService::adminMounts() zählt nur `$mount['mountPoint']` (Docblock nennt die Regel und dass die Bestätigung dasselbe Merkmal liest); templates/admin.php setzt `<?php if ($externalMount['duplicate']) { ?> data-mount-duplicate="true"<?php } ?>` direkt nach `data-mount-id`; admin.js `mountDuplicateOf(id)` (nur `box.dataset.mountDuplicate === 'true'`) und `confirmedMounts(ids)` (bei Merkmal `t('findling', '%1$s (ID %2$s)').replace(/%([12])\$s/g, function (_, n) { ... })`, Form i), Ausgabe weiter über `text(...)`. Der Schlüssel `%1$s (ID %2$s)` steht in allen 18 Katalogdateien, kein Katalog geändert. Der Skript-Gate `scan_mount_script` ließ bisher kein `dataset` im Speicherteil zu; er lässt jetzt genau `dataset.mountDuplicate === 'true'` zu (Fehl-Sample `!== undefined` rot), verlangt den neuen Aufruf und die eine Ersetzung mit Funktion (Fehl-Samples innerHTML und zwei Ersetzungen hintereinander rot). Neuer Gate `scan_duplicate_mark` mit Fehl-Samples: ohne Bedingung, unter `$externalStorage`, doppelt, Merkmal nicht streng boolesch, je rot.
+
+Hinweis zum RED: im Harness stand zunächst ein überzähliges `return element` im Funktionsrumpf (ReferenceError); im RED nicht erreicht, weil der Ausschnitt schon vorher scheiterte. Vor GREEN behoben, die Erwartungen blieben unverändert.
+
+#### V-45-10-02 Mutationen
+
+Je einzeln, danach Datei byte-gleich zurück (`restored_identical=yes`), Skripte `<scratchpad>/mutate19.py`, `mut19.sh`, `mut19_v3.sh`:
+
+(V1) `confirmedMounts` gibt nur `ids.map(mountPointOf).join(', ')` zurück, Bestätigung ohne ID -> rot: `test_the_confirmation_names_the_id_of_storages_that_share_a_mount_point`, dazu `test_the_confirmation_follows_the_duplicate_rule_across_backends` und `test_the_confirmation_keeps_markup_and_replacement_patterns_as_text` (`3 failed, 234 passed`)
+(V2) zwei hintereinander geschaltete String-Replacements `.replace('%1$s', point).replace('%2$s', String(id))` statt einer Regex mit Callback -> rot: `test_the_confirmation_keeps_markup_and_replacement_patterns_as_text`, dazu `test_the_script_reads_a_mount_only_out_of_its_row_and_writes_it_as_text` (`2 failed, 235 passed`)
+(V3) ExternalMountService nimmt den Typ wieder in den Schlüssel (Zählung und Merkmal `mountPoint . "\0" . backend`) -> rot: `testMountsThatShareAMountPointAreDuplicatesWhateverTheBackend` (`Tests: 11, Assertions: 52, Failures: 1.`)
+(V4) das Attribut ohne die Bedingung, also an jeder Checkbox gesetzt -> rot: `test_the_duplicate_mark_only_follows_the_server_flag` (`1 failed, 236 passed`)
+
+Baumhash php/: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `233c6ab1...` mit 141 Dateien; Positivkontrolle Rezept und Pipeline über `git archive cf53cfd8` -> `34d00c1f...` mit 141 (gleich dem bisherigen PHP_TREE_HASH_TODAY).

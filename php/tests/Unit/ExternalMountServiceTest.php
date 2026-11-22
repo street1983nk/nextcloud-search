@@ -189,14 +189,25 @@ final class ExternalMountServiceTest extends TestCase {
 		self::assertSame($this->opened, $this->closed);
 	}
 
-	public function testTwoMountsWithTheSameMountPointAndBackendAreBothDuplicatesOrderedById(): void {
+	/**
+	 * One rule for the list and the confirmation (V-45-10-02, owner decision c
+	 * of plan 45-19): a mount is a duplicate as soon as another entry shows the
+	 * same mount point, whatever its type, because the confirmation names the
+	 * mount point only and reads the same flag. Two mount points of the same
+	 * type are no duplicates.
+	 */
+	public function testMountsThatShareAMountPointAreDuplicatesWhateverTheBackend(): void {
 		$this->mount(17, '/Share', 'smb');
 		$this->mount(5, '/Share', 'smb');
 		$this->mount(8, '/Share', 'sftp');
+		$this->mount(4, '/Beta', 'smb');
+		$this->mount(3, '/Alpha', 'smb');
 
 		self::assertSame([
+			['id' => 3, 'mountPoint' => '/Alpha', 'backend' => 'SMB/CIFS', 'duplicate' => false],
+			['id' => 4, 'mountPoint' => '/Beta', 'backend' => 'SMB/CIFS', 'duplicate' => false],
 			['id' => 5, 'mountPoint' => '/Share', 'backend' => 'SMB/CIFS', 'duplicate' => true],
-			['id' => 8, 'mountPoint' => '/Share', 'backend' => 'SFTP', 'duplicate' => false],
+			['id' => 8, 'mountPoint' => '/Share', 'backend' => 'SFTP', 'duplicate' => true],
 			['id' => 17, 'mountPoint' => '/Share', 'backend' => 'SMB/CIFS', 'duplicate' => true],
 		], $this->service()->adminMounts());
 	}

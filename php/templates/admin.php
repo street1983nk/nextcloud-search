@@ -1680,7 +1680,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 					$mountId = (string)(int)$externalMount['id'];
 					?>
 					<li class="findling-rules__row findling-rules__mount">
-						<input type="checkbox" class="checkbox" id="findling-rules-mount-<?php p($mountId); ?>" data-mount-id="<?php p($mountId); ?>"<?php if (!in_array($externalMount['id'], $excludedExternalMounts, true)) { ?> checked<?php } ?>>
+						<input type="checkbox" class="checkbox" id="findling-rules-mount-<?php p($mountId); ?>" data-mount-id="<?php p($mountId); ?>"<?php if ($externalMount['duplicate']) { ?> data-mount-duplicate="true"<?php } ?><?php if (!in_array($externalMount['id'], $excludedExternalMounts, true)) { ?> checked<?php } ?>>
 						<label for="findling-rules-mount-<?php p($mountId); ?>"><span class="findling-path"><?php p($externalMount['mountPoint']); ?></span>
 							<span class="findling-rules__mount-type"><?php p($externalMount['backend']); ?><?php if ($externalMount['duplicate']) { ?> <?php p($l->t('ID %s', [$mountId])); ?><?php } ?></span></label>
 					</li>

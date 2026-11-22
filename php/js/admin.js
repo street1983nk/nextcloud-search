@@ -1127,6 +1127,36 @@
     return label === null ? '' : label.textContent
   }
 
+  /**
+   * Whether the server marked a row as sharing its mount point with another
+   * one (V-45-10-02). The template sets data-mount-duplicate="true" under the
+   * same flag that adds the id to the list, so the list and the confirmation
+   * follow one rule, the one of ExternalMountService; any other value counts
+   * as no mark.
+   */
+  function mountDuplicateOf (id) {
+    const box = mountBoxes().find(function (candidate) {
+      return mountIdOf(candidate) === id
+    })
+    return box === undefined ? false : box.dataset.mountDuplicate === 'true'
+  }
+
+  /**
+   * The storages of the confirmation line, each by its mount point and, where
+   * the server marked it, by its id as well: '/Gemeinsam (ID 11)'. The two
+   * placeholders are put in by one pass of one expression with a function, so
+   * a mount point holding $& or %2$s stays exactly as it was typed.
+   */
+  function confirmedMounts (ids) {
+    return ids.map(function (id) {
+      const point = mountPointOf(id)
+      if (!mountDuplicateOf(id)) {
+        return point
+      }
+      return t('findling', '%1$s (ID %2$s)').replace(/%([12])\$s/g, function (_, n) { return n === '1' ? point : String(id) })
+    }).join(', ')
+  }
+
   /** Ids of a stored list, whole numbers only, ascending. */
   function mountIdsOf (value) {
     return (Array.isArray(value) ? value : [])
@@ -1663,13 +1693,15 @@
     // The third line since plan 45-05: the external storage this save newly
     // keeps out, without a number, cut at its placeholder like the patterns.
     // The mount points are read as text out of their rows and stand in the
-    // code element only, never inside a translated string.
+    // code element only, never inside the translated sentence; where the
+    // server marked a row, its id follows through the short '%1$s (ID %2$s)'
+    // (V-45-10-02), and the line is still written as text.
     const mountSentence = newMounts.length === 1
       ? t('findling', 'Remove indexed content? Excluding the external storage %s also removes its already indexed documents from the index. The files themselves stay untouched on the storage.')
       : t('findling', 'Remove indexed content? Excluding the external storages %s also removes their already indexed documents from the index. The files themselves stay untouched on the storage.')
     const mountCut = mountSentence.indexOf('%s')
     text('findling-rules-confirm-mounts-before', mountCut === -1 ? mountSentence : mountSentence.slice(0, mountCut))
-    text('findling-rules-confirm-mounts-value', newMounts.map(mountPointOf).join(', '))
+    text('findling-rules-confirm-mounts-value', confirmedMounts(newMounts))
     text('findling-rules-confirm-mounts-after', mountCut === -1 ? '' : mountSentence.slice(mountCut + 2))
     shown('findling-rules-confirm-mounts', newMounts.length > 0)
     pendingMounts = newMounts.slice()

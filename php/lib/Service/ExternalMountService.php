@@ -94,8 +94,12 @@ final class ExternalMountService {
 	 * Every admin mount, sorted by mount point in the language of the page and
 	 * by id where two mount points are equal.
 	 *
-	 * duplicate is true when another entry shows the same mount point with the
-	 * same display name, so the page adds the id to tell the two apart.
+	 * duplicate is true when another entry shows the same mount point, whatever
+	 * its type, so the page adds the id to tell them apart. It is the one rule
+	 * for the list and for the confirmation of a save (V-45-10-02, owner
+	 * decision c of plan 45-19): the confirmation names a storage by its mount
+	 * point alone and reads this same flag off the box of the row, so the type
+	 * cannot be part of the rule.
 	 *
 	 * @return list<array{id: int, mountPoint: string, backend: string, duplicate: bool}>
 	 */
@@ -116,13 +120,13 @@ final class ExternalMountService {
 
 		$seen = [];
 		foreach ($mounts as $mount) {
-			$key = $mount['mountPoint'] . "\0" . $mount['backend'];
+			$key = $mount['mountPoint'];
 			$seen[$key] = ($seen[$key] ?? 0) + 1;
 		}
 
 		$out = [];
 		foreach ($mounts as $mount) {
-			$mount['duplicate'] = $seen[$mount['mountPoint'] . "\0" . $mount['backend']] > 1;
+			$mount['duplicate'] = $seen[$mount['mountPoint']] > 1;
 			$out[] = $mount;
 		}
 
