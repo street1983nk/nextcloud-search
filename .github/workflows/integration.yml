@@ -3711,7 +3711,8 @@ jobs:
 
       # The language proof of phase 20: for every new language code the result
       # page is asked once, with the session of the owner the step above left in
-      # its jar, and it has to answer in that language.
+      # its jar, and it has to answer in that language. zh_TW joined the loop
+      # with its catalogue (issue #53).
       #
       # The key gates of backend/tests/test_admin_ui_contract.py prove that a
       # catalogue is complete. They cannot prove that it is loaded: a wrong file
@@ -3759,7 +3760,7 @@ jobs:
 
           source_sentence='Search your file contents'
           failed=0
-          for code in es it nl pt_PT pt_BR; do
+          for code in es it nl pt_PT pt_BR zh_TW; do
             catalogue="apps/findling/l10n/${code}.json"
             if [ ! -f "${catalogue}" ]; then
               echo "::error::${code}: the catalogue ${catalogue} is not installed, so there is nothing to prove"

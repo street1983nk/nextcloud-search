@@ -529,9 +529,9 @@ def test_every_key_of_the_plugin_stands_in_every_catalogue() -> None:
     source = PLUGIN.read_text(encoding="utf-8")
     catalogues = {path.name: catalogue_of(path) for path in L10N_CATALOGUES}
 
-    # The anti vacuity clauses: all sixteen files are read, and the reading of
+    # The anti vacuity clauses: all eighteen files are read, and the reading of
     # the script finds the ten keys of D-32-04, so an empty set cannot pass.
-    assert len(catalogues) == 16
+    assert len(catalogues) == 18
     assert used_keys(source) == ALLOWED_KEYS
     assert keys_missing_from_catalogues(PLUGIN.name, source, catalogues) == []
 
