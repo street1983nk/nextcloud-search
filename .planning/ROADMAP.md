@@ -205,7 +205,7 @@ Plans:
 - [ ] 45-15-PLAN.md: Antworten in #45, #56, #57, #59 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
 - [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-22; Release-Threats im Nachtrag von 45-15 (REL-07)
 - [x] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
-- [ ] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
+- [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
 - [ ] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
 - [ ] 45-22-PLAN.md: E3 keine Textausschnitte unter Secure View, Quellenbericht, Owner-Entscheid, SnippetPolicy (läuft vor 45-20) (COMP-05, REL-07)
 - [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07)
@@ -225,7 +225,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 10/22 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 11/22 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
