@@ -70,8 +70,16 @@ final class StorageServiceTest extends TestCase {
 	 */
 	private array $mounts = [];
 
-	/** The rows of oc_external_mounts. @var list<array{mount_id: int, storage_backend: string}> */
+	/**
+	 * The rows of oc_external_mounts; type (1 admin, 2 personal) only where the
+	 * exclusion of single external storages needs it.
+	 *
+	 * @var list<array<string, mixed>>
+	 */
 	private array $externalMounts = [];
+
+	/** The SettingsService the last service() was built with. */
+	private ?SettingsService $settings = null;
 
 	/** The rows of oc_external_config. @var list<array{mount_id: int, key: string, value: string}> */
 	private array $externalConfig = [];
@@ -130,10 +138,16 @@ final class StorageServiceTest extends TestCase {
 		$strings = null;
 		$scalars = [];
 		$columns = [];
+		// The column of the first IN clause, which is the band of every query.
+		$inColumn = null;
 
 		$qb = $this->createMock(IQueryBuilder::class);
 		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('in')->willReturn('x IN (:p)');
+		$expr->method('in')->willReturnCallback(static function (mixed $column) use (&$inColumn): string {
+			$inColumn ??= (string)$column;
+
+			return 'x IN (:p)';
+		});
 		$expr->method('eq')->willReturn('x = :p');
 		$expr->method('isNotNull')->willReturn('x IS NOT NULL');
 
@@ -170,7 +184,7 @@ final class StorageServiceTest extends TestCase {
 				return ':p';
 			},
 		);
-		$qb->method('executeQuery')->willReturnCallback(function () use (&$table, &$ints, &$strings, &$scalars, &$columns): IResult {
+		$qb->method('executeQuery')->willReturnCallback(function () use (&$table, &$ints, &$strings, &$scalars, &$columns, &$inColumn): IResult {
 			self::assertIsArray($ints, 'every query carries its band as an int array');
 			$this->bands[] = [$table, count($ints)];
 			$this->selected[$table] = $columns;
@@ -189,26 +203,47 @@ final class StorageServiceTest extends TestCase {
 						$ints,
 					)),
 				),
-				// Two questions to oc_mounts: the provider list of classifyAbsent
-				// (a string array) and the external mounts of a hashed id (one
-				// provider and a mount id).
-				'mounts' => is_array($strings)
-					? array_values(array_filter(
+				// Four questions to oc_mounts: the provider list of classifyAbsent
+				// (a string array), the storages of excluded admin mounts (a band
+				// of mount ids and one provider), every mount of a candidate
+				// storage (a band of storage ids and nothing else) and the
+				// external mounts of a hashed id (one provider and a mount id).
+				'mounts' => match (true) {
+					is_array($strings) => array_values(array_filter(
 						$this->mounts,
 						static fn (array $row): bool => in_array($row['storage_id'], $ints, true)
 							&& in_array($row['mount_provider_class'], $strings, true),
-					))
-					: array_values(array_filter(
+					)),
+					$inColumn === 'mount_id' => array_values(array_filter(
+						$this->mounts,
+						static fn (array $row): bool => in_array($row['mount_id'] ?? null, $ints, true)
+							&& in_array($row['mount_provider_class'], $scalars, true),
+					)),
+					$scalars === [] => array_values(array_filter(
+						$this->mounts,
+						static fn (array $row): bool => in_array($row['storage_id'], $ints, true),
+					)),
+					default => array_values(array_filter(
 						$this->mounts,
 						static fn (array $row): bool => in_array($row['storage_id'], $ints, true)
 							&& in_array($row['mount_provider_class'], $scalars, true)
 							&& ($row['mount_id'] ?? null) !== null,
 					)),
-				'external_mounts' => array_values(array_filter(
-					$this->externalMounts,
-					static fn (array $row): bool => in_array($row['mount_id'], $ints, true)
-						&& in_array($row['storage_backend'], (array)$strings, true),
-				)),
+				},
+				// Two questions to oc_external_mounts: the backends of a hashed
+				// id (a string array) and the admin mounts among the excluded
+				// ids (one type).
+				'external_mounts' => is_array($strings)
+					? array_values(array_filter(
+						$this->externalMounts,
+						static fn (array $row): bool => in_array($row['mount_id'], $ints, true)
+							&& in_array($row['storage_backend'], $strings, true),
+					))
+					: array_values(array_filter(
+						$this->externalMounts,
+						static fn (array $row): bool => in_array($row['mount_id'], $ints, true)
+							&& in_array($row['type'] ?? null, $scalars, true),
+					)),
 				'external_config' => array_values(array_filter(
 					$this->externalConfig,
 					static fn (array $row): bool => in_array($row['mount_id'], $ints, true)
@@ -241,7 +276,8 @@ final class StorageServiceTest extends TestCase {
 		return $result;
 	}
 
-	private function service(bool $teamFolders = true, bool $external = false): StorageService {
+	/** @param list<mixed> $excludedMounts the stored value of excluded_external_mounts */
+	private function service(bool $teamFolders = true, bool $external = false, array $excludedMounts = []): StorageService {
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueBool')->willReturnCallback(
 			static fn (string $app, string $key, bool $default = false): bool => match ($key) {
@@ -249,6 +285,11 @@ final class StorageServiceTest extends TestCase {
 				SettingsService::KEY_INDEX_EXTERNAL_STORAGE => $external,
 				default => $default,
 			},
+		);
+		// The key is spelled out rather than taken from the constant, so the
+		// suite names the stored key itself.
+		$appConfig->method('getValueArray')->willReturnCallback(
+			static fn (string $app, string $key, array $default = []): array => $key === 'excluded_external_mounts' ? $excludedMounts : $default,
 		);
 		$logger = $this->createMock(LoggerInterface::class);
 		foreach (['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'] as $level) {
@@ -259,10 +300,12 @@ final class StorageServiceTest extends TestCase {
 			);
 		}
 
+		$this->settings = new SettingsService($appConfig, $logger, $this->createMock(ITimeFactory::class));
+
 		return new StorageService(
 			$this->fileAccess,
 			$this->createMock(IMimeTypeLoader::class),
-			new SettingsService($appConfig, $logger, $this->createMock(ITimeFactory::class)),
+			$this->settings,
 			$this->db,
 			$logger,
 		);
@@ -417,6 +460,160 @@ final class StorageServiceTest extends TestCase {
 		$answer = $this->service(teamFolders: false, external: true)->classifyAbsent([12, 9, 12]);
 
 		self::assertSame(['gone' => [], 'deselected' => [12]], $answer);
+	}
+
+	// -- single external storages kept out of the index (plan 45-02, EXCL-04) --
+
+	/**
+	 * The storage ids of one read of the mount list.
+	 *
+	 * @param iterable<array{storage_id: int, root_id: int, overridden_root: int}> $mounts
+	 * @return list<int>
+	 */
+	private static function storageIdsOf(iterable $mounts): array {
+		$ids = [];
+		foreach ($mounts as $mount) {
+			$ids[] = (int)$mount['storage_id'];
+		}
+
+		return $ids;
+	}
+
+	/** One admin mount of files_external (type 1 of DBConfigService) with one mounts row per storage. */
+	private function stageExternalMount(int $mountId, int $type, int ...$storageIds): void {
+		$this->externalMounts[] = ['mount_id' => $mountId, 'storage_backend' => 'smb', 'type' => $type];
+		foreach ($storageIds as $i => $storageId) {
+			$this->mounts[] = [
+				'storage_id' => $storageId,
+				'user_id' => 'user' . $i,
+				'mount_id' => $mountId,
+				'mount_provider_class' => self::EXTERNAL,
+			];
+		}
+	}
+
+	public function testTheAdminMountTypeIsTheOneOfFilesExternal(): void {
+		// apps/files_external/lib/Service/DBConfigService.php :34 on stable33,
+		// stable34 and stable35: MOUNT_TYPE_ADMIN = 1, MOUNT_TYPE_PERSONAL = 2.
+		self::assertSame(1, StorageService::ADMIN_MOUNT_TYPE);
+	}
+
+	public function testAnExcludedAdminMountLeavesTheMountListAndGoesAtOnce(): void {
+		$this->storages = [21, 40];
+		$this->stageExternalMount(5, 1, 21);
+		$this->mounts[] = ['storage_id' => 40, 'mount_provider_class' => self::HOME];
+		$this->listed = [21, 40];
+
+		$service = $this->service(external: true, excludedMounts: [5]);
+
+		self::assertSame([40], self::storageIdsOf($service->getMounts()));
+		self::assertFalse($service->isIndexedStorage(21));
+		self::assertTrue($service->isIndexedStorage(40));
+		// No grace period: the exclusion is a decision of the admin (D-45-05).
+		self::assertSame(['gone' => [], 'deselected' => [21]], $service->classifyAbsent([21]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testAnExcludedMountWithUserCredentialsTakesEveryStorageOfIt(): void {
+		// Credentials per user: one storage id per user under one mount id.
+		$this->storages = [21, 22, 40];
+		$this->stageExternalMount(5, 1, 21, 22);
+		$this->listed = [21, 22, 40];
+
+		$service = $this->service(external: true, excludedMounts: [5]);
+
+		self::assertSame([40], self::storageIdsOf($service->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => [21, 22]], $service->classifyAbsent([22, 21]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testAStorageThatAnIncludedMountAlsoCarriesStays(): void {
+		// 23: the same share under the excluded admin mount 6 and the included
+		// admin mount 7. 24: under the excluded mount 6 and a home provider.
+		$this->storages = [23, 24];
+		$this->stageExternalMount(6, 1, 23, 24);
+		$this->stageExternalMount(7, 1, 23);
+		$this->mounts[] = ['storage_id' => 24, 'mount_provider_class' => self::HOME, 'mount_id' => null];
+		$this->listed = [23, 24];
+
+		$service = $this->service(external: true, excludedMounts: [6]);
+
+		self::assertSame([23, 24], self::storageIdsOf($service->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([23, 24]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testAPersonalMountIdInTheListHasNoEffect(): void {
+		// D-45-03: personal mounts follow the main switch only.
+		$this->storages = [25];
+		$this->stageExternalMount(9, 2, 25);
+		$this->listed = [25];
+
+		$service = $this->service(external: true, excludedMounts: [9]);
+
+		self::assertSame([25], self::storageIdsOf($service->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([25]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testADeletedMountIdInTheListHasNoEffectAndLeavesNoTrace(): void {
+		// D-45-06: a mount that was deleted has no rows any more.
+		$this->storages = [26];
+		$this->stageExternalMount(8, 1, 26);
+		$this->listed = [26];
+
+		$service = $this->service(external: true, excludedMounts: [404]);
+
+		self::assertSame([26], self::storageIdsOf($service->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([26]));
+		self::assertSame([], $this->logs, 'an unknown mount id is not worth a log line');
+		$this->assertNoLogCarries(['404']);
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testWithTheSwitchOffTheListChangesNothingAndStaysReadable(): void {
+		// D-45-04: the switch decides first; the stored list waits.
+		$this->storages = [21, 40];
+		$this->stageExternalMount(5, 1, 21);
+		$this->mounts[] = ['storage_id' => 40, 'mount_provider_class' => self::HOME];
+		$this->listed = [40];
+
+		$without = $this->service(external: false)->classifyAbsent([21]);
+		$this->bands = [];
+		$service = $this->service(external: false, excludedMounts: [5]);
+		$with = $service->classifyAbsent([21]);
+
+		self::assertSame(['gone' => [], 'deselected' => [21]], $without);
+		self::assertSame($without, $with);
+		self::assertSame([40], self::storageIdsOf($service->getMounts()));
+		self::assertSame([], array_values(array_filter($this->bands, static fn (array $band): bool => $band[0] === 'external_mounts')));
+		self::assertNotNull($this->settings);
+		self::assertSame([5], $this->settings->excludedExternalMounts());
+	}
+
+	public function testAnEmptyListAsksNoMountTable(): void {
+		$this->db->expects(self::never())->method('getQueryBuilder');
+		$this->listed = [21, 40];
+
+		$service = $this->service(external: true);
+
+		self::assertSame([21, 40], self::storageIdsOf($service->getMounts()));
+		self::assertTrue($service->isIndexedStorage(21));
+	}
+
+	public function testALongListIsAskedInBandsAndOncePerRequest(): void {
+		// T-45-06: 250 admin mounts without a single mounts row.
+		foreach (range(1, 250) as $mountId) {
+			$this->externalMounts[] = ['mount_id' => $mountId, 'storage_backend' => 'smb', 'type' => 1];
+		}
+		$this->listed = [40];
+
+		$service = $this->service(external: true, excludedMounts: range(1, 250));
+		self::assertSame([40], self::storageIdsOf($service->getMounts()));
+		self::assertSame([40], self::storageIdsOf($service->getMounts()));
+
+		self::assertSame([['external_mounts', 200], ['external_mounts', 50], ['mounts', 200], ['mounts', 50]], $this->bands);
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
 	}
 
 	// -- one share identity per storage (plan 43-21, D-43-15, D-43-17) --

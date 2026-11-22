@@ -7,6 +7,7 @@ namespace OCA\Findling\Tests\Unit;
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\SettingsService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Exceptions\AppConfigTypeConflictException;
 use OCP\IAppConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -486,5 +487,149 @@ final class SettingsServiceTest extends TestCase {
 	#[DataProvider('hintStates')]
 	public function testTheHintStandsSevenDaysAfterTheStamp(int $state, int $now, bool $visible): void {
 		self::assertSame($visible, SettingsService::coverageHintVisible($state, $now));
+	}
+
+	// -- single external storages kept out of the index (plan 45-02, EXCL-04) --
+	//
+	// Key and field are spelled out here rather than taken from the constants,
+	// so the suite names what is stored and what the form sends.
+
+	private const EXCLUDED_KEY = 'excluded_external_mounts';
+	private const EXCLUDED_FIELD = 'excludedExternalMounts';
+
+	/** @var list<array{string, array<mixed>}> every warning as message and context */
+	private array $warnings = [];
+
+	private function recordWarnings(): void {
+		$this->logger->method('warning')->willReturnCallback(
+			function (mixed $message, array $context = []): void {
+				$this->warnings[] = [(string)$message, $context];
+			},
+		);
+	}
+
+	/**
+	 * A valid form of the rules, with the given fields on top.
+	 *
+	 * @param array<string, mixed> $extra
+	 * @return array<string, mixed>
+	 */
+	private static function form(array $extra = []): array {
+		return $extra + [
+			SettingsService::FIELD_MAX_FILE_BYTES => SettingsService::MIN_CAP_BYTES,
+			'indexTeamFolders' => true,
+			'indexExternalStorage' => true,
+		];
+	}
+
+	public function testTheKeyTheFieldAndTheCeilingOfTheExcludedMounts(): void {
+		self::assertSame(self::EXCLUDED_KEY, SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS);
+		self::assertSame(self::EXCLUDED_FIELD, SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS);
+		self::assertSame(1000, SettingsService::MAX_EXCLUDED_EXTERNAL_MOUNTS);
+	}
+
+	public function testAMissingKeyIsAnEmptyListOfExcludedMounts(): void {
+		// D-45-02: an upgrade from 1.6.5 needs no migration, every admin mount stays in.
+		self::assertArrayNotHasKey(self::EXCLUDED_KEY, $this->values);
+		self::assertSame([], $this->settings()->excludedExternalMounts());
+	}
+
+	public function testAnOccWrittenListKeepsItsPositiveIdsAndCountsTheRest(): void {
+		$this->recordWarnings();
+		$this->values[self::EXCLUDED_KEY] = [7, 3, 3, 0, -2, 'x'];
+
+		self::assertSame([3, 7], $this->settings()->excludedExternalMounts());
+
+		self::assertCount(1, $this->warnings);
+		self::assertSame(3, $this->warnings[0][1]['unusable'] ?? null);
+		foreach ($this->warnings as [$message, $context]) {
+			foreach ($context as $value) {
+				self::assertIsInt($value, 'a context value that is no counter');
+			}
+			self::assertStringNotContainsString('7', $message);
+		}
+	}
+
+	public function testATypeConflictReadsAsAnEmptyListWithACounterOnly(): void {
+		$this->recordWarnings();
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueArray')->willThrowException(
+			new AppConfigTypeConflictException('conflict with value type from database'),
+		);
+
+		$settings = new SettingsService($appConfig, $this->logger, $this->time);
+
+		self::assertSame([], $settings->excludedExternalMounts());
+		self::assertCount(1, $this->warnings);
+		foreach ($this->warnings[0][1] as $value) {
+			self::assertIsInt($value, 'a context value that is no counter');
+		}
+	}
+
+	public function testSavingExcludedMountsWritesThemSortedAndMarksTheScanStale(): void {
+		$settings = $this->settings();
+
+		self::assertSame([], $settings->save(self::form([self::EXCLUDED_FIELD => [9, 4, 9]])));
+
+		self::assertSame([4, 9], $this->values[self::EXCLUDED_KEY]);
+		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+		// The answer of the same request follows the write.
+		self::assertSame([4, 9], $settings->excludedExternalMounts());
+	}
+
+	/** @return iterable<string, array{0: mixed}> */
+	public static function unusableExcludedMounts(): iterable {
+		yield 'nought' => [[0]];
+		yield 'negative' => [[-4]];
+		yield 'a string' => [['a']];
+		yield 'a numeric string' => [['4']];
+		yield 'a float' => [[4.0]];
+		yield 'a bool' => [[true]];
+		yield 'not a list' => [7];
+		yield 'a map' => [['a' => 4]];
+		yield 'above the ceiling' => [range(1, 1001)];
+	}
+
+	#[DataProvider('unusableExcludedMounts')]
+	public function testAnUnusableListOfExcludedMountsWritesNothingAtAll(mixed $value): void {
+		$this->recordWarnings();
+		$this->values[self::EXCLUDED_KEY] = [5];
+
+		$errors = $this->settings()->save(self::form([self::EXCLUDED_FIELD => $value]));
+
+		self::assertSame([self::EXCLUDED_FIELD => SettingsService::ERROR_OUT_OF_RANGE], $errors);
+		// All or nothing: neither the list nor any other key was written.
+		self::assertSame([self::EXCLUDED_KEY => [5]], $this->values);
+		foreach ($this->warnings as [, $context]) {
+			foreach ($context as $entry) {
+				self::assertIsInt($entry, 'a context value that is no counter');
+			}
+		}
+	}
+
+	public function testAFormWithoutTheFieldLeavesTheExcludedMountsAlone(): void {
+		// An admin.js of 1.6.5 in a browser cache does not know the field, and
+		// must not clear the exclusions after the upgrade.
+		$this->values[self::EXCLUDED_KEY] = [5];
+
+		self::assertSame([], $this->settings()->save(self::form()));
+		self::assertSame([5], $this->values[self::EXCLUDED_KEY]);
+
+		self::assertSame([], $this->settings()->save(self::form([self::EXCLUDED_FIELD => null])));
+		self::assertSame([5], $this->values[self::EXCLUDED_KEY]);
+
+		self::assertSame([], $this->settings()->save(self::form([self::EXCLUDED_FIELD => []])));
+		self::assertSame([], $this->values[self::EXCLUDED_KEY]);
+	}
+
+	public function testWithTheSwitchOffTheStoredListIsReadUnchanged(): void {
+		// D-45-04: the list waits for the switch and is not cleared by it.
+		$this->values[self::EXCLUDED_KEY] = [5, 2];
+		$settings = $this->settings();
+
+		self::assertSame([], $settings->save(self::form(['indexExternalStorage' => false])));
+		self::assertFalse($settings->indexExternalStorage());
+		self::assertSame([5, 2], $this->values[self::EXCLUDED_KEY]);
+		self::assertSame([2, 5], $settings->excludedExternalMounts());
 	}
 }
