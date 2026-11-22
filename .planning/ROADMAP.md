@@ -182,8 +182,8 @@ Plans:
   2. Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW aus PR #56); die Admin-Seite funktioniert unter der dreiteiligen Locale zh_Hant_TW auch im Rückfall auf root.lang (PR #57); PRODUCT.md und CHANGELOG nennen die Sprache.
   3. Die Store-Beschreibungen beider Apps sind in DE, EN und FR kurz (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku) und wurden erst nach Owner-Freigabe des Entwurfs eingebaut; die verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku aller drei Sprachen, die bisherigen Gates prüfen sie dort, und die READMEs aller Sprachen sind auf aktuelle Fakten geprüft.
   4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen.
+  5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56, #57 und #59.
   6. COMP-05 (#59): Eine Datei unter dem Wasserzeichen von Nextcloud Office wird als ihr Besitzer oder als andere berechtigte Person gelesen (erneutes Öffnen in actAs nur bei Secure-View-Ablehnung, E1), Findling umgeht keine Sperre (E2, eigener Grund policy_blocked), Treffer unter Secure View zeigen keinen Textausschnitt (E3); vorher und nachher auf echter Instanz über den Update-Weg 1.6.5 -> 1.7.0 belegt, der ganze Release-Diff unabhängig geprüft.
-  5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56 und #57.
 
 **Plans**: 22 plans
 
@@ -197,20 +197,20 @@ Plans:
 - [x] 45-07-PLAN.md: READMEs DE/EN/FR mit verlagerten Pflichtinhalten und Faktenprüfung, Gates auf READMEs (STORE-04)
 - [x] 45-08-PLAN.md: Version 1.7.0, CHANGELOG, Update-Probe ab 1.6.5, je eigene Owner-Freigabe (REL-07)
 - [x] 45-09-PLAN.md: Launch-Härtung und Audit, Digest-Gate, Push, audited_head (REL-07)
-- [ ] 45-10-PLAN.md: Volltest DE/EN/FR, Playwright 3 Breiten hell/dunkel, impeccable, Umlaut-Audit, gemeinsame Owner-Abnahme (REL-07)
+- [ ] 45-10-PLAN.md: Volltest DE/EN/FR komplett neu nach 45-21 (Push-Freigabe vorab), Playwright 3 Breiten hell/dunkel, impeccable, Umlaut-Audit, neue Proben V-45-10-02/03, policy_blocked, E3, gemeinsame Owner-Abnahme (REL-07, COMP-05)
 - [ ] 45-11-PLAN.md: Kurze Store-Texte beider Apps, Entwurf kurz vor dem Release, Einbau nach Freigabe (STORE-03)
 - [ ] 45-12-PLAN.md: Push der Store-Texte mit Freigabe, Tag-Kopf
 - [ ] 45-13-PLAN.md: Signatur-Probe mit eigener Owner-Freigabe
 - [ ] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette (erst nach 45-16, E4)
-- [ ] 45-15-PLAN.md: Antworten in #45, #56, #57 und Bitte in #53 nach dem Store-Release
+- [ ] 45-15-PLAN.md: Antworten in #45, #56, #57, #59 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
 - [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-22; Release-Threats im Nachtrag von 45-15 (REL-07)
-- [ ] 45-17-PLAN.md: #59 Freigaben, Nachbau aller Wasserzeichen-Modi auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
+- [ ] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
 - [ ] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
 - [ ] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
 - [ ] 45-22-PLAN.md: E3 keine Textausschnitte unter Secure View, Quellenbericht, Owner-Entscheid, SnippetPolicy (läuft vor 45-20) (COMP-05, REL-07)
-- [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in allen Modi, files_accesscontrol, E1 und E3 echt, CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07)
+- [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07)
 - [ ] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit, neuer audited_head (COMP-05, REL-07)
-  Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-20, 45-21, dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen (45-10 trägt formal wave 9)
+  Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-20, 45-21, dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-10 depends_on [45-21], wave 15; 45-14 depends_on [45-16])
 **UI hint**: yes
 
 ## Progress
