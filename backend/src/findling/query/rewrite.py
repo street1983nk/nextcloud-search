@@ -287,6 +287,16 @@ _FIELD_TOKEN: Final = re.compile(r"(?:^|\s)[+\-!]*([a-z_]+):\w")
 # rewriting step must change what it came for and nothing else.
 _WHITESPACE: Final = re.compile(r"(\s+)")
 
+# The complaint the lenient parser files when a line holds nothing but
+# exclusions, by the name of its class, because the stub of tantivy 0.26.2 does
+# not export the class. The parser repairs such a line by adding "everything" to
+# it, so that ``-wort`` answers every document without the word. Measured on
+# 0.26.2, it files the same complaint and makes the same repair for a group in
+# which no branch survives: neither ``(a OR b)`` asks for anything then, and a
+# clause of nothing counts as a clause of exclusions. build_query reads the
+# complaint for that second case, see there.
+_ONLY_EXCLUDING: Final = "AllButQueryForbiddenError"
+
 
 def umlaut_variants(term: str) -> list[str]:
     """Return the term, plus its umlaut spelling when the two differ.
@@ -462,7 +472,7 @@ def carries_one_term(text: str) -> bool:
     return len(residual.split()) == 1
 
 
-def add_umlaut_variants(text: str) -> str:
+def add_umlaut_variants(text: str, *, han: bool = True) -> str:
     """Turn every plain token with a written out umlaut form into an alternative.
 
     ``kuendigung`` becomes ``(kuendigung OR kündigung)``, and a leading plus,
@@ -475,17 +485,21 @@ def add_umlaut_variants(text: str) -> str:
     which are left alone. The name stayed, because every caller and every test
     of this step knows it by it, and the umlaut is still the case it was built
     for.
+
+    ``han=False`` leaves the Han variants out and gives the line the way every
+    release before issue #53 rewrote it. build_query asks for that line when the
+    Han variants turn out to be what made a search answer every document.
     """
     segments: list[tuple[bool, str]] = []
     for quoted, part in _segments(text):
         if quoted:
             segments.append((quoted, part))
             continue
-        segments.append((quoted, "".join(_rewrite_token(token) for token in _WHITESPACE.split(part))))
+        segments.append((quoted, "".join(_rewrite_token(token, han=han) for token in _WHITESPACE.split(part))))
     return _rejoin(segments)
 
 
-def _rewrite_token(token: str) -> str:
+def _rewrite_token(token: str, *, han: bool = True) -> str:
     if token in _OPERATORS:
         return token
     match = _PLAIN_TOKEN.match(token)
@@ -495,7 +509,11 @@ def _rewrite_token(token: str) -> str:
     # duplicates dropped. A term needs both only if it mixes German and Chinese
     # in one word, and even then the group stays at six branches.
     variants = list(
-        dict.fromkeys(spelling for umlaut in umlaut_variants(match["term"]) for spelling in han_variants(umlaut))
+        dict.fromkeys(
+            spelling
+            for umlaut in umlaut_variants(match["term"])
+            for spelling in (han_variants(umlaut) if han else [umlaut])
+        )
     )
     if len(variants) == 1:
         return token
@@ -617,6 +635,11 @@ def _filter_clause(
     if len(clauses) == 1:
         return clauses[0]
     return Query.boolean_query([(Occur.Must, clause) for clause in clauses])
+
+
+def _only_excluding(errors: Sequence[object]) -> bool:
+    """Whether the parser repaired the line by adding "everything" to it."""
+    return any(type(error).__name__ == _ONLY_EXCLUDING for error in errors)
 
 
 def _max_bracket_depth(text: str) -> int:
@@ -753,13 +776,38 @@ def build_query(
     # second representation of the field list beside the first one for a saving
     # nothing can measure. A plan is one value, and that is worth more here than
     # two allocations of eight.
-    parsed, errors = index.parse_query_lenient(
-        rewritten,
-        default_field_names=searched,
-        field_boosts=dict(plan.boosts),
-        conjunction_by_default=True,
-        allow_regexes=False,
-    )
+    def parse(line: str) -> tuple[Query, list[object]]:
+        found, complaints = index.parse_query_lenient(
+            line,
+            default_field_names=searched,
+            field_boosts=dict(plan.boosts),
+            conjunction_by_default=True,
+            allow_regexes=False,
+        )
+        return found, list(complaints)
+
+    parsed, errors = parse(rewritten)
+    if _only_excluding(errors):
+        # A Han variant must never be what makes a search answer every document.
+        # The variant turns one term into a group, and a group in which no
+        # branch survives is repaired into "everything" (see _ONLY_EXCLUDING),
+        # where the bare term was a query that finds nothing. No branch survives
+        # when no chain that is asked keeps the term: 20 Han characters are 60
+        # bytes, which the name chain drops and every chain but the Chinese one
+        # dropped at 48 already, and a field the schema does not know keeps
+        # nothing of any length, so ``notiz:台灣`` answered the whole holding.
+        # So the line is parsed once more the way it was before issue #53, and
+        # that answer is taken whenever it needs no repair. Asked instead of
+        # predicted: a rule about bytes and chains here would be a second
+        # description of the analysers that drifts away from them. When the line
+        # without Han variants is repaired as well, the repair is not theirs: a
+        # line of exclusions that somebody typed keeps both shapes, and what
+        # the umlaut group or two dropped terms do is what they did before.
+        unvaried = add_umlaut_variants(residual, han=False).strip()
+        if unvaried != rewritten:
+            plain, plain_errors = parse(unvaried)
+            if not _only_excluding(plain_errors):
+                parsed, errors, rewritten = plain, plain_errors, unvaried
     if errors:
         # Debug and nowhere else. These entries quote the input, so an info line
         # would put a search term into a log that operators read and ship.
@@ -774,7 +822,7 @@ def build_query(
         query=parsed,
         text=rewritten,
         extensions=extensions,
-        errors=list(errors),
+        errors=errors,
         operators=operators,
         one_term=one_term,
         filter_query=filter_query,

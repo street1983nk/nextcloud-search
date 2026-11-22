@@ -3209,8 +3209,16 @@ PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda
 # sha256sum over the CRLF normalised tree: 62a6d85c... both ways, and the same
 # pipeline over git archive HEAD before the step gave c024c9a4... (positive
 # control).
+#
+# Moved on 2026-11-23 by the repair of the Han variants (issue #53):
+# query/rewrite.py parses a line once more without them when the variants are
+# what makes the parser answer every document. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, sed and sha256sum over the CRLF normalised
+# tree: 65f6bc65... both ways, and the same pipeline over git archive HEAD
+# before the step gave 62a6d85c... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "62a6d85c67ef20d53776f1832981a88a4ede6e0139622bdb82be8a13fd337f8d"
+PACKAGE_TREE_HASH_TODAY = "65f6bc6565e0d9ab55071934729a08be98c11c6db8f58cabd11098e994d0fb82"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

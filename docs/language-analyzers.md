@@ -602,6 +602,10 @@ rewrite cuts at spaces and looks at plain tokens only. `(台灣)` and `(a 台灣
 left alone, while `(a 台灣 b)` becomes `(a (台灣 OR 臺灣) b)`, the same limit the
 umlaut variant has. The other gap: a term that mixes the shapes the other way
 round than the document (台灣臺北 against 臺灣台北) is not found through that term.
+A term that nothing asked keeps gets no second shape: 20 Han characters are 60
+bytes, which only the Chinese chain keeps, and a field the schema does not know
+keeps nothing. The parser reads a group whose branches are all empty as every
+document, so such a line is sent as typed and finds nothing, as it did before.
 
 **Space.** One more filled chain, measured on 2026-11-15 through the real
 writer, `de,en` against `de,en,zh` on the same documents: the directory grows
