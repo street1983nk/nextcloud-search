@@ -1254,11 +1254,18 @@ final class AdminViewService {
 	 * a too long or a surplus entry against the numbers the server judges with
 	 * and names them in its sentence, instead of carrying a second copy of them.
 	 *
+	 * ``excludedExternalMounts`` carries the ids of the admin mounts kept out of
+	 * the index (EXCL-04, plan 45-03), ids only. The mount points and the
+	 * backends travel in the rendered form of Settings\Admin and never here,
+	 * because this answer reaches the initial state and the poll of five
+	 * seconds (T-45-12).
+	 *
 	 * @return array{
 	 *     exclusions:list<string>, exclusionPatterns:list<string>,
 	 *     maxPrefixes:int, maxPrefixLength:int, maxPatterns:int, maxPatternLength:int,
 	 *     maxFileBytes:int, maxFileBytesCeiling:int,
 	 *     indexTeamFolders:bool, indexExternalStorage:bool,
+	 *     excludedExternalMounts:list<int>,
 	 *     cleanupLatencyHours:int, restartCommand:string
 	 * }
 	 */
@@ -1274,6 +1281,7 @@ final class AdminViewService {
 			'maxFileBytesCeiling' => $this->settingsService->containerCap(),
 			'indexTeamFolders' => $this->settingsService->indexTeamFolders(),
 			'indexExternalStorage' => $this->settingsService->indexExternalStorage(),
+			'excludedExternalMounts' => $this->settingsService->excludedExternalMounts(),
 			'cleanupLatencyHours' => self::RECONCILE_INTERVAL_HOURS,
 			'restartCommand' => self::RESTART_COMMAND,
 		];

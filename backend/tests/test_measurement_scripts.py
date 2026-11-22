@@ -1329,8 +1329,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the independent pipeline of find, sort, sed and sha256sum over the same tree gave 4d13bae1 as
 # well; the recipe over git archive of b60ee646, the last commit before the plan, gave a7d7a5c7
 # with 133 files (positive control).
-PHP_FILES_TODAY = 135
-PHP_TREE_HASH_TODAY = "4d13bae18edddd33cb5bf304ad4766c132c77fe466cad386348d3011c86d9080"
+# Moved on 2026-11-22 by plan 45-03 task 2 (EXCL-04, the rules route and the form): one file came,
+# tests/Unit/AdminSettingsTest.php; lib/Controller/SettingsController.php takes the ids of the
+# excluded admin mounts, lib/Service/AdminViewService.php carries them in rules(), lib/Settings/
+# Admin.php hands the list of admin mounts to the template, and tests/Unit/SettingsControllerTest.php
+# and AdminViewServiceTest.php follow, so PHP_FILES_TODAY moves to 136. The recipe gave c0a27412;
+# the independent pipeline of find, sort, sed and sha256sum over the same tree gave c0a27412 as
+# well; the recipe over git archive of 873c3e9d, the commit of task 1, gave 4d13bae1 with 135 files
+# (positive control).
+PHP_FILES_TODAY = 136
+PHP_TREE_HASH_TODAY = "c0a27412df40770687d9f85ac9028d40e64db51e568799edfa0a41aa54fa0124"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

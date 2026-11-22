@@ -7,11 +7,13 @@ namespace OCA\Findling\Tests\Unit;
 use OCA\Findling\Service\AdminViewService;
 use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExAppService;
+use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -1699,6 +1701,40 @@ final class AdminViewServiceTest extends TestCase {
 		$settings = new SettingsService($appConfig, $this->createMock(LoggerInterface::class), $time);
 
 		return $this->viewWith(['settingsService' => $settings]);
+	}
+
+	// -- the external storage kept out (plan 45-03, EXCL-04) ------------------
+
+	public function testTheRulesCarryTheIdsOfTheExcludedAdminMountsAndNothingElseOfThem(): void {
+		$values = [
+			SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS => [9, 4, 4, 0, '5'],
+			SettingsService::KEY_INDEX_EXTERNAL_STORAGE => true,
+		];
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueArray')->willReturnCallback(
+			static fn (string $app, string $key, array $default = []): array => is_array($values[$key] ?? null) ? $values[$key] : $default,
+		);
+		$appConfig->method('getValueBool')->willReturnCallback(
+			static fn (string $app, string $key, bool $default = false): bool => is_bool($values[$key] ?? null) ? $values[$key] : $default,
+		);
+		$appConfig->method('getValueInt')->willReturnCallback(
+			static fn (string $app, string $key, int $default = 0): int => $default,
+		);
+		$logger = $this->createMock(LoggerInterface::class);
+		$settings = new SettingsService($appConfig, $logger, $this->createMock(ITimeFactory::class));
+		$exclusions = new ExclusionService(
+			$appConfig,
+			$this->createMock(StorageService::class),
+			$this->createMock(IJobList::class),
+			$logger,
+		);
+
+		$rules = $this->viewWith(['settingsService' => $settings, 'exclusionService' => $exclusions])->rules();
+
+		// Read through SettingsService: positive ints only, sorted, once each.
+		self::assertSame([4, 9], $rules['excludedExternalMounts']);
+		self::assertTrue($rules['indexExternalStorage']);
+		self::assertArrayNotHasKey('externalMounts', $rules);
 	}
 
 	public function testAFirstCompleteCountStampsTheHintAndItStaysVisible(): void {

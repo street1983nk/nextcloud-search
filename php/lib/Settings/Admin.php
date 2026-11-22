@@ -6,6 +6,7 @@ namespace OCA\Findling\Settings;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\AdminViewService;
+use OCA\Findling\Service\ExternalMountService;
 use OCA\Findling\Service\ProbeService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
@@ -30,12 +31,22 @@ use Psr\Log\LoggerInterface;
  *
  * The Override attribute is absent here as well, for the reason written out in
  * Section: it is PHP 8.3 and this app supports PHP 8.2.
+ *
+ * The list of external storage an admin set up (EXCL-04, plan 45-03) is the
+ * one exception to the duplication: it goes into the template parameters as
+ * externalMounts and never into the initial state. It can be long, its mount
+ * points are data of the instance that only the rendered form for an admin
+ * needs, and the initial state is the shape the poll of five seconds keeps
+ * refreshing, which has no use for a list that only changes when an admin
+ * sets up a storage. The script reads the ids out of the rendered rows; the
+ * rules in the initial state carry the excluded ids only (T-45-12).
  */
 final class Admin implements ISettings {
 	public function __construct(
 		private IInitialState $initialState,
 		private AdminViewService $view,
 		private ProbeService $probeService,
+		private ExternalMountService $externalMountService,
 		private IUserSession $userSession,
 		private LoggerInterface $logger,
 	) {
@@ -63,9 +74,31 @@ final class Admin implements ISettings {
 		return new TemplateResponse(
 			Application::APP_ID,
 			'admin',
-			$overview,
+			$overview + ['externalMounts' => $this->externalMounts()],
 			TemplateResponse::RENDER_AS_BLANK,
 		);
+	}
+
+	/**
+	 * The admin mounts for the storage selection, or an empty, switched off
+	 * list when reading them failed. A failure here must not break the page,
+	 * the same rule as the probe take-over above; the warning carries a
+	 * counter and no value, because a message of the failure could name a
+	 * mount point (T-04-51).
+	 *
+	 * @return array{enabled: bool, mounts: list<array{id: int, mountPoint: string, backend: string, duplicate: bool}>}
+	 */
+	private function externalMounts(): array {
+		try {
+			return [
+				'enabled' => $this->externalMountService->enabled(),
+				'mounts' => $this->externalMountService->adminMounts(),
+			];
+		} catch (\Throwable) {
+			$this->logger->warning('Findling: could not list the external storage for the admin page', ['failed' => 1]);
+
+			return ['enabled' => false, 'mounts' => []];
+		}
 	}
 
 	public function getSection(): ?string {

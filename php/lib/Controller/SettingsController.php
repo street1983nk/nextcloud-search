@@ -253,6 +253,20 @@ final class SettingsController extends Controller {
 	 * Both lists are taken as mixed and judged by listOf() below, for the reason
 	 * written there (finding H-33-01 of audit 33-11).
 	 *
+	 * The selection of external storage (EXCL-04, plan 45-03) does not travel
+	 * here, and the confirmation names a storage taken out without a number,
+	 * like a pattern. affectedDocuments() does not count indexed documents: the
+	 * index lives in the container and not in a table of this app, so it walks
+	 * the file cache entries of indexable types under a folder prefix in bands
+	 * of 500 and stops at PREVIEW_CAP. For a whole external storage that walk
+	 * starts at the root of the storage; on an ordinary SMB share it reaches
+	 * the cap almost every time, so the number would mostly read "at least
+	 * 5000", and it would cost up to ten queries per newly excluded storage on
+	 * a file cache that is often large for exactly these storages. Mapping the
+	 * mount ids to their storages the way StorageService does it would be
+	 * cheap, but it gives the storages and not the number: the cost and the
+	 * cap lie in the counting, not in the mapping.
+	 *
 	 * @param mixed $exclusions the prefix list as the form holds it
 	 * @param mixed $exclusionPatterns the pattern list as the form holds it
 	 */
@@ -306,9 +320,10 @@ final class SettingsController extends Controller {
 	/**
 	 * POST /apps/findling/admin/rules
 	 *
-	 * The four switches of ADM-04 in one call, and the only writing route of this
-	 * phase. All four travel together because they are one form: an admin presses
-	 * one button, and a route per switch would make a half saved form a state this
+	 * The four switches of ADM-04 in one call, since 1.7.0 with the selection of
+	 * external storage as well, and the only writing route of this phase. All of
+	 * them travel together because they are one form: an admin presses one
+	 * button, and a route per switch would make a half saved form a state this
 	 * page can reach.
 	 *
 	 * Validated before anything is written, and refused as a whole. With one bad
@@ -353,8 +368,19 @@ final class SettingsController extends Controller {
 	 * Both lists are taken as mixed and judged by listOf() below, for the reason
 	 * written there (finding H-33-01 of audit 33-11).
 	 *
+	 * The ids of the admin mounts kept out of the index are the sixth value
+	 * (EXCL-04, plan 45-03). They are judged with the cap by
+	 * SettingsService::validate() before anything is written and travel in the
+	 * same SettingsService::save() call, so all or nothing still holds. A value
+	 * that is not a list is refused under the field name with out_of_range, the
+	 * code validate() gives a bad entry. A missing field (null) leaves the
+	 * stored list as it is: an admin.js of 1.6.5 in the cache of a browser does
+	 * not know the field and must not clear the exclusions with its next save.
+	 * The log counts the ids, it never names one.
+	 *
 	 * @param mixed $exclusions the prefix list as the form holds it
 	 * @param mixed $exclusionPatterns the pattern list as the form holds it
+	 * @param mixed $excludedExternalMounts the ids of the admin mounts not indexed, or null for unchanged
 	 */
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules')]
 	public function saveRules(
@@ -363,13 +389,26 @@ final class SettingsController extends Controller {
 		bool $indexTeamFolders = true,
 		bool $indexExternalStorage = false,
 		mixed $exclusionPatterns = [],
+		mixed $excludedExternalMounts = null,
 	): DataResponse {
 		[$list, $listShape] = self::listOf($exclusions);
 		[$patterns, $patternShape] = self::listOf($exclusionPatterns);
 
-		$fieldErrors = $this->settingsService->validate([
-			SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
-		]);
+		$mounts = null;
+		$mountShape = false;
+		if ($excludedExternalMounts !== null) {
+			[$mounts, $shape] = self::listOf($excludedExternalMounts);
+			$mountShape = $shape !== [];
+		}
+
+		$fields = [SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes];
+		if ($mounts !== null) {
+			$fields[SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS] = $mounts;
+		}
+
+		$fieldErrors = $mountShape
+			? [SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS => SettingsService::ERROR_OUT_OF_RANGE]
+			: $this->settingsService->validate($fields);
 		$listErrors = $listShape !== [] ? $listShape : $this->exclusionService->validate($list);
 		$patternErrors = $patternShape !== [] ? $patternShape : $this->exclusionService->validatePatterns($patterns);
 
@@ -381,6 +420,7 @@ final class SettingsController extends Controller {
 				'fields' => count($fieldErrors),
 				'exclusions' => count($listErrors),
 				'exclusionPatterns' => count($patternErrors),
+				'excludedExternalMounts' => is_array($mounts) ? count($mounts) : 0,
 			]);
 
 			return new DataResponse(
@@ -417,11 +457,17 @@ final class SettingsController extends Controller {
 			// from this request: the controller validated the same list above
 			// with the same rules, and nothing about the list depends on a value
 			// another request could move.
-			$savedFieldErrors = $this->settingsService->save([
+			$save = [
 				SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
 				'indexTeamFolders' => $indexTeamFolders,
 				'indexExternalStorage' => $indexExternalStorage,
-			]);
+			];
+			// Only when the field came: a missing field leaves the stored
+			// list as it is (T-45-14).
+			if ($mounts !== null) {
+				$save[SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS] = $mounts;
+			}
+			$savedFieldErrors = $this->settingsService->save($save);
 			$savedListErrors = $savedFieldErrors === [] ? $this->exclusionService->save($list) : [];
 			// The patterns are written last and only after both writes above
 			// held. Like the prefixes, nothing about them depends on a value
@@ -437,6 +483,7 @@ final class SettingsController extends Controller {
 					'fields' => count($savedFieldErrors),
 					'exclusions' => count($savedListErrors),
 					'exclusionPatterns' => count($savedPatternErrors),
+					'excludedExternalMounts' => is_array($mounts) ? count($mounts) : 0,
 				]);
 
 				return new DataResponse(
@@ -536,7 +583,8 @@ final class SettingsController extends Controller {
 
 	/**
 	 * The parts of the rules an admin can change, as AdminViewService::rules()
-	 * reads them: folders, patterns, cap and the two switches. The limits and
+	 * reads them: folders, patterns, cap, the two switches and the external
+	 * storage kept out (plan 45-03). The limits and
 	 * the remembered container ceiling stay out, because they are not part of
 	 * what an admin saved.
 	 *
@@ -550,6 +598,7 @@ final class SettingsController extends Controller {
 			'maxFileBytes' => $rules['maxFileBytes'] ?? 0,
 			'indexTeamFolders' => $rules['indexTeamFolders'] ?? true,
 			'indexExternalStorage' => $rules['indexExternalStorage'] ?? false,
+			'excludedExternalMounts' => $rules['excludedExternalMounts'] ?? [],
 		];
 	}
 

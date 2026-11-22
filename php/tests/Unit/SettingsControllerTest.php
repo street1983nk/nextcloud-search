@@ -242,32 +242,103 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame(1_800_000_000, $this->values[SettingsService::KEY_RULES_CHANGED_AT] ?? null);
 	}
 
-	/** @return array<string, array{list<string>, int, bool, bool, list<string>}> */
+	/** @return array<string, array{list<string>, int, bool, bool, list<string>, list<int>|null}> */
 	public static function everyRuleThatCanChange(): array {
 		return [
-			'a folder' => [['Archiv', 'Neu'], self::CAP, true, false, ['*.key']],
-			'a pattern' => [['Archiv'], self::CAP, true, false, ['*.key', '*.tmp']],
-			'the cap' => [['Archiv'], 2 * self::CAP, true, false, ['*.key']],
-			'the Team Folder switch' => [['Archiv'], self::CAP, false, false, ['*.key']],
-			'the external storage switch' => [['Archiv'], self::CAP, true, true, ['*.key']],
+			'a folder' => [['Archiv', 'Neu'], self::CAP, true, false, ['*.key'], null],
+			'a pattern' => [['Archiv'], self::CAP, true, false, ['*.key', '*.tmp'], null],
+			'the cap' => [['Archiv'], 2 * self::CAP, true, false, ['*.key'], null],
+			'the Team Folder switch' => [['Archiv'], self::CAP, false, false, ['*.key'], null],
+			'the external storage switch' => [['Archiv'], self::CAP, true, true, ['*.key'], null],
+			// Plan 45-03: only the selection of external storage moves.
+			'the external storage kept out' => [['Archiv'], self::CAP, true, false, ['*.key'], [4, 9]],
 		];
 	}
 
 	/**
 	 * @param list<string> $exclusions
 	 * @param list<string> $patterns
+	 * @param list<int>|null $mounts
 	 */
 	#[DataProvider('everyRuleThatCanChange')]
-	public function testEveryPartOfTheRulesCountsAsAChange(array $exclusions, int $cap, bool $team, bool $external, array $patterns): void {
+	public function testEveryPartOfTheRulesCountsAsAChange(array $exclusions, int $cap, bool $team, bool $external, array $patterns, ?array $mounts): void {
 		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
 		$this->values[SettingsService::KEY_EXCLUSION_PATTERNS] = ['*.key'];
 		$this->values[SettingsService::KEY_MAX_FILE_BYTES] = self::CAP;
 		$this->values[SettingsService::KEY_INDEX_TEAM_FOLDERS] = true;
 		$this->values[SettingsService::KEY_INDEX_EXTERNAL_STORAGE] = false;
+		$this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS] = [];
 
-		$this->controller()->saveRules($exclusions, $cap, $team, $external, $patterns);
+		$this->controller()->saveRules($exclusions, $cap, $team, $external, $patterns, $mounts);
 
 		self::assertContains(SettingsService::KEY_RULES_CHANGED_AT, $this->writes);
+	}
+
+	// -- the external storage kept out (plan 45-03, EXCL-04) ------------------
+
+	public function testTheExcludedExternalMountsAreSavedAndAnswered(): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
+
+		$response = $this->controller()->saveRules(['Archiv'], self::CAP, true, true, [], [9, 4]);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertTrue($body['saved']);
+		self::assertSame([4, 9], $this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS]);
+		self::assertContains(SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS, $this->writes);
+		$rules = $body['rules'];
+		self::assertIsArray($rules);
+		self::assertSame([4, 9], $rules['excludedExternalMounts']);
+		// A changed selection marks the counters stale like every other rule.
+		self::assertSame(1_800_000_000, $this->values[SettingsService::KEY_SCAN_STALE_SINCE] ?? null);
+		self::assertSame(1_800_000_000, $this->values[SettingsService::KEY_RULES_CHANGED_AT] ?? null);
+	}
+
+	public function testWithoutTheFieldTheStoredSelectionStaysAsItWas(): void {
+		$this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS] = [7];
+
+		$response = $this->controller()->saveRules([], self::CAP, true, true, []);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertNotContains(SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS, $this->writes);
+		self::assertSame([7], $this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS]);
+		$rules = $body['rules'];
+		self::assertIsArray($rules);
+		self::assertSame([7], $rules['excludedExternalMounts']);
+	}
+
+	/** @return iterable<string, array{mixed}> */
+	public static function unusableMountSelections(): iterable {
+		yield 'a string' => ['x'];
+		yield 'a number' => [4];
+		yield 'a zero' => [[0]];
+		yield 'a negative id' => [[-3]];
+		yield 'a numeric string' => [['4']];
+	}
+
+	#[DataProvider('unusableMountSelections')]
+	public function testAnUnusableSelectionIsRefusedAndWritesNothing(mixed $value): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Alt'];
+		$this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS] = [7];
+
+		$response = $this->controller()->saveRules(['Archiv'], self::CAP, true, true, ['*.key'], $value);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertFalse($body['saved']);
+		self::assertSame(
+			[SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS => SettingsService::ERROR_OUT_OF_RANGE],
+			$body['fields'],
+		);
+		self::assertSame([], $body['exclusions']);
+		self::assertSame([], $body[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame([], $this->writes, 'a refused form wrote a key');
+		self::assertSame(['Alt'], $this->values[SettingsService::KEY_EXCLUSIONS]);
+		self::assertSame([7], $this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS]);
+		self::assertArrayNotHasKey(SettingsService::KEY_EXCLUSION_PATTERNS, $this->values);
+		self::assertSame([], $this->jobs);
+		$this->assertTheLogOnlyCounts();
 	}
 
 	public function testTheSameRulesSavedAgainAreNoChange(): void {
