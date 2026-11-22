@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-07-PLAN.md (READMEs DE/EN/FR mit den verlagerten Store-Inhalten, Gates auf die READMEs umgezogen, STORE-04)"
-last_updated: "2026-11-22T04:45:00.000Z"
-last_activity: "2026-11-22, 45-07 abgeschlossen: READMEs tragen Grenzen, Suchsprachen und Neuerungen 1.7.0, Faktenprüfung ohne Befund, info.xml-Gates der verlagerten Inhalte auf README-Gates umgezogen (lokal, nicht gepusht)"
+stopped_at: "45-08 am Checkpoint Task 2 (Owner-Freigabe Version 1.7.0), danach Task 3 (Freigabe CHANGELOG); Task 1 lokal committet (93996a4b, 53a11d81)"
+last_updated: "2026-11-22T06:00:00.000Z"
+last_activity: "2026-11-22, 45-08 Task 1: Version 1.7.0 in beiden Apps, Update-Probe ab v1.6.4/v1.6.5, CHANGELOG 1.7.0 DE/EN/FR, STOPP-Prüfung leer; wartet auf zwei Owner-Freigaben (lokal, nicht gepusht)"
 progress:
   total_phases: 2
   completed_phases: 1
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-07 von 16 abgeschlossen, nächster 45-08
+Plan: 45-07 von 16 abgeschlossen, 45-08 am Checkpoint (Task 1 fertig, Freigaben Version und CHANGELOG offen)
 Status: Executing
-Last activity: 2026-11-22, 45-07 abgeschlossen: READMEs DE/EN/FR mit den verlagerten Store-Inhalten und Fakten 1.7.0, Gates auf READMEs (fdfe1b70, 907baa2f, lokal)
+Last activity: 2026-11-22, 45-08 Task 1: Bump 1.7.0 und CHANGELOG 1.7.0 lokal (93996a4b, 53a11d81), Freigaben offen
 
 ## Performance Metrics
 
