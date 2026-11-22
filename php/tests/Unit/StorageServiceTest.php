@@ -87,6 +87,12 @@ final class StorageServiceTest extends TestCase {
 	/** A table whose query throws, to stand for a missing app or a broken dialect. */
 	private ?string $failing = null;
 
+	/** The tables tableExists() denies, to stand for an app never enabled. @var list<string> */
+	private array $missingTables = [];
+
+	/** Every table tableExists() was asked for. @var list<string> */
+	private array $tablesAsked = [];
+
 	/** The storage ids the mount list in force carries. @var list<int> */
 	private array $listed = [];
 
@@ -118,6 +124,13 @@ final class StorageServiceTest extends TestCase {
 
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->db->method('getQueryBuilder')->willReturnCallback(fn (): IQueryBuilder => $this->queryBuilder());
+		$this->db->method('tableExists')->willReturnCallback(
+			function (string $table): bool {
+				$this->tablesAsked[] = $table;
+
+				return !in_array($table, $this->missingTables, true);
+			},
+		);
 	}
 
 	/** @return \Generator<int, array{storage_id: int, root_id: int, overridden_root: int}> */
@@ -621,6 +634,54 @@ final class StorageServiceTest extends TestCase {
 
 		self::assertSame([21, 40], self::storageIdsOf($service->getMounts()));
 		self::assertTrue($service->isIndexedStorage(21));
+	}
+
+	public function testWithoutTheTableOfFilesExternalAStoredListExcludesNothingAndStallsNothing(): void {
+		// L-45-09-03 of audit 45-09: files_external was never enabled, so
+		// oc_external_mounts does not exist, and occ wrote ids anyway with the
+		// switch on. Without a guard query 1 threw, and with it getMounts(),
+		// isIndexedStorage() and classifyAbsent(): crawl, reconcile and events
+		// stalled (reproduced on 34.0.3, see 45-AUDIT.md). Without the table
+		// there is no admin mount, so the excluded set is empty.
+		$this->missingTables = ['external_mounts'];
+		$this->failing = 'external_mounts';
+		$this->storages = [21, 40];
+		$this->mounts[] = ['storage_id' => 21, 'mount_provider_class' => self::HOME];
+		$this->mounts[] = ['storage_id' => 40, 'mount_provider_class' => self::HOME];
+		$this->listed = [21, 40];
+
+		$service = $this->service(external: true, excludedMounts: [5]);
+
+		self::assertSame([21, 40], self::storageIdsOf($service->getMounts()));
+		self::assertTrue($service->isIndexedStorage(21));
+		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([21]));
+		self::assertSame([], array_values(array_filter($this->bands, static fn (array $band): bool => $band[0] === 'external_mounts')));
+		self::assertSame(['external_mounts'], $this->tablesAsked, 'asked once per request');
+		self::assertSame([], $this->logs, 'the ordinary state of an instance without files_external is not worth a log line');
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testWithTheTableInPlaceAFailingQueryIsNotSwallowed(): void {
+		// The guard asks for the table and nothing else: a database that fails
+		// with the table in place still fails loudly, so a broken query can
+		// never quietly put an excluded storage back into the index.
+		$this->failing = 'external_mounts';
+		$this->stageExternalMount(5, 1, 21);
+		$this->listed = [21, 40];
+
+		$service = $this->service(external: true, excludedMounts: [5]);
+
+		$this->expectException(\RuntimeException::class);
+		iterator_to_array($service->getMounts());
+	}
+
+	public function testWithAnEmptyListOrTheSwitchOffTheTableIsNotAskedFor(): void {
+		$this->missingTables = ['external_mounts'];
+		$this->listed = [21];
+
+		self::assertSame([21], self::storageIdsOf($this->service(external: true)->getMounts()));
+		self::assertSame([21], self::storageIdsOf($this->service(external: false, excludedMounts: [5])->getMounts()));
+		self::assertSame([], $this->tablesAsked);
 	}
 
 	public function testALongListIsAskedInBandsAndOncePerRequest(): void {

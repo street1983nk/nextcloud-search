@@ -682,7 +682,10 @@ indexierende externe Speicher" (EXCL-04).
   Liste.
 - **Ohne `files_external`** steht statt der Liste nur der Satz "Externer
   Speicher ist auf diesem Server nicht aktiviert.", ohne Admin-Speicher "Es
-  gibt keinen von Admins angelegten externen Speicher."
+  gibt keinen von Admins angelegten externen Speicher." War `files_external`
+  nie aktiviert, gibt es seine Tabelle `oc_external_mounts` nicht; eine per
+  `occ` gesetzte Liste schließt dann nichts aus und hält weder Crawl noch
+  Abgleich noch Dateiereignisse auf.
 
 Das Protokoll nennt dazu nur Zähler, nie Konfigurations-IDs, Einhängepunkte
 oder Pfade.

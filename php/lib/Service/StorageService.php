@@ -363,6 +363,8 @@ class StorageService {
 	 *
 	 * Empty, and without a single query, when the switch for external storage
 	 * is off (then the switch decides, D-45-04) or the stored list is empty.
+	 * Empty as well when the table oc_external_mounts does not exist, because
+	 * files_external was never enabled (L-45-09-03).
 	 * Otherwise three banded questions, each answered row by row again so the
 	 * decision does not rest on the dialect:
 	 * 1. oc_external_mounts: which of the stored ids are admin mounts
@@ -388,7 +390,16 @@ class StorageService {
 		$wanted = $this->settingsService->indexExternalStorage()
 			? $this->settingsService->excludedExternalMounts()
 			: [];
-		if ($wanted === []) {
+		// Without oc_external_mounts there is no admin mount at all: the table
+		// only comes with the first enabling of files_external, which is not
+		// enabled by default. occ can still write ids with the switch on, and
+		// query 1 would then throw on every request, which stalled the crawl,
+		// the reconcile and every event (L-45-09-03 of audit 45-09). Only the
+		// missing table is read as empty; any other failure of the queries
+		// below stays loud, so a broken database never quietly puts an
+		// excluded storage back into the index. No log line, the state is
+		// ordinary.
+		if ($wanted === [] || !$this->db->tableExists('external_mounts')) {
 			$this->excludedStorages = [];
 
 			return $this->excludedStorages;
