@@ -284,3 +284,284 @@ Am Stand nach den Regressionsfällen dieses Plans (2026-11-22):
 - Python in backend/: `ruff check .` grün, `ruff format --check .` 260 Dateien formatiert, pyright (latest) 0 Fehler, vulture grün.
 - pytest: test_php_supply_chain_gates.py (25), test_measurement_scripts.py, test_php_static_gates.py, test_php_trust_boundary.py, test_exclusion_path_space.py, test_admin_ui_contract.py zusammen 946 passed; migration_path, phase33/34/40/41_audit, probe_run, store_metadata, unified_search_plugin, workflow_tag_triggers, changelog_translations, public_artifacts, admin_locale, lockstep_versions zusammen 555 passed, 113 skipped; Extraktoren und feindselige Dateien 485 passed.
 - Baumhash PHP-Hälfte nach den Testfällen: 136 Dateien, 6638875f (Rezept und unabhängige Pipeline find, sort, sed, sha256sum gleich; Positivkontrolle git archive 92fd028a = ee8088b3).
+
+## Nachtrag 45-17 bis 45-22 (#59, V-45-10-02/03, E3)
+
+Plan 45-17 Task 1, 2026-11-22. Quellen am Tag, Nachbau auf v1.6.5 in den Wasserzeichen-Modi M1 bis M5 und die Tabelle vorher; die Gegenprobe nachher folgt in 45-20.
+
+### Quellen am Tag
+
+Abgerufen am 2026-11-22 per `gh api repos/nextcloud/<repo>/contents/<pfad>?ref=<tag>` (Accept raw), abgelegt unter `<scratchpad>/src59/<tag>/`. Neueste Version je Nextcloud-Hauptversion laut Tag-Liste und `appinfo/info.xml`: richdocuments v12.0.2 (`<nextcloud min-version="35" max-version="35"/>`), v11.1.3 (34 bis 34), v10.3.3 (33 bis 33); files_accesscontrol v6.0.1 (35), v5.0.1 (34), v4.0.2 (33). Die Kopien `rd/*.php` im Scratchpad sind byte-gleich mit v12.0.2 (SHA-256 SecureViewWrapper ead56095..., SecureViewService 4cbbdeac..., PermissionManager 6cb3f1f2..., Application 8041f61a...) bzw. `rd/fac.php` mit files_accesscontrol v6.0.1 lib/StorageWrapper.php (71bdddad...). Die in findling-59 installierte richdocuments 12.0.2 hat dieselben vier SHA-256 wie der Tag (`sha256sum` im Container gegen `src59/v12.0.2`).
+
+richdocuments, Datei und Zeile je Tag:
+
+| Stelle | v12.0.2 (NC 35) | v11.1.3 (NC 34) | v10.3.3 (NC 33) |
+|---|---|---|---|
+| Hook `OC_Filesystem::preSetup` -> addStorageWrapper | Application.php Z. 84 | Z. 84 | Z. 80 |
+| ohne `watermark_enabled` (Namensraum `files`) != 'no' kein Wrapper | Z. 139 | Z. 139 | Z. 132 |
+| `Filesystem::addStorageWrapper('richdocuments', ..., -10)` | Z. 143 | Z. 143 | Z. 136 |
+| Callback: `if (!\OC::$CLI && $mountPoint !== '/')` -> SecureViewWrapper um jeden Mount außer '/' | Z. 153 | Z. 153 | Z. 146 |
+| `namespace OCA\Richdocuments\Storage;` / `class SecureViewWrapper` | SecureViewWrapper.php Z. 9 / 22 | Z. 9 / 22 | Z. 9 / 22 |
+| `fopen()` ruft `$this->checkFileAccess($path)` | Z. 46-47 | Z. 46-47 | Z. 46-47 |
+| `private function checkFileAccess` | Z. 90 | Z. 90 | Z. 90 |
+| Bedingung `!isWOPIRequest() && getMethod() === 'GET' && shouldSecure($path, $this, false)` | Z. 94-96 | Z. 94-96 | Z. 94-96 |
+| `throw new ForbiddenException('Download blocked due the secure view policy', false)` | Z. 97 | Z. 97 | Z. 97 |
+| aktive Person `$this->userSession->getUser()?->getUID()` | SecureViewService.php Z. 58 | Z. 57 | Z. 57 |
+| `shouldWatermark($cacheEntry, $userId, $share, $storage->getOwner($path) ?: null)` | Z. 60 | Z. 59 | Z. 59 |
+| `shouldWatermark()` | PermissionManager.php Z. 174 | Z. 174 | Z. 174 |
+| nur richdocuments-Mimetypes (`getMimeTypes()`) | Z. 179 | Z. 179 | Z. 179 |
+| `$isUpdatable` aus Eintrag bzw. Freigabe | Z. 185-188 | Z. 185-188 | Z. 185-188 |
+| link-Modi nur bei `getShareType() === IShare::TYPE_LINK` | Z. 194-215 | Z. 194-215 | Z. 194-215 |
+| shareAll: `if ($userId === null \|\| $ownerId !== $userId) return true` | Z. 217-224 (221) | gleich | gleich |
+| shareRead: `&& !$isUpdatable` | Z. 226-228 | gleich | gleich |
+| shareDisabledDownload: `&& $isDisabledDownload` | Z. 230-232 | gleich | gleich |
+| shareTalkPublic: `$userId === null && TYPE_ROOM` | Z. 234-238 | gleich | gleich |
+| allGroups: `$userId !== null && ...` | Z. 240-247 | gleich | gleich |
+| allTags: Systemtag in `watermark_allTagsList` | Z. 248-257 | gleich | gleich |
+
+Unterschiede zwischen den Versionen (`diff` der vier Dateien): SecureViewWrapper.php ist in allen drei Tags byte-gleich (SHA-256 ead56095...). SecureViewService.php v12.0.2 hat gegenüber v11.1.3 nur eine Leerzeile mehr (v10.3.3 = v11.1.3). PermissionManager.php v11.1.3 = v12.0.2; v10.3.3 weicht in genau einer Zeile ab (Z. 183 `$fileId = $nodeOrCacheEntry->getId();` statt `(string)...`, ohne Wirkung auf die Bedingungen). Application.php: v11.1.3 -> v12.0.2 nur der Listener für gelöschte Tags (`TagDeletedEvent` statt `ManagerEvent::EVENT_DELETE`); v10.3.3 -> v11.1.3 neue Listener und Vorschau-Provider, dadurch verschobene Zeilen. Die GET- und die WOPI-Bedingung, die exakte Nachricht, Klasse, Namensraum, Funktionsname `checkFileAccess` und alle Modus-Bedingungen gelten unverändert in v10.3.3, v11.1.3 und v12.0.2. Watermark-Schlüssel stehen im App-Namensraum `files` (AppConfig.php v12.0.2 Z. 52 `WATERMARK_APP_NAMESPACE = 'files'`); Listen (`watermark_allTagsList`, `watermark_allGroupsList`) als kommagetrennte Zeichenkette (AppConfig.php Z. 98-103). Mimetypes (Capabilities.php v12.0.2 Z. 17 ff., 40 ff., 64 ff.): ODT, PDF, `text/plain`, `text/markdown` u. a., also alle drei Probe-Typen.
+
+Folgerung für den Trace: Die Ausnahme entsteht in `checkFileAccess` (Z. 97), aufgerufen aus `fopen` (Z. 47). `getTrace()[0]` ist damit der Frame von `checkFileAccess` (class `OCA\Richdocuments\Storage\SecureViewWrapper`, function `checkFileAccess`, line 47 als Aufrufstelle), `getLine()` ist 97. Die Meldung des Melders nennt "Line":47; das passt zur Aufrufstelle, nicht zu `getLine()` (am echten Log unten geprüft).
+
+files_accesscontrol v6.0.1:
+
+- CacheWrapper.php Z. 30-34 Maske ohne READ, CREATE, UPDATE, DELETE; Z. 38-56 `formatCacheEntry()` ruft `Operation::checkFileAccess(..., 0)` und nimmt bei `ForbiddenException` die Bits per Maske weg (Z. 52-53). Damit löst die gesperrte Person den Knoten ohne Lesebit auf; `SearchService::readableFile()` gibt null, das Gateway antwortet 404 bzw. readerOf überspringt die Person (unreadable).
+- StorageWrapper.php Z. 103-110 `isReadable()` false bei Sperre; Z. 306-312 `getCache()` legt den CacheWrapper um.
+- Abweichung von der Annahme des Plans ("keine ForbiddenException beim fopen"): StorageWrapper.php Z. 241-253 `fopen()` ruft `checkFileAccess($path, false, PERMISSION_READ)` und kann damit sehr wohl werfen, `Operation.php` Z. 118 `throw new ForbiddenException('Access denied by access control', false)`. Erreicht wird dieser Wurf nur, wenn der Knoten zuvor lesbar aufgelöst wurde, also wenn die Regel bei der Auflösung (CacheWrapper, `requiredPermissions` 0) anders entscheidet als beim Öffnen (`PERMISSION_READ`), etwa eine Regel mit Rechte-Operation statt `deny`. Für den Entwurf von 45-17 heißt das: diese Ausnahme ist "eine andere ForbiddenException" (Nachricht und Ursprungs-Frame passen nicht zu Secure View) und führt fail-closed zu 403 policy ohne erneutes Öffnen. Das ist gewollt; die Bewertung gehört in die echte Probe von 45-20 Schritt C.
+
+### Nachbau vor dem Fix (v1.6.5)
+
+Stand: 2026-11-22 10:15 bis 11:42 UTC, Repo-Kopf 15fef4aa (Freigaben 45-17), Nachbau aus dem Worktree `<scratchpad>/wt-165` am Tag v1.6.5 (06a0d7c8c9a33e7cce599c1c834d66a902ad0ce2), Begleit-App per Bind-Mount von `wt-165/php`, Backend als Host-Prozess aus `wt-165/backend` (eigene venv, `uv sync --frozen`), Speicher `<scratchpad>/state-59/storage`. Docker seriell, vor dem Start `test -z "$(docker ps -q)"` leer. Passwörter und Secrets ausgelassen.
+
+Aufbau:
+
+```
+$ git worktree add <scratchpad>/wt-165 v1.6.5      ->  HEAD is now at 06a0d7c8 chore(release): version 1.6.5 in both apps
+$ (wt-165/backend) uv sync --frozen
+$ docker compose -f <scratchpad>/compose-59.yaml -p findling-59 up -d
+  (Kopie von scripts/dev/compose.yaml: name findling-59, container_name findling-59, Image nextcloud:35.0.3-apache, Port 8091, Volume findling-59-html, ./wt-165/php -> custom_apps/findling)
+$ curl -s http://localhost:8091/status.php
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"35.0.3.2","versionstring":"35.0.3",...}
+$ occ app:install richdocuments
+Error: Cannot write into "apps" directory. ...
+  (Docker legt custom_apps für den Bind-Mount als root an; nur das Verzeichnis selbst: chown www-data:www-data /var/www/html/custom_apps)
+$ occ app:install richdocuments      ->  richdocuments 12.0.2 installed / richdocuments enabled
+$ sha256sum lib/Storage/SecureViewWrapper.php lib/Service/SecureViewService.php lib/PermissionManager.php lib/AppInfo/Application.php   (im Container)
+ead56095...  4cbbdeac...  6cb3f1f2...  8041f61a...   (gleich dem Tag v12.0.2, siehe Quellen am Tag)
+$ occ app:install groupfolders       ->  groupfolders 23.0.1 installed
+$ occ app:list (Auszug)              ->  app_api 35.0.0, findling 1.6.5, groupfolders 23.0.1, richdocuments 12.0.2; admin_audit disabled; spreed und files_accesscontrol nicht installiert
+$ FINDLING_PORT=8091 sh <scratchpad>/register59.sh   (Kopie von scripts/dev/register-exapp.sh mit REPO_ROOT=wt-165, COMPOSE_FILE=compose-59.yaml, RUN_DIR=state-59)
+registering version 1.6.5 with 6 routes from backend/appinfo/info.xml
+ExApp findling_backend deployed successfully.
+```
+
+Zwei Umgebungsschritte, ohne die das Host-Backend nichts indexiert: (1) `state-59/storage` musste angelegt werden (`the enable could not be written to the volume, an FileNotFoundError`); (2) das Wortlisten-Artefakt `dict/de.txt` aus `.dev/storage/dict` kopiert, Digest `b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0` wie in docs/german-analyzer.md (sonst `indexing pass ended in an unexpected FileNotFoundError`, docs/dev-setup.md Schritt 1). Kein Tesseract auf dem Host: die acht Beispielbilder von admin enden `failed(ocr_unavailable)`, die Probedateien haben eine Textebene und sind davon nicht berührt.
+
+Saat (`<scratchpad>/seed59.sh`, `share59.sh`, Dateien aus `gen59.py`): `occ background:cron`, `skeletondirectory` und `templatedirectory` leer, Nutzer alice, bob, carol, dave; Uploads per WebDAV (je HTTP 201); Freigaben per OCS an alice; Gruppen tf-lesen (alice, bob, carol), gm-lesen (alice, dave), gm-schreiben (bob), wz-gruppe (alice, bob, dave); Team Folder 1 `TF-lesen` (tf-lesen: permissions 1; zum Hochladen kurz schreibend, danach nur lesend) und 2 `TF-gemischt` (gm-lesen 1, gm-schreiben 7). Eindeutige Wörter: b1 `Wasserzeichenprobe59a`, b2 `...59b`, b3 `...59c`, d1 `...59d`, d2 `...59e`, d3 `...59f`, `Positivkontrolle59`, `Eigenprobe59`, `Leseprobe59`, tf1 `Teamordnerprobe59a`, tf2 `Teamordnerprobe59b`. Abweichung von der Planvorgabe nur bei der Positivkontrolle: `wz59-offen.odt` mit Download UND `permissions=3`, damit sie auch in M5 (shareRead) eine Positivkontrolle bleibt.
+
+```
+$ php /tmp/sql59.php "SELECT id, share_type, uid_owner, share_with, file_source, permissions, attributes FROM oc_share ORDER BY id"
+id=1 | share_type=0 | uid_owner=bob | share_with=alice | file_source=130 | permissions=1 | attributes=[["permissions","download",false]]
+id=2 | share_type=0 | uid_owner=bob | share_with=alice | file_source=133 | permissions=1 | attributes=[["permissions","download",false]]
+id=3 | share_type=0 | uid_owner=bob | share_with=alice | file_source=134 | permissions=1 | attributes=[["permissions","download",false]]
+id=4 | share_type=0 | uid_owner=dave | share_with=alice | file_source=141 | permissions=1 | attributes=[["permissions","download",false]]
+id=5 | share_type=0 | uid_owner=dave | share_with=alice | file_source=142 | permissions=1 | attributes=[["permissions","download",false]]
+id=6 | share_type=0 | uid_owner=dave | share_with=alice | file_source=143 | permissions=1 | attributes=[["permissions","download",false]]
+id=7 | share_type=0 | uid_owner=bob | share_with=alice | file_source=135 | permissions=3 | attributes=NULL
+id=8 | share_type=0 | uid_owner=bob | share_with=alice | file_source=137 | permissions=1 | attributes=NULL
+```
+
+Datei-IDs: 130 wz59-b1.odt, 133 wz59-b2.pdf, 134 wz59-b3.txt, 135 wz59-offen.odt, 136 wz59-eigen.odt, 137 wz59-lesen.odt (bob, Speicher 3); 141 wz59-d1.odt, 142 wz59-d2.pdf, 143 wz59-d3.txt (dave, Speicher 4); 152 wz59-tf1.odt (TF-lesen, Speicher 7); 153 wz59-tf2.odt (TF-gemischt, Speicher 8). Mimetypes 11 `application/vnd.oasis.opendocument.text`, 12 `application/pdf`, 22 `text/plain` (alle in `getMimeTypes()` von richdocuments). Systemtag für M3: `occ tag:add wz59-tag public` -> `{"id":"1","name":"wz59-tag","access":"public"}`, als bob per `PUT /remote.php/dav/systemtags-relations/files/<id>/1` an 130 und 136 (HTTP 201), `oc_systemtag_object_mapping`: 130 und 136 mit Tag 1.
+
+Mount-Cache-Probe (`php /tmp/mounts59.php <ids>`, CLI, `IUserMountCache::getMountsForFileId`, öffnet nichts), Anfang und Ende gleich bis auf carol:
+
+```
+130 | bob | /bob/ | OC\Files\Mount\LocalHomeMountProvider
+130 | alice | /alice/files/wz59-b1.odt/ | OCA\Files_Sharing\MountProvider
+(133, 134, 135, 137 gleich: bob /bob/ LocalHomeMountProvider, alice /alice/files/<name>/ Files_Sharing)
+136 | bob | /bob/ | OC\Files\Mount\LocalHomeMountProvider
+141 | dave | /dave/ | OC\Files\Mount\LocalHomeMountProvider
+141 | alice | /alice/files/wz59-d1.odt/ | OCA\Files_Sharing\MountProvider
+(142, 143 gleich)
+152 | bob | /bob/files/TF-lesen/ | OCA\GroupFolders\Mount\MountProvider
+152 | alice | /alice/files/TF-lesen/ | OCA\GroupFolders\Mount\MountProvider
+152 | carol | /carol/files/TF-lesen/ | OCA\GroupFolders\Mount\MountProvider     (erst am Ende; vor carols erster Anmeldung fehlte die Zeile)
+153 | bob | /bob/files/TF-gemischt/ | OCA\GroupFolders\Mount\MountProvider
+153 | alice | /alice/files/TF-gemischt/ | OCA\GroupFolders\Mount\MountProvider
+153 | dave | /dave/files/TF-gemischt/ | OCA\GroupFolders\Mount\MountProvider
+```
+
+Der Home-Mount trägt exakt `/<uid>/` mit `OC\Files\Mount\LocalHomeMountProvider` (Grundlage der Besitzererkennung in Task 3); Team-Folder-Mounts haben keinen Home-Mount, also keinen Besitzer.
+
+Ablauf je Modus (`<scratchpad>/mode59.sh <Modus> <schlüssel=wert>`): alle fünf Modus-Schlüssel (`watermark_shareAll`, `watermark_shareRead`, `watermark_shareDisabledDownload`, `watermark_allTags`, `watermark_allGroups`) im Namensraum `files` auf `no`, `watermark_enabled=yes`, dann nur die Schlüssel des Modus; `occ findling:index --restart -n`; zweimal `background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once` und `... StorageCrawlJob --stop_after 60`; warten, bis `scheduled` und `handed to the worker` 0 sind (höchstens 90 x 10 s); dann messen: `grep -c "secure view policy" nextcloud.log` vorher/nachher, Gateway-Anfragen aus dem Apache-Zugriffsprotokoll (`docker logs --since`, die URL trägt `userId` = Leser laut Claim), Backend-Zeilen, state.db (`state59.py`, nur lesend), `oc_findling_file_state`, Unified Search per OCS `GET /ocs/v2.php/search/providers/findling/search?term=<Wort>` als Besitzer, alice, carol (Zahl der `resourceUrl`). Ausgaben vollständig in `<scratchpad>/state-59/mode-<M>.txt`. Vor M2 zusätzlich M0 (Wasserzeichen aus) als Grundlinie. Die Listen-Schlüssel `watermark_allTagsList` (1) und `watermark_allGroupsList` (wz-gruppe) bleiben nach M3/M4 stehen; wirkungslos, solange der zugehörige Modus `no` ist.
+
+Endkonfiguration nach M1 (`occ config:list files | grep watermark`):
+
+```
+            "watermark_shareAll": "no",
+            "watermark_shareRead": "no",
+            "watermark_shareDisabledDownload": "yes",
+            "watermark_allTags": "no",
+            "watermark_allGroups": "no",
+            "watermark_enabled": "yes",
+            "watermark_allTagsList": "1",
+            "watermark_allGroupsList": "wz-gruppe"
+```
+
+Aktive Person beim fopen (temporäre Probe nur im Worktree `wt-165`, nie im Repo: eine Zeile `$this->logger->error('PROBE59 active user at fopen: ' . (\OCP\Server::get(\OCP\IUserSession::class)->getUser()?->getUID() ?? 'null') . ' file ' . $fileId);` direkt vor `$stream = $file->fopen('r');`, nur während M2, danach `git checkout -- php/lib/Controller/GatewayController.php`; Datei im Container danach ohne `PROBE59`, ohne CR-Zeichen SHA-256 db26d2c0... wie `git show v1.6.5:php/lib/Controller/GatewayController.php`):
+
+```
+      2 "message":"PROBE59 active user at fopen: null file 130"
+      2 "message":"PROBE59 active user at fopen: null file 136"
+      2 "message":"PROBE59 active user at fopen: null file 152"
+      (jede gelesene Datei: null, auch 136 mit Leser bob)
+```
+
+Ein echter Secure-View-Logeintrag (`php /tmp/svlog59.php 1`, M2):
+
+```
+time=2026-11-22T10:37:53+00:00 app=findling url=/ocs/v2.php/apps/findling/files/141?userId=alice message=Findling: unknown error reading a file
+  Exception=OCP\Files\ForbiddenException Message=Download blocked due the secure view policy File=SecureViewWrapper.php Line=97
+  Trace[0] class=OCA\Richdocuments\Storage\SecureViewWrapper function=checkFileAccess file=SecureViewWrapper.php line=47
+  Trace[1] class=OCA\Richdocuments\Storage\SecureViewWrapper function=fopen file=View.php line=1233
+  Trace[2] class=OC\Files\View function=basicOperation file=View.php line=1062
+```
+
+Damit ist die Erkennung aus E1 am echten Request belegt: Nachricht exakt, `getTrace()[0]` mit class `OCA\Richdocuments\Storage\SecureViewWrapper` und function `checkFileAccess`. Die "Line":47 aus #59 ist die Zeile des Ursprungs-Frames, `getLine()` ist 97.
+
+M0 (Wasserzeichen aus, Grundlinie): alle elf Gateway-Anfragen 200 (130, 133, 134, 135, 137, 141, 142, 143, 152, 153 mit `userId=alice`, 136 mit `userId=bob`), 0 Secure-View-Zeilen, state.db alle `indexed`, Treffer Besitzer und alice je 1, carol 0 (auch bei TF-lesen, siehe Befund I-45-17-04).
+
+M2 shareAll (10:37 bis 10:55 UTC):
+
+```
+-- secure view policy im nextcloud.log nachher: 56 (Differenz 56)
+      2 GET /ocs/v2.php/apps/findling/files/130?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/133?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/134?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/135?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/136?userId=bob 500
+      1 GET /ocs/v2.php/apps/findling/files/137?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/141?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/142?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/143?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/152?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/153?userId=alice 500
+      3 WARNING:findling.worker.poller:content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage
+      1 WARNING:findling.worker.poller:content gateway refused 9 files of this pass with http status 500 from 2 storages, taken as an outage
+      2 WARNING:findling.worker.poller:indexing pass stopped, the content gateway is unavailable, 27 rows handed back, 5 charged
+-- state.db: alle elf failed | gateway_error (attempts 1 oder 2)
+```
+
+Die 56 Zeilen sind 16 Anfragen auf Probedateien und 40 auf Office-, PDF- und Textdateien von admin (je eine "refused one file, http status 500"); die Bilder von admin (PNG, JPG) wurden nicht abgelehnt (kein richdocuments-Mimetype).
+
+M3 allTags (Tag 1 an 130 und 136, 10:57 bis 10:59 UTC): Differenz 2; `130?userId=alice 500`, `136?userId=bob 500`, alle übrigen neun 200; state.db 130 und 136 `failed | gateway_error | attempts=3`, Rest `indexed`; `oc_findling_file_state` 130 und 136 `failed | gateway_error`.
+
+M4 allGroups (wz-gruppe: alice, bob, dave; 10:59 bis 11:02 UTC): Differenz 0, alle elf 200, alle `indexed`. Positivkontrolle, dass der Modus für angemeldete Personen greift (WebDAV-Download):
+
+```
+M4 WebDAV GET als alice alice/wz59-offen.odt -> HTTP 403
+M4 WebDAV GET als bob bob/wz59-eigen.odt -> HTTP 403
+M4 WebDAV GET als carol carol/TF-lesen/wz59-tf1.odt -> HTTP 200
+M4 WebDAV GET als alice alice/TF-lesen/wz59-tf1.odt -> HTTP 403
+```
+
+M5 shareRead (11:02 bis 11:21 UTC): Differenz 14; 500 für 130, 133, 134, 137, 141, 142, 143, 152, 153 (alle `userId=alice`), 200 für 135 (`permissions=3`) und 136 (`userId=bob`); zweimal "refused 5 files ... from 2 storages, taken as an outage"; state.db die neun `failed | gateway_error`, 135 und 136 `indexed`. Gegenprobe per WebDAV:
+
+```
+M5 WebDAV GET als bob bob/TF-gemischt/wz59-tf2.odt -> HTTP 200
+M5 WebDAV GET als alice alice/TF-gemischt/wz59-tf2.odt -> HTTP 403
+M5 WebDAV GET als dave dave/TF-gemischt/wz59-tf2.odt -> HTTP 403
+M5 WebDAV GET als bob bob/TF-lesen/wz59-tf1.odt -> HTTP 403
+M5 WebDAV GET als bob bob/wz59-lesen.odt -> HTTP 200
+M5 WebDAV GET als alice alice/wz59-lesen.odt -> HTTP 403
+```
+
+M1 shareDisabledDownload (11:21 bis 11:39 UTC), der Fall des Melders:
+
+```
+-- secure view policy im nextcloud.log nachher: 88 (Differenz 11)
+      2 GET /ocs/v2.php/apps/findling/files/130?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/133?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/134?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/135?userId=alice 200
+      1 GET /ocs/v2.php/apps/findling/files/136?userId=bob 200
+      1 GET /ocs/v2.php/apps/findling/files/137?userId=alice 200
+      2 GET /ocs/v2.php/apps/findling/files/141?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/142?userId=alice 500
+      2 GET /ocs/v2.php/apps/findling/files/143?userId=alice 500
+      1 GET /ocs/v2.php/apps/findling/files/152?userId=alice 200
+      1 GET /ocs/v2.php/apps/findling/files/153?userId=alice 200
+      2 WARNING:findling.worker.poller:content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage
+-- state.db
+file_id=130 | state=failed | reason=gateway_error | attempts=4
+file_id=133 | state=failed | reason=gateway_error | attempts=4
+file_id=134 | state=failed | reason=gateway_error | attempts=2
+file_id=135 | state=indexed | reason=None | attempts=3
+file_id=136 | state=indexed | reason=None | attempts=4
+file_id=137 | state=indexed | reason=None | attempts=2
+file_id=141 | state=failed | reason=gateway_error | attempts=4
+file_id=142 | state=failed | reason=gateway_error | attempts=4
+file_id=143 | state=failed | reason=gateway_error | attempts=4
+file_id=152 | state=indexed | reason=None | attempts=2
+file_id=153 | state=indexed | reason=None | attempts=2
+-- Nextcloud oc_findling_file_state
+file_id=134 | state=failed | reason=gateway_error
+```
+
+(130, 133, 141, 142, 143 lagen zur Messzeit belastet in der Warteschlange, `locked_at 2026-11-22 11:37:35, retries=2`, deshalb noch ohne Zeile in `oc_findling_file_state`.)
+
+Abgleich nach M1: Backend gestoppt (Log gesichert als `state-59/exapp-bis-M1.log`), mit `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1` und `FINDLING_RECONCILE_HOUR=12` (Ortsstunde des Host-Prozesses, `time.localtime()`, CET; 11:40 UTC) neu gestartet:
+
+```
+INFO:findling.worker.reconcile:reconcile round walked, mounts=7 slices=7 seen=60 stale=1 missing=0 given_up=0
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 134
+INFO:findling.worker.poller:pass finished, claimed=1 indexed=0 skipped=0 failed=1 unchanged=0 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+```
+
+attempts danach (11:41 UTC): 130, 133, 141, 142, 143 je 4 (in der Warteschlange gesperrt bis 11:52:35), 134 = 3. M1 bleibt als Endkonfiguration für 45-20 Schritt 0 stehen. Ende: Backend beendet (heartbeat 000), `docker compose -p findling-59 stop` -> `Container findling-59 Stopped`, `docker ps -q` leer, Volume `findling-59-html` und Worktree `wt-165` (sauber, 06a0d7c8) bleiben.
+
+### Modus x Leser -> Ergebnis vorher
+
+Spalten: Datei (ID), Leser laut Claim (`userId` der Gateway-URL), Antwort des Gateways, Urteil in state.db (Nextcloud-Seite: `oc_findling_file_state`, soweit geschrieben), Treffer Besitzer/alice/carol (Unified Search, Provider findling). Wichtig: Die Treffer-Spalte belegt in 1.6.5 kein Lesen. Nach `failed(gateway_error)` bleibt der früher indexierte Inhalt im Index und findbar (Befund I-45-17-02); alle Dateien waren in M0 indexiert. Maßgeblich sind Antwort und Urteil.
+
+| Modus und Fall | Datei | Leser laut Claim | Antwort | Urteil | Treffer B/a/c |
+|---|---|---|---|---|---|
+| M1 shareDisabledDownload, Freigabe ohne Download | 130, 133, 134 (bob), 141, 142, 143 (dave) | alice | 500, je eine Secure-View-Zeile | failed(gateway_error), Durchlauf als Ausfall gewertet | 1/1/0 (Altbestand) |
+| M1, Positivkontrolle mit Download | 135 | alice | 200 | indexed | 1/1/0 |
+| M1, eigene Datei ohne Freigabe | 136 | bob | 200 | indexed | 1/0/0 |
+| M1, lesende Freigabe mit Download | 137 | alice | 200 | indexed | 1/1/0 |
+| M1, Team Folder | 152, 153 | alice | 200 | indexed | 152: 1/1/1, 153: 1/1/0 |
+| M2 shareAll, alle Probedateien | alle elf | alice (136: bob) | 500 | failed(gateway_error), Ausfall-Eskalation | wie M0 (Altbestand) |
+| M2, eigene Datei des Besitzers | 136 | bob | 500 | failed(gateway_error) | 1/0/0 (Altbestand) |
+| M3 allTags, getaggt und geteilt | 130 | alice | 500 | failed(gateway_error) | 1/1/0 (Altbestand) |
+| M3, getaggt, nur Besitzer | 136 | bob | 500 | failed(gateway_error) | 1/0/0 (Altbestand) |
+| M3, ohne Tag (Gegenkontrolle) | 133, 134, 135, 137, 141, 142, 143, 152, 153 | alice | 200 | indexed | wie M0, carol 1 bei 152 |
+| M4 allGroups, Gruppe alice, bob, dave | alle elf | alice (136: bob) | 200 | indexed | wie M3 |
+| M5 shareRead, lesende Freigabe | 130, 133, 134, 137, 141, 142, 143 | alice | 500 | failed(gateway_error), Ausfall-Eskalation | wie M0 (Altbestand) |
+| M5, Team Folder nur lesend für alle (TF-lesen) | 152 | alice | 500 | failed(gateway_error) | 1/1/1 (Altbestand) |
+| M5, Team Folder mit schreibendem Mitglied (TF-gemischt) | 153 | alice (bob schreibt) | 500 | failed(gateway_error) | 1/1/0 (Altbestand) |
+| M5, Gegenkontrollen | 135 (`permissions=3`), 136 | alice, bob | 200 | indexed | 1/1/0, 1/0/0 |
+
+carol ist Gegenkontrolle ohne Freigabe: 0 Treffer in jedem Modus für jede Datei außer TF-lesen, deren Mitglied sie ist (ab M3 1, nachdem ihr Mount im Cache stand).
+
+Quellenbewertung von `shouldWatermark` (PermissionManager.php v12.0.2) mit `userId null` (Gateway heute, belegt durch die Probe) und mit der lesenden Person in actAs (Entwurf E1):
+
+- M1 shareDisabledDownload (Z. 230-232): wirkt nur über eine Freigabe mit `download=false` (Z. 190-191), unabhängig von `userId`. null: alice über ihren Freigabe-Mount gesperrt, Beobachtung gleich. Lesende Person: Besitzer bob bzw. dave über den Home-Mount ohne Freigabe -> nicht gesperrt; alice in actAs weiterhin gesperrt. Erwartung 1.7.0: über den Besitzer indexiert.
+- M2 shareAll (Z. 217-224): null sperrt jeden Mount außer '/' für jeden richdocuments-Mimetype, auch den Besitzer (Beobachtung: 136 mit Leser bob 500, 40 Dateien von admin 500). Lesende Person: nur der Besitzer selbst (`$ownerId === $userId`, ownerId aus `$storage->getOwner($path)`) liest frei. Erwartung 1.7.0: Dateien mit Home-Mount über den Besitzer in actAs indexiert; Team Folder ohne Besitzer: jeder Kandidat ist nicht Besitzer -> policy_blocked.
+- M3 allTags (Z. 248-257): unabhängig von `userId`, greift für jeden Leser. null und lesende Person: gesperrt (Beobachtung 130 und 136). Erwartung 1.7.0 (E2): Besitzer in actAs abgelehnt -> sofort 403 policy, policy_blocked.
+- M4 allGroups (Z. 240-247): nur bei `userId !== null` und Mitgliedschaft. null: greift nie (Beobachtung: alles 200, Positivkontrolle WebDAV 403 für Mitglieder). Lesende Person: würde für Mitglieder greifen, wird in 1.7.0 aber nur nach einer Secure-View-Ablehnung erreicht (E1), also beim Indexieren wie heute nie. Offene Restfrage G1/G2.
+- M5 shareRead (Z. 226-228 mit Z. 185-188): sperrt, wenn der Cache-Eintrag des lesenden Mounts bzw. die Freigabe kein UPDATE trägt, unabhängig von `userId`. null: alice (nur lesend) gesperrt, Beobachtung gleich; 135 (Freigabe mit UPDATE) und 136 (Home) frei. Lesende Person: lesende Freigabe -> Besitzer über Home-Mount frei (Erwartung indexiert); TF-lesen: alle Mitglieder nur lesend, kein Besitzer -> alle Kandidaten gesperrt, policy_blocked (WebDAV-Gegenprobe bob 403); TF-gemischt: kein Besitzer, Kandidaten alphabetisch alice (gesperrt), bob (schreibend, WebDAV 200) -> indexiert über bob.
+- shareTalkPublic (Z. 234-238): nur bei `userId === null` UND Freigabetyp ROOM. Talk (spreed) ist nicht installiert, kein echter Fall. An der Quelle: eine ROOM-Freigabe erzeugt einen Mount für die Teilnehmenden (files_sharing `MountProvider.php` NC v35.0.3 Z. 63 und 382 `IShare::TYPE_ROOM`) und würde im Gateway heute wie shareAll für diesen Mount wirken; der Besitzer-zuerst-Weg aus 1.7.0 liest über den Home-Mount ohne Freigabe, dort greift shareTalkPublic nicht. In actAs (userId gesetzt) greift shareTalkPublic nie.
+- link-Modi (`watermark_linkAll`, `watermark_linkRead`, `watermark_linkSecure`, `watermark_linkTags`, Z. 194-215): nur bei `getShareType() === IShare::TYPE_LINK`. Link-Freigaben erzeugen keinen Mount im Mount-Cache: der files_sharing-MountProvider fragt nur USER, GROUP, CIRCLE, ROOM und DECK ab (Z. 60-64 und 379-383, kein TYPE_LINK). Das Gateway liest nur über Mounts aus dem Mount-Cache, also greifen die link-Modi beim Indexieren nie, weder mit null noch in actAs.
+
+Abweichung zwischen Quelle und Beobachtung: keine. Jede Beobachtung in M1 bis M5 entspricht der Bedingung an der Quelle mit `userId null`.
+
+### Befunde 45-17 (Nachbau)
+
+| ID | Schwere | Befund | Beleg | Empfehlung |
+|---|---|---|---|---|
+| I-45-17-01 | INFO, relevant für 45-18 | Ab fünf Ablehnungen mit gleichem Status aus zwei Speichern wertet 1.6.5 einen Durchlauf als Ausfall: Urteile verfallen, fünf Zeilen werden belastet und bleiben 900 s gesperrt (QueueMapper::LOCK_TIMEOUT). Das trat in M1, M2 und M5 auf und verlängert jeden Zyklus auf rund 15 Minuten. Der Kommentar zu GATEWAY_OUTAGE_MIN_STORAGES (poller.py v1.6.5) sagt "401 and 403 do not escalate at once" | Backend-Zeilen "refused 5 files of this pass with http status 500 from 2 storages, taken as an outage", `locked_at 11:37:35, retries=2` | In 45-18/45-20 belegen, dass 403 policy nicht als Ausfall eskaliert (Test und echter Lauf mit mehr als fünf gesperrten Dateien auf zwei Speichern) |
+| I-45-17-02 | INFO, relevant für 45-22 (E3) | Nach `failed(gateway_error)` bleibt früher indexierter Inhalt im Index und findbar. Eine Datei, die vor dem Einschalten des Wasserzeichens indexiert war, findet alice weiter über ihren alten Inhalt, obwohl sie jetzt unter Secure View steht (ob mit Ausschnitt, wurde hier nicht gemessen) | Treffer 1/1/0 in M1, M2, M5 trotz `failed` in state.db | In 45-22 (E3) berücksichtigen: die Unterdrückung der Ausschnitte muss auch für solche Altbestände gelten |
+| I-45-17-03 | INFO, Korrektur einer Plan-Annahme | files_accesscontrol wirft beim fopen sehr wohl eine ForbiddenException ("Access denied by access control"), wenn der Knoten zuvor lesbar aufgelöst wurde | StorageWrapper.php v6.0.1 Z. 241-253, Operation.php Z. 118 | Keine Änderung am Entwurf: fällt unter "jede andere ForbiddenException -> 403 policy" (fail-closed); in 45-20 Schritt C echt prüfen |
+| I-45-17-04 | INFO, vorbestehend | Der Mount-Cache kennt eine Person erst nach ihrem ersten Dateisystem-Aufbau: carol fehlte für TF-lesen bis zu ihrer ersten Anmeldung, und ihre ACL im Index fehlte bis zum nächsten Lesen der Datei. Für 1.7.0: eine solche Person ist auch kein Kandidat in readingOrder | Mount-Probe vorher/nachher, Treffer carol bei 152 erst ab M3 | Kein Fix in 45-17; im Docblock von ReaderCandidates nennen |
+| I-45-17-05 | INFO, relevant für 45-20 Schritt 0 und Frage d | attempts trägt den Verlauf aller Modi: am Ende von M1 stehen 130, 133, 141, 142, 143 schon bei 4, 134 nach dem Abgleich bei 3; auch indexierte Dateien haben attempts > 1 (136: 4) | state.db nach M1 und nach dem Abgleich | Die Serie in 45-20 Schritt 0 beginnt nicht bei 1; vor Schritt 0 den Stand neu lesen und die Erwartung daran ausrichten |
