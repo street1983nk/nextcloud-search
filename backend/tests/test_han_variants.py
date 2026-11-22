@@ -109,11 +109,23 @@ def test_a_quoted_shape_is_left_as_typed(index: Index) -> None:
     assert _found(index, '"臺灣"') == {4}
 
 
-def test_a_term_inside_parentheses_is_left_as_typed(index: Index) -> None:
+def test_a_term_with_a_bracket_attached_is_left_as_typed(index: Index) -> None:
     # The documented limit, shared with the umlaut variant: the rewrite looks at
-    # plain tokens, and a token with a parenthesis attached is not one. So the
-    # common shape inside a group does not reach the traditional one.
+    # plain tokens, and a token with a bracket attached is not one. So the common
+    # shape at the edge of a group does not reach the traditional one.
     assert add_umlaut_variants("(台灣)") == "(台灣)"
     assert add_umlaut_variants("(台灣 OR 日本)") == "(台灣 OR 日本)"
+    assert add_umlaut_variants("(a 台灣)") == "(a 台灣)"
     assert _found(index, "(台灣)") == set()
     assert _found(index, "(臺灣)") == {4}
+    assert _found(index, "(台灣 OR 日本)") == set()
+
+
+def test_a_term_between_spaces_inside_a_group_is_rewritten(index: Index) -> None:
+    # The other side of the limit: what counts is the token and not the group
+    # around it, so a term with spaces on both sides is rewritten inside brackets
+    # as well. The document writes 臺灣, so only the rewrite reaches it.
+    assert add_umlaut_variants("(a 台灣 b)") == "(a (台灣 OR 臺灣) b)"
+    assert add_umlaut_variants("(a kuendigung b)") == "(a (kuendigung OR kündigung) b)"
+    assert _found(index, "(日本 OR 台灣 OR 東京)") == {4}
+    assert _found(index, "(日本 OR 東京)") == set()

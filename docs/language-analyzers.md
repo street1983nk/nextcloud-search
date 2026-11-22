@@ -597,10 +597,11 @@ other one, the way it adds the umlaut to a written out umlaut
 (`findling.query.rewrite.han_variants`): 台灣 is searched as
 `(台灣 OR 臺灣)`. The table holds this one pair and grows only with a word it
 was needed for. A changed table needs no rebuild. Quoted segments are left as
-typed, like for the umlaut, and so is a term inside parentheses: the rewrite
-looks at plain tokens only, and `(台灣)` is not one, the same limit the umlaut
-variant has. The other gap: a term that mixes the shapes the other way round
-than the document (台灣臺北 against 臺灣台北) is not found through that term.
+typed, like for the umlaut, and so is a term with a bracket attached to it: the
+rewrite cuts at spaces and looks at plain tokens only. `(台灣)` and `(a 台灣)` are
+left alone, while `(a 台灣 b)` becomes `(a (台灣 OR 臺灣) b)`, the same limit the
+umlaut variant has. The other gap: a term that mixes the shapes the other way
+round than the document (台灣臺北 against 臺灣台北) is not found through that term.
 
 **Space.** One more filled chain, measured on 2026-11-15 through the real
 writer, `de,en` against `de,en,zh` on the same documents: the directory grows
