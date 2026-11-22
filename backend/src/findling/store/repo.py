@@ -222,6 +222,15 @@ SWEEP_MARK: Final = "storage_sweep_at"
 REFUSAL_RENEW_MARK: Final = "refusal_streaks_1_6_3"
 RENEW_DONE: Final = "done"
 
+# The same once more for 1.7.0 (issue #59, plan 45-18): 1.6.x judged the
+# refusal of the secure view of Nextcloud Office failed(gateway_error), so on an
+# instance with a watermark the streak of such a file is spent and the
+# reconcile never hands it to 1.7.0, which reads it as its owner. The same
+# renewal under a mark of its own, so a database that ran 1.6.3 or later, and
+# carries REFUSAL_RENEW_MARK already, gets it once as well. At most three more
+# requests per such file and database (T-45-69).
+REFUSAL_RENEW_MARK_1_7_0: Final = "refusal_streaks_1_7_0"
+
 # The renewal itself: attempts back to 1, the value a streak starts at in
 # _RECORD_SQL, so the stored refusal counts as the first one of a new streak and
 # the reconcile asks again up to its cap, exactly as after a fresh refusal. Only
@@ -391,6 +400,9 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
 # streak on the same etag, so a sharing violation or a file that was offline
 # is asked again a few times instead of staying unreadable for good, and a
 # change between 500 and 422 does not reset the cap.
+#
+# Since plan 45-18 (issue #59, owner 08:47) failed(policy_blocked), the verdict
+# of a 403 with X-Findling-Refusal: policy, is the third pair of that streak.
 _RECORD_SQL: Final = """
 INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
                    etag, content_hash, text_chars, state, reason, attempts, ocr_used,
@@ -412,9 +424,9 @@ ON CONFLICT(file_id) DO UPDATE SET
     state         = excluded.state,
     reason        = excluded.reason,
     attempts      = CASE
-        WHEN ((excluded.state = 'failed' AND excluded.reason = 'gateway_error')
+        WHEN ((excluded.state = 'failed' AND excluded.reason IN ('gateway_error', 'policy_blocked'))
               OR (excluded.state = 'skipped' AND excluded.reason = 'unreadable'))
-             AND NOT (((files.state = 'failed' AND files.reason = 'gateway_error')
+             AND NOT (((files.state = 'failed' AND files.reason IN ('gateway_error', 'policy_blocked'))
                        OR (files.state = 'skipped' AND files.reason = 'unreadable'))
                       AND files.etag IS excluded.etag)
         THEN 1
@@ -1577,9 +1589,10 @@ class Store:
         per page for the rows with an unmoved etag, banded like
         :meth:`known_skip_reasons` and for the same reason.
 
-        A refusal is failed(gateway_error) or skipped(unreadable), the
-        container verdict of a gateway 422 (D-43-16, plan 43-18): one streak,
-        one cap, no other reason.
+        A refusal is failed(gateway_error), skipped(unreadable), the
+        container verdict of a gateway 422 (D-43-16, plan 43-18), or
+        failed(policy_blocked), the verdict of a refusal by a rule (issue #59,
+        plan 45-18): one streak, one cap, no other reason.
         """
         if not file_ids:
             return set()
@@ -1594,7 +1607,7 @@ class Store:
             rows = self._conn.execute(
                 # Placeholders only, as in known_etags above.
                 "SELECT file_id FROM files WHERE deleted_at IS NULL "  # noqa: S608
-                "AND ((state = 'failed' AND reason = 'gateway_error') "
+                "AND ((state = 'failed' AND reason IN ('gateway_error', 'policy_blocked')) "
                 "OR (state = 'skipped' AND reason = 'unreadable')) "
                 f"AND attempts <= ? AND file_id IN ({placeholders})",
                 (limit, *band),
@@ -1603,21 +1616,35 @@ class Store:
         return candidates
 
     def renew_refusal_streaks(self) -> int | None:
-        """Give every spent refusal of 1.6.2 one new streak, once (plan 43-20).
+        """Give every spent refusal one new streak, once per mark (plans 43-20, 45-18).
 
-        See :data:`REFUSAL_RENEW_MARK`. One transaction reads the mark, resets
+        See :data:`REFUSAL_RENEW_MARK` (1.6.2 to 1.6.3) and
+        :data:`REFUSAL_RENEW_MARK_1_7_0` (1.6.x to 1.7.0, issue #59), in that
+        order. Each mark in a transaction of its own: it reads the mark, resets
         the rows and writes the mark, so the poller and the reconcile opening
         the same database at the same moment renew once and not twice, and a
         later start never touches a streak that ran up under this code. The
-        number of rows that moved, or None when the mark was already there.
+        number of rows that moved under the marks that ran, or None when both
+        marks were already there.
         """
+        renewed: int | None = None
+        for mark in (REFUSAL_RENEW_MARK, REFUSAL_RENEW_MARK_1_7_0):
+            rows = self._renew_refusal_streaks_once(mark)
+            if rows is not None:
+                renewed = rows if renewed is None else renewed + rows
+        return renewed
+
+    def _renew_refusal_streaks_once(self, mark: str) -> int | None:
+        """One renewal under one mark; the rows that moved, or None when the mark was there."""
         with self._transaction():
-            if self._conn.execute("SELECT 1 FROM meta WHERE key = ?", (REFUSAL_RENEW_MARK,)).fetchone() is not None:
+            if self._conn.execute("SELECT 1 FROM meta WHERE key = ?", (mark,)).fetchone() is not None:
                 return None
             renewed = self._conn.execute(_RENEW_REFUSALS_SQL).rowcount
-            self.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
-        # The count and nothing else: no id, no path.
-        _LOG.info("refusal streaks renewed once after the update, rows=%d", renewed)
+            self.write_meta(mark, RENEW_DONE)
+        # The count and the mark and nothing else: no id, no path. The count
+        # first, so the diagnosis of scripts/ci/coverage_e2e.sh, which greps
+        # "after the update, rows=", keeps matching.
+        _LOG.info("refusal streaks renewed once after the update, rows=%d mark=%s", renewed, mark)
         return renewed
 
     def rewind_reconcile_walk(self) -> None:

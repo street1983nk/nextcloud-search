@@ -124,6 +124,13 @@ GIVEN_UP_REASON: Final = "repeatedly_stuck"
 # outlasts three nights waits for the next change of the file or for
 # occ findling:index --restart. The admin page names the number in words, and
 # tests/test_admin_ui_contract.py binds the sentence to this constant.
+#
+# The same cap holds for failed(policy_blocked), a refusal by a rule (issue
+# #59, owner 08:47: "wie gateway_error bis 3 Nächte" in 45-FREIGABEN.md): one
+# streak with gateway_error and skipped(unreadable) on the same etag, and the
+# remedy of that reason binds the same three to this constant. A watermark that
+# is lifted is picked up within three nights, one that stays costs four
+# requests per version.
 GATEWAY_ERROR_RETRIES: Final = 3
 
 # The verdict of this container that is not an end state, spelled out here for
@@ -287,9 +294,10 @@ def _open_state() -> Store | None:
     if not path.exists():
         return None
     store = open_store(path)
-    # The same once as in the poller (plan 43-20), and for the case where a
-    # round opens the database before the first pass did: the rows this round
-    # reads are then already renewed. Behind the backup hold as well.
+    # The same once as in the poller (plans 43-20 and 45-18, one renewal per
+    # mark), and for the case where a round opens the database before the first
+    # pass did: the rows this round reads are then already renewed. Behind the
+    # backup hold as well.
     store.renew_refusal_streaks()
     return store
 
@@ -782,7 +790,10 @@ class Reconcile:
         unmoved etag; a page without such a row asks nothing. A streak 1.6.2
         spent is renewed once on the first open (plan 43-20,
         Store.renew_refusal_streaks), so such a file reaches the gateway of
-        1.6.3 again and gets its verdict.
+        1.6.3 again and gets its verdict; the same once more for a streak 1.6.x
+        spent on a refusal of the secure view (plan 45-18, issue #59), so such
+        a file reaches the gateway of 1.7.0, which reads it as its owner.
+        failed(policy_blocked) is a refusal of the same kind and the same cap.
         """
         known = store.known_etags([row.file_id for row in rows])
         # Asked once per page rather than once per row: it is a cached lookup,

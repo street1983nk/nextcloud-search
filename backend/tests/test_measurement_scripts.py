@@ -2889,8 +2889,20 @@ PHP_TREE_HASH_TODAY = "34d00c1f0492eade5592ec7609157c6660d60ebc2fb98cc28f7084c27
 # normalised tree: 7249fe45... both ways, and the recipe and the same
 # pipeline over git archive of 006c2983 before the step gave 76a4f649...
 # (positive control).
+#
+# Moved on 2026-11-22 by plan 45-18, task 2 (issue #59): nc/client.py tells
+# a 403 with X-Findling-Refusal: policy apart as GatewayPolicyRefused,
+# worker/poller.py judges it failed(policy_blocked) and never counts it towards
+# an outage, store/repo.py takes policy_blocked into the streak of refusals and
+# renews the spent streaks of 1.6 once under the mark refusal_streaks_1_7_0,
+# and worker/reconcile.py says so in its comments. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83; the PHP pair does not move with this step.
+# Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: 9fa6c443... both ways, and the recipe and the same pipeline
+# over git archive of 7198db12 before the step gave 7249fe45... (positive
+# control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "7249fe45e517ec890f24204696a16304aa8e4aae0fb6cc0eb1f693b885e38387"
+PACKAGE_TREE_HASH_TODAY = "9fa6c443774e29e618878694b3b2542a76851bd7e845696f93ea47a467c12320"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

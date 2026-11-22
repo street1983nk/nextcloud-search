@@ -172,6 +172,17 @@ _OUTAGE_STATUS = frozenset({408, 429, 502, 503, 504})
 # fopen returned false. It still travels as GatewayRefused, the poller decides.
 GATEWAY_UNREADABLE_STATUS: Final = 422
 
+# The header the gateway sets on a 403 when a rule keeps every user it asked
+# from reading the file, and its one value (issue #59, plan 45-17):
+# GatewayController::REFUSAL_HEADER and ::REFUSAL_POLICY on the PHP side, held
+# against these two by tests/test_gateway_client.py. The secure view of Nextcloud
+# Office with a watermark that applies to the owner as well is the case of the
+# report. Read only on a 403 and only with exactly this value; HTTP header names
+# are case-insensitive, and httpx looks them up that way.
+GATEWAY_REFUSAL_HEADER: Final = "X-Findling-Refusal"
+GATEWAY_REFUSAL_POLICY: Final = "policy"
+_POLICY_STATUS: Final = 403
+
 # Fallbacks for the two environment variables the client library uses to
 # configure transport. Mirrored rather than invented, so an admin who sets
 # NPA_NC_CERT for a private CA or NPA_TIMEOUT_DAV for a slow disk keeps both
@@ -322,6 +333,20 @@ class GatewayRefused(NextcloudException):
         self.status = status
 
 
+class GatewayPolicyRefused(GatewayRefused):
+    """A rule keeps every user the gateway asked from reading this file (issue #59).
+
+    The gateway answered 403 with ``X-Findling-Refusal: policy``
+    (:data:`GATEWAY_REFUSAL_HEADER`), for example because the watermark of
+    Nextcloud Office applies to the owner as well, so the second open in the
+    name of the owner was refused like the first one. A subclass of
+    :class:`GatewayRefused`, so every place that handles a refusal handles this
+    one, the log line of the poller included; the poller judges it
+    failed(policy_blocked) and never counts it towards an outage. A 403 without
+    the header stays a plain GatewayRefused, failed(gateway_error) as before.
+    """
+
+
 async def _stream_file(
     client: httpx.AsyncClient,
     header_user: str,
@@ -354,6 +379,12 @@ async def _stream_file(
             # is the entire verdict either way.
             if response.status_code in _OUTAGE_STATUS:
                 raise NextcloudException(response.status_code, reason=f"content gateway refused file id {file_id}")
+            # The refusal by a rule is told apart by a header, never by the body.
+            if (
+                response.status_code == _POLICY_STATUS
+                and response.headers.get(GATEWAY_REFUSAL_HEADER) == GATEWAY_REFUSAL_POLICY
+            ):
+                raise GatewayPolicyRefused(response.status_code, file_id=file_id)
             raise GatewayRefused(response.status_code, file_id=file_id)
 
         async for chunk in response.aiter_bytes(CHUNK_SIZE):

@@ -1743,6 +1743,119 @@ def _by_the_grid(status: int, file_id: int) -> NextcloudException:
     return GatewayRefused(status, file_id=file_id)
 
 
+# -- a refusal by a rule is its own verdict and never an outage (#59, 45-18) ---
+
+
+def _policy(file_id: int) -> GatewayRefused:
+    """The refusal of the gateway when a rule keeps every user asked from the file.
+
+    Read through the module, so the RED state of the tests is a failed case and
+    no import error.
+    """
+    refused = nc_client_module.GatewayPolicyRefused(403, file_id=file_id)
+    assert isinstance(refused, GatewayRefused)
+    return refused
+
+
+async def test_a_refusal_by_a_rule_is_failed_policy_blocked_and_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    jobs = (_job(), _job(92, 4712), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4712: _policy(4712)})
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert (result.indexed, result.failed) == (2, 1)
+    assert queue.acknowledged == [([91, 93], {92: "policy_blocked"})]
+    assert queue.unlocked == []
+    row = store.file_row(4712)
+    assert row is not None
+    assert (row["state"], row["reason"], row["attempts"]) == ("failed", "policy_blocked", 1)
+    assert sorted(_stored_ids(index)) == [4711, 4713]
+
+
+@pytest.mark.parametrize(("policy", "escalates"), [(True, False), (False, True)])
+async def test_five_refusals_by_a_rule_over_three_storages_are_five_verdicts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, policy: bool, escalates: bool
+) -> None:
+    # Many files under one watermark are many files and no outage. The counter
+    # check: the same five as ordinary 403 over three storages escalate.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 3) for offset in range(5))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: _policy(4711 + offset) if policy else GatewayRefused(403, file_id=4711 + offset)
+        for offset in range(5)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    if escalates:
+        assert result.state == ROUND_GATEWAY_UNAVAILABLE
+        assert queue.acknowledged == []
+        return
+    assert result.state == ROUND_WORKED
+    assert result.failed == 5
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([], {91 + offset: "policy_blocked" for offset in range(5)})]
+    assert poller_module.gateway_unavailable_since() is None
+
+
+async def test_policy_refusals_from_two_storages_never_escalate_to_an_outage(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # I-45-17-01: 1.6.5 took five refusals of one status from two storages as an
+    # outage, the verdicts of the pass lapsed and five rows stayed charged for
+    # the lock timeout of 900 s (QueueMapper::LOCK_TIMEOUT). Six files under a
+    # watermark, three on each of two storages, all refused by a rule in one
+    # pass: no outage line, no lapse (every verdict acknowledged), no charge
+    # (nothing left locked: every row acknowledged, none unlocked or kept),
+    # and one line per file with the wording 45-20 looks for.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(6))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {4711 + offset: _policy(4711 + offset) for offset in range(6)}
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    with caplog.at_level("WARNING", logger="findling"):
+        result = await poller.run_once()
+
+    lines = [record.getMessage() for record in caplog.records]
+    assert [line for line in lines if "taken as an outage" in line] == []
+    assert len([line for line in lines if "refused one file, http status 403" in line]) == 6
+    assert result.state == ROUND_WORKED
+    assert result.failed == 6
+    assert queue.acknowledged == [([], {91 + offset: "policy_blocked" for offset in range(6)})]
+    assert queue.unlocked == []
+    assert poller_module.gateway_unavailable_since() is None
+    for offset in range(6):
+        row = store.file_row(4711 + offset)
+        assert row is not None
+        assert (row["state"], row["reason"]) == ("failed", "policy_blocked")
+
+    # The counter check in the same test: the same six files refused with 500
+    # escalate at the fifth, the pass lapses, the five refused rows stay
+    # charged and only the sixth, never fetched, goes back. So the test sees an
+    # escalation when there is one.
+    caplog.clear()
+    control = _FakeQueue(ClaimResult(jobs=jobs))
+    refused_500: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(500, file_id=4711 + offset) for offset in range(6)
+    }
+    second = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=control, bodies=refused_500)
+
+    with caplog.at_level("WARNING", logger="findling"):
+        escalated = await second.run_once()
+
+    assert escalated.state == ROUND_GATEWAY_UNAVAILABLE
+    assert control.acknowledged == []
+    assert control.unlocked == [[96]]
+    assert [record.getMessage() for record in caplog.records if "taken as an outage" in record.getMessage()] == [
+        "content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage"
+    ]
+
+
 @pytest.mark.parametrize("status", [408, 429, 502, 503, 504])
 async def test_a_proxy_status_is_an_outage_with_a_refund(
     store: Store, writer: IndexBatchWriter, tmp_path: Path, status: int

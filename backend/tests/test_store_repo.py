@@ -31,6 +31,7 @@ import pytest
 
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, expected_versions
 from findling.index.wordlist_nl import DUTCH_LIST_OFF
+from findling.store import repo as repo_module
 from findling.store.repo import (
     _ACL_DOCUMENTS_SQL,
     _ACL_ROWS_SQL,
@@ -892,6 +893,129 @@ def test_the_renewal_leaves_every_other_row_alone(store: Store) -> None:
     assert store.renew_refusal_streaks() == 0
 
     assert {file_id: _attempts(store, file_id) for file_id in (2, 3, 4, 5, 6)} == before
+
+
+# -- a refusal by a rule, failed(policy_blocked) (issue #59, plan 45-18) -------
+
+
+def test_entering_a_refusal_by_a_rule_starts_the_streak_at_one(store: Store) -> None:
+    for _ in range(3):
+        store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="h")
+
+    store.record(1, a_file(1, etag="aaa"), "failed", "policy_blocked")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="aaa"), "failed", "policy_blocked")
+    assert _attempts(store, 1) == 2
+    # A new etag is a new version and a new streak.
+    store.record(1, a_file(1, etag="bbb"), "failed", "policy_blocked")
+    assert _attempts(store, 1) == 1
+
+
+def test_a_refusal_by_a_rule_continues_the_streak_of_every_other_refusal(store: Store) -> None:
+    # Owner 08:47 ("policy_blocked wie gateway_error bis 3 Nächte"): one streak
+    # on one etag, whichever of the three refusals the gateway answered, so a
+    # file that switches between them does not reset the cap of the reconcile.
+    store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="h")
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="aaa"), "failed", "policy_blocked")
+    assert _attempts(store, 1) == 2
+    store.record(1, a_file(1, etag="aaa"), "skipped", "unreadable")
+    assert _attempts(store, 1) == 3
+    store.record(1, a_file(1, etag="aaa"), "failed", "policy_blocked")
+    assert _attempts(store, 1) == 4
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 5
+    store.record(2, a_file(2, etag="aaa"), "skipped", "unreadable")
+    store.record(2, a_file(2, etag="aaa"), "failed", "policy_blocked")
+    assert _attempts(store, 2) == 2
+    # A new etag starts anew from either side.
+    store.record(1, a_file(1, etag="bbb"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 1
+    store.record(2, a_file(2, etag="bbb"), "failed", "policy_blocked")
+    assert _attempts(store, 2) == 1
+
+
+def test_gateway_retry_candidates_hold_a_refusal_by_a_rule(store: Store) -> None:
+    for _ in range(3):
+        store.record(1, a_file(1, etag="aaa"), "failed", "policy_blocked")
+    for _ in range(4):
+        store.record(2, a_file(2, etag="aaa"), "failed", "policy_blocked")
+    store.record(3, a_file(3, etag="aaa"), "failed", "policy_blocked")
+    store.tombstone(3)
+
+    assert _attempts(store, 1) == 3
+    assert store.gateway_retry_candidates([1, 2, 3], GATEWAY_ERROR_RETRIES) == {1}
+
+
+def _renew_marks(store: Store) -> dict[str, str]:
+    """The two marks of the renewal as the meta table holds them."""
+    meta = store.read_meta()
+    return {mark: meta[mark] for mark in (REFUSAL_RENEW_MARK, repo_module.REFUSAL_RENEW_MARK_1_7_0) if mark in meta}
+
+
+def test_the_renewal_of_1_7_0_brings_a_spent_refusal_of_1_6_back_once(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    # #59: 1.6.x wrote the refusal of the secure view as failed(gateway_error),
+    # and on an instance that ran 1.6.3 or later the streak is spent. A database
+    # with the mark of 1.6.3 and without the one of 1.7.0 gets one renewal.
+    store.write_meta(REFUSAL_RENEW_MARK, "done")
+    _a_spent_refusal(store, 1)
+    store.record(2, a_file(2, etag="aaa"), "failed", "gateway_error")
+    for _ in range(GATEWAY_ERROR_RETRIES + 2):
+        store.record(3, a_file(3, etag="aaa"), "failed", "policy_blocked")
+        store.record(4, a_file(4, etag="aaa"), "failed", "corrupt")
+        store.record(5, a_file(5, etag="aaa"), "failed", "repeatedly_stuck")
+    _a_spent_refusal(store, 6)
+    store.tombstone(6)
+    before = {file_id: _attempts(store, file_id) for file_id in (3, 4, 5, 6)}
+
+    with caplog.at_level(logging.INFO, logger="findling"):
+        assert store.renew_refusal_streaks() == 1
+
+    assert _attempts(store, 1) == 1
+    assert _attempts(store, 2) == 1
+    assert {file_id: _attempts(store, file_id) for file_id in (3, 4, 5, 6)} == before
+    assert _renew_marks(store) == {REFUSAL_RENEW_MARK: "done", repo_module.REFUSAL_RENEW_MARK_1_7_0: "done"}
+    lines = [record.getMessage() for record in caplog.records if "refusal streaks renewed" in record.getMessage()]
+    assert lines == ["refusal streaks renewed once after the update, rows=1 mark=refusal_streaks_1_7_0"]
+
+    # Once: a second call renews nothing, also not a streak that ran up since.
+    _a_spent_refusal(store, 1)
+    spent = _attempts(store, 1)
+    assert store.renew_refusal_streaks() is None
+    assert _attempts(store, 1) == spent
+
+
+def test_a_database_without_either_mark_renews_under_both_with_a_line_each(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    _a_spent_refusal(store, 1)
+
+    with caplog.at_level(logging.INFO, logger="findling"):
+        assert store.renew_refusal_streaks() == 1
+
+    assert _attempts(store, 1) == 1
+    assert _renew_marks(store) == {REFUSAL_RENEW_MARK: "done", repo_module.REFUSAL_RENEW_MARK_1_7_0: "done"}
+    lines = [record.getMessage() for record in caplog.records if "refusal streaks renewed" in record.getMessage()]
+    assert lines == [
+        "refusal streaks renewed once after the update, rows=1 mark=refusal_streaks_1_6_3",
+        "refusal streaks renewed once after the update, rows=0 mark=refusal_streaks_1_7_0",
+    ]
+    assert store.renew_refusal_streaks() is None
+
+
+def test_the_renewal_of_1_7_0_alone_leaves_the_mark_of_1_6_3_to_its_own_run(store: Store) -> None:
+    # The two marks are independent: a database that has the mark of 1.7.0 and
+    # not the one of 1.6.3 (no release writes that, a hand edit could) still
+    # runs the renewal of 1.6.3 once, unchanged.
+    store.write_meta(repo_module.REFUSAL_RENEW_MARK_1_7_0, "done")
+    _a_spent_refusal(store, 1)
+
+    assert store.renew_refusal_streaks() == 1
+    assert _attempts(store, 1) == 1
+    assert _renew_marks(store) == {REFUSAL_RENEW_MARK: "done", repo_module.REFUSAL_RENEW_MARK_1_7_0: "done"}
 
 
 def test_refresh_meta_moves_the_crawl_facts_and_leaves_the_verdict_alone(store: Store) -> None:

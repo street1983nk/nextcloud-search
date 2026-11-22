@@ -1508,6 +1508,51 @@ def test_the_retry_candidates_are_asked_once_per_page(store: Store, monkeypatch:
     assert asked == []
 
 
+# -- the refusal by a rule and the renewal of 1.7.0 (issue #59, plan 45-18) ----
+
+
+@pytest.mark.parametrize(("times", "work"), [(1, True), (3, True), (4, False)])
+@pytest.mark.parametrize("reason", ["policy_blocked", "gateway_error"])
+def test_a_refusal_by_a_rule_is_retried_like_every_refusal(
+    store: Store, times: int, work: bool, reason: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Owner 08:47: policy_blocked like gateway_error, up to three nights. The
+    # Nextcloud side carries policy_blocked from a 1.7 companion, gateway_error
+    # from an older one (the fallback on the wire).
+    given_up: list[int] = []
+    monkeypatch.setattr(store, "give_up", lambda file_id, **_: given_up.append(file_id))
+    for _ in range(times):
+        store.record(10, a_file(10, etag="aaa"), "failed", "policy_blocked")
+
+    expected = [10] if work else []
+    assert _compare_one(store, a_row(10, etag="aaa", state="failed", reason=reason)) == expected
+    assert given_up == []
+
+
+@pytest.mark.parametrize(("renewed", "work"), [(True, True), (False, False)])
+def test_a_spent_refusal_of_1_6_is_work_again_after_the_renewal_of_1_7_0(
+    store: Store, renewed: bool, work: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #59: a file under the watermark that 1.6.x refused past the cap, on an
+    # etag that never moved, and that Nextcloud meanwhile wrote off as
+    # repeatedly_stuck. After the renewal its streak stands at 1 and the file is
+    # work again; the counter check without the renewal keeps attempts at 4
+    # and the file stays quiet.
+    given_up: list[int] = []
+    monkeypatch.setattr(store, "give_up", lambda file_id, **_: given_up.append(file_id))
+    store.write_meta(repo.REFUSAL_RENEW_MARK, repo.RENEW_DONE)
+    _refused(store, 10, reconcile_module.GATEWAY_ERROR_RETRIES + 1)
+    if renewed:
+        assert store.renew_refusal_streaks() == 1
+    row = store.file_row(10)
+    assert row is not None
+    assert row["attempts"] == (1 if renewed else reconcile_module.GATEWAY_ERROR_RETRIES + 1)
+
+    expected = [10] if work else []
+    assert _compare_one(store, a_row(10, etag="aaa", state=GIVEN_UP_STATE, reason=GIVEN_UP_REASON)) == expected
+    assert given_up == []
+
+
 def test_the_number_of_retries_is_three() -> None:
     # The admin page names the number in words (E-40-07-05); the contract test
     # of the catalogue holds the sentence to this constant.

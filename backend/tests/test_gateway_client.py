@@ -318,6 +318,113 @@ async def test_a_proxy_answer_stays_an_outage_and_is_no_refusal(status: int) -> 
     assert raised.value.status_code == status
 
 
+# -- a refusal by a rule: 403 with X-Findling-Refusal: policy (issue #59) -------
+
+PHP_GATEWAY_CONTROLLER = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Controller" / "GatewayController.php"
+
+
+class _CountingStream(httpx.AsyncByteStream):
+    """A response body that counts how often it was read from."""
+
+    def __init__(self) -> None:
+        self.reads = 0
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        self.reads += 1
+        yield b'{"error": "Reading this file is blocked by a rule."}'
+
+
+class _HeaderGateway:
+    """Answers with a prepared status and headers, and counts the reads of the body."""
+
+    def __init__(self, status: int, headers: dict[str, str]) -> None:
+        self._status = status
+        self._headers = headers
+        self.body = _CountingStream()
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(self._status, headers=self._headers, stream=self.body)
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self.handle))
+
+
+async def _refusal(status: int, headers: dict[str, str]) -> tuple[GatewayRefused, int]:
+    """The refusal the client raises for this answer, and how often the body was read."""
+    gateway = _HeaderGateway(status, headers)
+    async with gateway.client() as client:
+        with pytest.raises(GatewayRefused) as refused:
+            await fetch_file_stream(_app(), 4713, "testuser", io.BytesIO(), client=client)
+    return refused.value, gateway.body.reads
+
+
+@pytest.mark.parametrize("name", ["X-Findling-Refusal", "x-findling-refusal", "X-FINDLING-REFUSAL"])
+async def test_a_403_with_the_policy_header_is_a_refusal_by_a_rule(name: str) -> None:
+    refused, reads = await _refusal(403, {name: "policy"})
+
+    # Read through the module, so the RED state is a failed case and no import error.
+    assert isinstance(refused, client_module.GatewayPolicyRefused)
+    assert isinstance(refused, GatewayRefused)
+    assert refused.status == 403
+    assert "4713" in str(refused)
+    assert "testuser" not in str(refused)
+    # The body is never read, as for every other refusal.
+    assert reads == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "headers"),
+    [
+        (403, {}),
+        (403, {"X-Findling-Refusal": "Policy"}),
+        (403, {"X-Findling-Refusal": "other"}),
+        (403, {"X-Findling-Refusal": ""}),
+        (500, {"X-Findling-Refusal": "policy"}),
+        (422, {"X-Findling-Refusal": "policy"}),
+        (401, {"X-Findling-Refusal": "policy"}),
+    ],
+)
+async def test_any_other_refusal_stays_an_ordinary_one(status: int, headers: dict[str, str]) -> None:
+    # The header counts only on a 403 and only with the exact value; a 403
+    # without it is the old answer and stays failed(gateway_error).
+    refused, reads = await _refusal(status, headers)
+
+    assert type(refused) is GatewayRefused
+    assert refused.status == status
+    assert reads == 0
+
+
+def scan_refusal_constants(php_source: str, header: str, value: str) -> list[str]:
+    """The two constants of the refusal, compared with REFUSAL_HEADER and REFUSAL_POLICY of PHP."""
+    violations: list[str] = []
+    for name, ours in (("REFUSAL_HEADER", header), ("REFUSAL_POLICY", value)):
+        theirs = re.findall(rf"public const {name} = '([^']*)';", php_source)
+        if theirs != [ours]:
+            violations.append(f"GatewayController::{name} is {theirs}, the container reads {ours!r}")
+    return violations
+
+
+def test_the_refusal_header_is_the_one_the_gateway_sends() -> None:
+    source = PHP_GATEWAY_CONTROLLER.read_text(encoding="utf-8")
+
+    assert client_module.GATEWAY_REFUSAL_HEADER == "X-Findling-Refusal"
+    assert client_module.GATEWAY_REFUSAL_POLICY == "policy"
+    assert (
+        scan_refusal_constants(source, client_module.GATEWAY_REFUSAL_HEADER, client_module.GATEWAY_REFUSAL_POLICY) == []
+    )
+
+
+def test_the_refusal_gate_reports_another_value() -> None:
+    source = PHP_GATEWAY_CONTROLLER.read_text(encoding="utf-8")
+
+    violations = scan_refusal_constants(source, "X-Findling-Refusal", "rule")
+
+    assert len(violations) == 1
+    assert violations[0].startswith("GatewayController::REFUSAL_POLICY")
+    assert len(scan_refusal_constants(source.replace("'policy'", "'rule'"), "X-Findling-Refusal", "policy")) == 1
+
+
 def test_the_outage_statuses_are_exactly_the_five_proxy_answers() -> None:
     assert frozenset({408, 429, 502, 503, 504}) == client_module._OUTAGE_STATUS
     # The other side of the grid: these stay answers about one file.

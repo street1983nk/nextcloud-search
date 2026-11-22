@@ -747,3 +747,45 @@ GREEN:
 verify-Zeile von Task 1 wörtlich aus `<scratchpad>/v18_t1.sh` -> Exit 0: die neun pytest-Dateien `1262 passed, 12 skipped`; ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund; `bash scripts/dev/phpunit_docker.sh` -> `OK (1347 tests, 8616 assertions)` (`1347 tests executed, floor 28`); `bash scripts/dev/php_gates_docker.sh all` -> `psalm taint gate green against 3 nextcloud/ocp tags` (je `No errors found!`, `0 findings, probe found 3`), `php-cs-fixer: no violation`, zizmor und actionlint grün. Dazu `tests/test_poller.py tests/test_profile_wire.py tests/test_phase31_audit.py` -> `360 passed, 1 skipped`; die volle pytest-Suite vor den zwei Nachzüglern `7 failed, 7295 passed, 305 skipped` (nur der Fall aus test_phase31_audit.py), danach dieser Fall `98 passed` über die Datei.
 
 Baumhashes: php/ Rezept und unabhängige Pipeline `34d00c1f...` mit 141 Dateien, Positivkontrolle `git archive 006c2983` -> `ef4f5a19...` mit 141; backend/src/findling Rezept und Pipeline `7249fe45...` mit 83 Dateien, Positivkontrolle `git archive 006c2983` -> `76a4f649...` mit 83.
+
+Task 2 (Container-Verhalten), RED (nicht committet, nur neue Fälle; der Klassenname wird in den Tests über das Modul gelesen, damit RED ein roter Fall und kein Importfehler ist):
+
+`PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_gateway_client.py tests/test_poller.py tests/test_store_repo.py tests/test_reconcile.py` -> `18 failed, 526 passed, 1 skipped in 20.92s`, wörtlich:
+
+```
+FAILED tests/test_gateway_client.py::test_a_403_with_the_policy_header_is_a_refusal_by_a_rule[X-Findling-Refusal]
+FAILED tests/test_gateway_client.py::test_a_403_with_the_policy_header_is_a_refusal_by_a_rule[x-findling-refusal]
+FAILED tests/test_gateway_client.py::test_a_403_with_the_policy_header_is_a_refusal_by_a_rule[X-FINDLING-REFUSAL]
+FAILED tests/test_gateway_client.py::test_the_refusal_header_is_the_one_the_gateway_sends
+FAILED tests/test_poller.py::test_a_refusal_by_a_rule_is_failed_policy_blocked_and_the_pass_goes_on
+FAILED tests/test_poller.py::test_five_refusals_by_a_rule_over_three_storages_are_five_verdicts[True-False]
+FAILED tests/test_poller.py::test_policy_refusals_from_two_storages_never_escalate_to_an_outage
+FAILED tests/test_store_repo.py::test_entering_a_refusal_by_a_rule_starts_the_streak_at_one
+FAILED tests/test_store_repo.py::test_a_refusal_by_a_rule_continues_the_streak_of_every_other_refusal
+FAILED tests/test_store_repo.py::test_gateway_retry_candidates_hold_a_refusal_by_a_rule
+FAILED tests/test_store_repo.py::test_the_renewal_of_1_7_0_brings_a_spent_refusal_of_1_6_back_once
+FAILED tests/test_store_repo.py::test_a_database_without_either_mark_renews_under_both_with_a_line_each
+FAILED tests/test_store_repo.py::test_the_renewal_of_1_7_0_alone_leaves_the_mark_of_1_6_3_to_its_own_run
+FAILED tests/test_reconcile.py::test_a_refusal_by_a_rule_is_retried_like_every_refusal[policy_blocked-1-True]
+FAILED tests/test_reconcile.py::test_a_refusal_by_a_rule_is_retried_like_every_refusal[policy_blocked-3-True]
+FAILED tests/test_reconcile.py::test_a_refusal_by_a_rule_is_retried_like_every_refusal[gateway_error-1-True]
+FAILED tests/test_reconcile.py::test_a_refusal_by_a_rule_is_retried_like_every_refusal[gateway_error-3-True]
+FAILED tests/test_reconcile.py::test_a_spent_refusal_of_1_6_is_work_again_after_the_renewal_of_1_7_0[True-True]
+```
+
+Im RED grün und als Wächter behalten: `test_any_other_refusal_stays_an_ordinary_one` (403 ohne Kopf, Wert `Policy`, `other`, leer, 500/422/401 mit Kopf bleiben `GatewayRefused`, Body nie gelesen), `test_the_refusal_gate_reports_another_value` (Fehl-Sample des Kopf-Gates auf der PHP-Quelle: anderer Wert -> rot), die Gegenkontrolle `[False-True]` (fünf normale 403 über drei Speicher eskalieren), die gesperrten Fälle `[...-4-False]` und `[False-False]` der Reconcile-Tests.
+
+Fix: client.py `GATEWAY_REFUSAL_HEADER = "X-Findling-Refusal"`, `GATEWAY_REFUSAL_POLICY = "policy"`, `class GatewayPolicyRefused(GatewayRefused)`, der Kopf wird nur bei 403 und nur mit exakt diesem Wert gelesen (`response.headers.get`, httpx sucht Kopfnamen ohne Groß- und Kleinschreibung), der Body nie. poller.py: `_count_refusal` kehrt bei `GatewayPolicyRefused` vor jeder Zählung zurück (Docstring: viele Dateien unter einem Wasserzeichen sind viele Dateien, kein Ausfall; I-45-17-01), `_refusal_outcome` -> failed(policy_blocked), Kommentar an der Aufrufstelle; kein eigener except-Zweig, die Logzeile `content gateway refused one file, http status %d for file id %d` ist byte-gleich. repo.py: `_RECORD_SQL` und `gateway_retry_candidates` mit `reason IN ('gateway_error', 'policy_blocked')`, `REFUSAL_RENEW_MARK_1_7_0 = "refusal_streaks_1_7_0"` mit Kommentar, `renew_refusal_streaks()` erneuert je Marke einmal in eigener Transaktion (1.6.3 zuerst, unverändert), Rückgabe die Summe der Zeilen der gelaufenen Marken oder None; Logzeile `refusal streaks renewed once after the update, rows=%d mark=%s` (Zähler vor der Marke, damit die Diagnose in scripts/ci/coverage_e2e.sh mit `grep -o '... rows=[0-9]*'` weiter trifft). reconcile.py: nur Kommentare, `GATEWAY_ERROR_RETRIES` bleibt 3.
+
+GREEN:
+verify-Zeile von Task 2 wörtlich aus `<scratchpad>/v18_t2.sh` -> Exit 0: die sieben pytest-Dateien `784 passed, 1 skipped`; ruff `All checks passed!`, ruff format grün, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund; `bash scripts/dev/phpunit_docker.sh` -> `OK (1347 tests, 8616 assertions)`; `bash scripts/dev/php_gates_docker.sh all` -> Psalm-Taint gegen v33.0.9, v34.0.6, v35.0.3 je `No errors found!` und `0 findings, probe found 3`, `php-cs-fixer: no violation`, zizmor und actionlint grün. Volle pytest-Suite vor dem Commit: `7333 passed, 305 skipped, 3 warnings in 739.70s`.
+
+Mutationsgegenprobe (`<scratchpad>/mut18.sh`): die Rückkehr vor der Zählung für `GatewayPolicyRefused` entfernt (Bedingung wieder nur `refused.status == GATEWAY_UNREADABLE_STATUS`), `tests/test_poller.py -k "policy or refusal or outage"` -> `2 failed, 27 passed`:
+
+```
+FAILED tests/test_poller.py::test_five_refusals_by_a_rule_over_three_storages_are_five_verdicts[True-False]
+FAILED tests/test_poller.py::test_policy_refusals_from_two_storages_never_escalate_to_an_outage
+restored_identical=yes
+```
+
+Baumhash backend/src/findling: Rezept und Pipeline `9fa6c443...` mit 83 Dateien, Positivkontrolle `git archive 7198db12` -> `7249fe45...` mit 83; php/ unverändert `34d00c1f...` (141).

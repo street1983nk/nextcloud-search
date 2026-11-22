@@ -101,6 +101,7 @@ from findling.nc.client import (
     AsyncNextcloudApp,
     FileTooLargeError,
     GatewayClient,
+    GatewayPolicyRefused,
     GatewayRefused,
     ShortRead,
     fetch_file_stream,
@@ -1765,7 +1766,10 @@ class Poller:
             # outage (E-40-06-02, E-40-07-01); one storage stays file by file.
             # A 422 is the gateway saying it could not open the file (D-43-16):
             # skipped(unreadable), counted under "not readable" and never
-            # towards an outage.
+            # towards an outage. A GatewayPolicyRefused (issue #59) comes
+            # through this same branch: failed(policy_blocked), never counted
+            # towards an outage either, however many files one watermark
+            # covers (I-45-17-01).
             self._count_refusal(refused, job)
             self._collect(job, _refusal_outcome(refused), done, failed, verdicts)
             return 0
@@ -2577,8 +2581,15 @@ class Poller:
         escalates on other refusals, a 422 row goes back refunded with the
         unjudged rows and its verdict lapses with the abort (W11). Every other
         status escalates as in E-40-06-02 and E-40-07-01.
+
+        A refusal by a rule (:class:`GatewayPolicyRefused`, issue #59) returns
+        before any count as well: many files under one watermark are many
+        files and no outage. 1.6.5 counted them as ordinary 403 and took five
+        from two storages as an outage, so the verdicts lapsed and five rows
+        stayed locked for the lock timeout (I-45-17-01). The same rule as for
+        the 422 holds when the pass escalates on other refusals.
         """
-        if refused.status == GATEWAY_UNREADABLE_STATUS:
+        if refused.status == GATEWAY_UNREADABLE_STATUS or isinstance(refused, GatewayPolicyRefused):
             return
         self._refused_rows.add(job.queue_id)
         self._refused_jobs[job.queue_id] = job
@@ -2847,13 +2858,19 @@ def default_poller(*, marks_stamped: Callable[[], None] | None = None) -> Poller
 
 
 def _refusal_outcome(refused: GatewayRefused) -> ExtractionOutcome:
-    """The verdict of a refusal: skipped(unreadable) for a 422, failed(gateway_error) else.
+    """The verdict of a refusal: policy_blocked, unreadable or gateway_error.
 
-    Only the cannotOpen branch of the gateway answers 422 (D-43-16), so that
-    file is not readable for the user it was fetched for, which the admin page
-    counts under "not readable" (D-43-11). A 500 out of StorageNotAvailable, a
-    401, a 403 and every other status from 400 on stay failed(gateway_error).
+    A 403 with ``X-Findling-Refusal: policy`` (:class:`GatewayPolicyRefused`,
+    issue #59) is failed(policy_blocked): a rule keeps every user asked from
+    the file, and the admin page names it with its own remedy. Only the
+    cannotOpen branch of the gateway answers 422 (D-43-16), so that file is
+    not readable for the user it was fetched for, which the admin page counts
+    under "not readable" (D-43-11). A 500 out of StorageNotAvailable, a 401, a
+    403 without the header and every other status from 400 on stay
+    failed(gateway_error).
     """
+    if isinstance(refused, GatewayPolicyRefused):
+        return ExtractionOutcome.failed(Reason.POLICY_BLOCKED)
     if refused.status == GATEWAY_UNREADABLE_STATUS:
         return ExtractionOutcome.skipped(Reason.UNREADABLE)
     return ExtractionOutcome.failed(Reason.GATEWAY_ERROR)
