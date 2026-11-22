@@ -38,3 +38,25 @@ Entscheid E3 keine Textausschnitte unter Secure View 45-17: "Go mit Empfehlung" 
 Entscheid E4 secure-phase vor dem Tag 45-17: "Go mit Empfehlung" (2026-11-22 09:25, Claude-Code-Chat) Entscheid: ja, 45-16 vor 45-14
 
 Hinweis: Zeiten in UTC, wie vom Koordinator übergeben. Die Zeilen decken keinen Push, keinen Tag und keinen Kommentar; die Antwort auf #59 wird erst nach dem Store-Release in 45-15 gepostet, vorher gegen den fertigen Fix abgeglichen (45-21). E1: Findling öffnet eine Datei weiterhin ohne aktive Person und liest sie nur dann erneut in actAs (zuerst als Besitzer, ohne erkennbaren Besitzer als einer der übrigen Nutzer, höchstens 20), wenn das erste Öffnen nachweislich von der Secure View von Nextcloud Office abgelehnt wurde; die Audit-Protokolle nennen für diese Dateien die lesende Person. E2: Gilt das Wasserzeichen auch für den Besitzer, umgeht Findling die Sperre nicht, sondern antwortet mit 403 policy und dem Urteil policy_blocked. E3: Suchtreffer von Dateien, die für die suchende Person unter Secure View oder Wasserzeichen stehen, zeigen Name und Treffer ohne Textausschnitt; die Erkennung wird an der Quelle belegt oder in 45-22 per Owner-Checkpoint mit Optionen entschieden. E4: Die secure-phase (45-16) läuft vor dem Tag und der Store-Abgabe (45-14). Die Sätze zu E1 bis E4 sind aus dem Plan 45-17 (Abschnitte "Entscheid zum Ort und zur Form des Rückfalls" und Objective) gefasst, die Koordinator-Nachricht selbst lag dem Ausführer nicht im Wortlaut vor.
+
+Freigabe Texte #59 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: ja
+Freigabe Texte V-45-10-02 und V-45-10-03 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: ja, Form i
+Freigabe CHANGELOG-Zeilen 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: ja
+Entscheid allGroups 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: G1
+Entscheid Gate 1.6.3-Sätze 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: c1
+Entscheid Abgleich-Wartezeit 45-17: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: d1
+Freigabe Korrektur 59 45-21: "Go  und für foolfitz auch" (2026-11-22 11:52, Claude-Code-Chat) Entscheid: ja
+
+Freigegebener Wortlaut der Korrektur 59 (ersetzt im Entwurf unter `## #59` in 45-ANTWORTEN.md genau den zweiten Punkt unter "Fixed in 1.7.0:"):
+
+- If the secure view policy refuses the fetch, Findling retries it as the file's owner before giving up.
+
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben; das Zitat ist die Antwort des Owners auf die Vorlage des Koordinators mit allen Entscheiden "wie empfohlen" (Texte 1 bis 7 wörtlich wie im Checkpoint-Entwurf, V-45-10-02 Form i, allGroups G1, Gate c1, Wartezeit d1) und der Korrektur des #59-Satzes. Ein Nachbau-Weg (e) war nicht nötig, weil in M1, M2, M3 und M5 gesperrt wurde. Kein Push, kein Tag, kein Kommentar; die Antwort auf #59 bleibt bis nach dem Store-Release in 45-15 liegen. Der Zusatz "und für foolfitz auch" betrifft keinen Punkt dieses Checkpoints und ist hier nicht ausgelegt.
+
+Die Texte 1, 2, 3, 5, 6 und 7 gelten wörtlich wie im Plan 45-17 (Abschnitt "Texte für den Owner-Checkpoint"). Maßgeblich für 45-18 bis 45-20 sind im Einzelnen:
+
+- V-45-10-02, Form i: Bestätigungszeile "/Gemeinsam (ID 11), /Gemeinsam (ID 12)" über den vorhandenen Schlüssel `%1$s (ID %2$s)`, kein neuer Satz, keine CHANGELOG-Zeile.
+- G1: allGroups bleibt beim Indexieren wirkungslos wie in 1.6.5 (Öffnen außerhalb von actAs, allGroups greift laut Quelle nur bei gesetzter userId); dokumentiert, Mitglieder sehen durch 45-22 keine Textausschnitte. Task 3 bekommt keinen zusätzlichen Fall.
+- c1: Der Gate prüft die 1.6.3-Sätze nur gegen ihre Abnahme in docs/store-listing.md und führt SUPERSEDED_IN_1_7_0 mit dem alten unreadable-Satz.
+- d1: 45-20 Schritt 0 wartet die drei Abgleiche echt ab (je mindestens eine Stunde, zusammen etwa drei Stunden, keine Docker-Arbeit daneben).
+- Text 4, CHANGELOG [1.7.0] Fixed zu #59, FR (im Plan nur "inhaltsgleich", hier der vorgelegte Wortlaut): "Un fichier soumis au filigrane de Nextcloud Office, par exemple partagé sans téléchargement, est lu au nom de son propriétaire ou d'un autre utilisateur autorisé à le lire, au lieu de finir en « Fichier non récupérable » ; les journaux d'audit indiquent cet utilisateur pour cette lecture. Un fichier que le filigrane bloque pour tous les utilisateurs reçoit son propre motif sur la page d'administration (#59)."

@@ -11,7 +11,7 @@ You were right on every point: Findling picked the alphabetically first user who
 Fixed in 1.7.0:
 
 - The owner of a file is now tried first when they can see it, then everyone else in alphabetical order.
-- If the fetch is refused for one user, Findling tries the next one before giving up.
+- If the secure view policy refuses the fetch, Findling retries it as the file's owner before giving up.
 - A refusal by a policy is shown as such on the admin page instead of "storage was not available".
 
 Your two files should be indexed after the update. If they still show up under errors, please let me know.
