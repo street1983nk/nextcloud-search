@@ -194,7 +194,7 @@ Plans:
 - [x] 45-05-PLAN.md: Speicherliste unter dem Hauptschalter, Inline-Bestätigung, Senden, alle Kataloge (EXCL-04)
 - [x] 45-06-PLAN.md: Integrationsstrecke M-45-01, Push mit Owner-Freigabe, grüner Kopf
 - [x] 45-07-PLAN.md: READMEs DE/EN/FR mit verlagerten Pflichtinhalten und Faktenprüfung, Gates auf READMEs (STORE-04)
-- [ ] 45-08-PLAN.md: Version 1.7.0, CHANGELOG, Update-Probe ab 1.6.5, je eigene Owner-Freigabe (REL-07)
+- [x] 45-08-PLAN.md: Version 1.7.0, CHANGELOG, Update-Probe ab 1.6.5, je eigene Owner-Freigabe (REL-07)
 - [ ] 45-09-PLAN.md: Launch-Härtung und Audit, Digest-Gate, Push, audited_head (REL-07)
 - [ ] 45-10-PLAN.md: Volltest DE/EN/FR, Playwright 3 Breiten hell/dunkel, impeccable, Umlaut-Audit, gemeinsame Owner-Abnahme (REL-07)
 - [ ] 45-11-PLAN.md: Kurze Store-Texte beider Apps, Entwurf kurz vor dem Release, Einbau nach Freigabe (STORE-03)
@@ -217,7 +217,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 7/16 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 8/16 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 

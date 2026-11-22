@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "45-08 am Checkpoint Task 2 (Owner-Freigabe Version 1.7.0), danach Task 3 (Freigabe CHANGELOG); Task 1 lokal committet (93996a4b, 53a11d81)"
-last_updated: "2026-11-22T06:00:00.000Z"
-last_activity: "2026-11-22, 45-08 Task 1: Version 1.7.0 in beiden Apps, Update-Probe ab v1.6.4/v1.6.5, CHANGELOG 1.7.0 DE/EN/FR, STOPP-Prüfung leer; wartet auf zwei Owner-Freigaben (lokal, nicht gepusht)"
+stopped_at: "Completed 45-08-PLAN.md"
+last_updated: "2026-11-22T06:30:00.000Z"
+last_activity: "2026-11-22, 45-08 fertig: Version 1.7.0 und CHANGELOG 1.7.0 vom Owner freigegeben (A, 05:01 UTC), lokal, nicht gepusht"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 26
-  completed_plans: 17
-  percent: 65
+  completed_plans: 18
+  percent: 69
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-07 von 16 abgeschlossen, 45-08 am Checkpoint (Task 1 fertig, Freigaben Version und CHANGELOG offen)
+Plan: 45-08 von 16 abgeschlossen, als Nächstes 45-09
 Status: Executing
-Last activity: 2026-11-22, 45-08 Task 1: Bump 1.7.0 und CHANGELOG 1.7.0 lokal (93996a4b, 53a11d81), Freigaben offen
+Last activity: 2026-11-22, 45-08 abgeschlossen: Freigaben Version und CHANGELOG 1.7.0 (efd0deb3), lokal
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ Last activity: 2026-11-22, 45-08 Task 1: Bump 1.7.0 und CHANGELOG 1.7.0 lokal (9
 - v1.7: 45-05 in ca. 35 min laut Systemzeit inkl. ca. 15 min Docker (3 Tasks, ein Commit, 29 Dateien)
 - v1.7: 45-06 ab Task 2 in ca. 35 min laut Systemzeit inkl. ca. 30 min CI (3 Tasks, 2 Dateien)
 - v1.7: 45-07 in ca. 50 min laut Systemzeit (2 Tasks, 9 Dateien)
+- v1.7: 45-08 in ca. 45 min ohne Wartezeit auf die Freigaben (3 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -132,6 +133,7 @@ Last activity: 2026-11-22, 45-08 Task 1: Bump 1.7.0 und CHANGELOG 1.7.0 lokal (9
 - 45-05 (22.11.2026, ae57d083, ein Commit für drei Tasks): fieldset#findling-rules-mounts unter dem Hauptschalter (disabled bei aus, Hilfe/Aus-Satz getauscht ohne Neuladen), Leersatz, eigener Satz ohne files_external, "ID %s" bei duplicate; Bestätigungszeile ohne Zahl, nur bei Hauptschalter an, "Keep files indexed"/Escape setzen die neu geleerten Haken zurück; excludedExternalMounts letzter Schlüssel, ohne gerenderte Liste inForceMounts aus dem Bootstrap (T-45-21); ID nur aus data-mount-id, Einhängepunkt nur per textContent (Gate mit Fehl-Samples). Typnamen unübersetzt (Fachbegriffe). Hilfesatz-Schlüssel ohne "box" (POL-03): "Clear the tick of a storage ...". Schlüsselzahl de.json 380; Baumhash PHP 136/ee8088b3. EXCL-04 Complete (Playwright/impeccable und Markup-Probe in 45-10). Lokal, nicht gepusht.
 - 45-06 (22.11.2026, f95fdf86, 612b7c9e): Zyklen M-45-01 vor "M-32-02: cycle 3" (E1 per Mount-ID ausgeschlossen: 0 Zeilen ohne Stempel, E3 und keep36 unverändert; nach config:app:delete im nächsten regulären Abgleich wieder 1 Zeile). Owner-Freigabe Push "Ja" 03:47 UTC; Push edc08233..612b7c9e, alle neun Workflows grün (Integration 44982244176), kein Rerun. Commits 45-01 bis 45-05 damit gepusht.
 - 45-07 (22.11.2026, fdfe1b70, 907baa2f): READMEs DE/EN/FR mit Suchsprachen, Abschnitt Bekannte Grenzen direkt nach der Sprachzeile und den drei Neuerungen 1.7.0 ("ab 1.7.0"); Faktenprüfung 45-README-PRUEFUNG.md ohne Befund. Gates nach D-45-14: Messzahl genau einmal je README, info.xml nur noch höchstens eine; Grenzen, Sprachzeile, Doku-Vergleich, Share-Satz, Similar documents je README; Formatliste-gegen-Entwurf nur noch, wo eine Beschreibung die Liste trägt; Kern-Gates (Datenschutz, Connector, Umstiegs-Link) unverändert auf info.xml. docs/l10n-chinese.md: Schlüsselzahl 380, kein wörtliches U+2014. STORE-04 Complete, REL-07 README-Teil erledigt. Lokal, nicht gepusht.
+- 45-08 (22.11.2026, 93996a4b, 53a11d81, efd0deb3): Version 1.7.0 in beiden Apps (zwei version, image-tag, Doku-Links), Update-Probe FROM_TAGS ab v1.6.2 bis v1.6.5, deploy-harp "tree carries 1.7.0", CHANGELOG [1.7.0] DE/EN/FR. STOPP-Prüfung leer (keine Migration, kein Schema seit v1.6.5). Owner-Antwort "A" (2026-11-22 05:01 UTC): Version ja, CHANGELOG ja; Datum [1.7.0] wird in 45-14 auf das Tag-Datum gezogen, falls der Tag später liegt. Lokal, nicht gepusht.
 
 ### Decisions (Roadmap v1.6)
 
@@ -312,13 +314,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-22T04:45:00.000Z
-Stopped at: Completed 45-07-PLAN.md
+Last session: 2026-11-22T06:30:00.000Z
+Stopped at: Completed 45-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:execute-phase 45: weiter mit 45-08 (45-01 bis 45-06 gepusht bis 612b7c9e; feeef88b und die drei Commits von 45-07 lokal, reisen mit dem nächsten freigegebenen Push)
+- /gsd:execute-phase 45: weiter mit 45-09 (45-01 bis 45-06 gepusht bis 612b7c9e; feeef88b, die Commits von 45-07 und 45-08 lokal, reisen mit dem nächsten freigegebenen Push). 45-14: CHANGELOG-Datum [1.7.0] in drei Sprachen auf das Tag-Datum ziehen, falls später als 2026-11-22 (von Freigabe A gedeckt)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
