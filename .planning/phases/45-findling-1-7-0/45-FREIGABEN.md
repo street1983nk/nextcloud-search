@@ -21,3 +21,8 @@ Entscheid LOW L-45-09-02 45-09: "Ok" (2026-11-22 05:36, Claude-Code-Chat) Entsch
 Entscheid LOW L-45-09-03 45-09: "Ok" (2026-11-22 05:36, Claude-Code-Chat) Entscheid: beheben
 
 Hinweis: Zeit in UTC. Der Owner schrieb zuerst "Qualität hat Vorrang" und gab dann mit "Ok" den überarbeiteten Vorschlag des Koordinators frei. Dieser machte aus L-45-09-02 "beheben" statt "akzeptieren", für alle drei Listen (Ordner, Muster, externe Speicher: die Route lehnt ein JSON-Objekt mit 400 und bestehendem Code ab, das Lesen bleibt duldsam), und verlangte für L-45-09-03 vor dem Fix eine Nachstellung auf einer echten Instanz ohne files_external. L-45-09-01: Obergrenze 1000 beim Lesen, Rest als unbrauchbar gezählt. Die Push-Freigabe deckt genau einen Push aller lokalen Commits samt Fixes und diesem Freigabe-Commit nach grünen lokalen Gates, einen CI-Warter (scripts/ci/head_green.sh) und höchstens einen `gh run rerun <id> --failed`; kein Tag, keine Store-Aktion, kein Kommentar.
+
+Entscheid L-45-09-03 enge Form 45-10: "Ok" (2026-11-22 07:26, Claude-Code-Chat) Entscheid: behalten
+Freigabe CHANGELOG-Zeile Objekt-Ablehnung 45-10: "Ok" (2026-11-22 07:26, Claude-Code-Chat) Entscheid: ja
+
+Hinweis: Zeit in UTC. L-45-09-03 bleibt in der engeren Form aus 45-09 (leere Menge nur bei fehlender Tabelle oc_external_mounts, nicht bei deaktiviertem files_external), keine Codeänderung. Die CHANGELOG-Freigabe deckt eine kurze Zeile in [1.7.0] von CHANGELOG.md, CHANGELOG.de.md und CHANGELOG.fr.md zur Ablehnung eines JSON-Objekts oder einer Liste mit Lücken in allen drei Regellisten (L-45-09-02); kein Push, kein Tag, kein Kommentar.
