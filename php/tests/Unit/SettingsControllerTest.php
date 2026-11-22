@@ -315,6 +315,13 @@ final class SettingsControllerTest extends TestCase {
 		yield 'a zero' => [[0]];
 		yield 'a negative id' => [[-3]];
 		yield 'a numeric string' => [['4']];
+		// Probe 2 of audit 45-09.
+		yield 'a nested list' => [[[4]]];
+		yield 'a float' => [[4.0]];
+		yield 'a bool' => [[true]];
+		yield 'a null entry' => [[null]];
+		yield 'one more than the ceiling' => [range(1, SettingsService::MAX_EXCLUDED_EXTERNAL_MOUNTS + 1)];
+		yield 'an object of objects' => [['a' => ['b' => 4]]];
 	}
 
 	#[DataProvider('unusableMountSelections')]

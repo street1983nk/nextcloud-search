@@ -1354,8 +1354,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave ee8088b3 as well; the recipe and
 # the pipeline over git archive of 6cea90e4, the last commit before the plan, gave 47251647 with
 # 136 files (positive control).
+# Moved on 2026-11-22 by plan 45-09 (launch hardening of 1.7.0): tests/Unit/SettingsControllerTest.php
+# takes six more unusable selections (a nested list, a float, a bool, a null entry, one more than the
+# ceiling, an object of objects) and tests/Unit/StorageServiceTest.php the case of the switch that
+# comes back on; no source file changed. No file came or went, so PHP_FILES_TODAY stays at 136. The
+# recipe gave 6638875f; the independent pipeline of find, sort, sed and sha256sum over the same tree
+# gave 6638875f as well; the recipe over git archive of 92fd028a, the last commit before this change,
+# gave ee8088b3 with 136 files (positive control).
 PHP_FILES_TODAY = 136
-PHP_TREE_HASH_TODAY = "ee8088b35fed178dab65f447d0880819cb614e66e2a3eba5a99427af83644541"
+PHP_TREE_HASH_TODAY = "6638875fb798880ed9a9e03f5b29a505906254c2933a6a1f6b2a640b9d6fbae9"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

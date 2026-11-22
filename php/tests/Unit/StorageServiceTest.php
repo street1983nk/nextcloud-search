@@ -591,6 +591,28 @@ final class StorageServiceTest extends TestCase {
 		self::assertSame([5], $this->settings->excludedExternalMounts());
 	}
 
+	public function testTheStoredListTakesHoldAgainWhenTheSwitchComesBackOn(): void {
+		// Probe 8 of audit 45-09: off, then on again with the list unchanged.
+		$this->storages = [21, 40];
+		$this->stageExternalMount(5, 1, 21);
+		$this->mounts[] = ['storage_id' => 40, 'mount_provider_class' => self::HOME];
+
+		$this->listed = [40];
+		$off = $this->service(external: false, excludedMounts: [5]);
+		self::assertSame([40], self::storageIdsOf($off->getMounts()));
+
+		$this->listed = [21, 40];
+		$on = $this->service(external: true, excludedMounts: [5]);
+		self::assertSame([40], self::storageIdsOf($on->getMounts()));
+		self::assertFalse($on->isIndexedStorage(21));
+		self::assertSame(['gone' => [], 'deselected' => [21]], $on->classifyAbsent([21]));
+
+		$this->listed = [21, 40];
+		$included = $this->service(external: true, excludedMounts: []);
+		self::assertSame([21, 40], self::storageIdsOf($included->getMounts()));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
 	public function testAnEmptyListAsksNoMountTable(): void {
 		$this->db->expects(self::never())->method('getQueryBuilder');
 		$this->listed = [21, 40];
