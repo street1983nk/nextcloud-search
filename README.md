@@ -40,6 +40,25 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
   Vorab-Prüfung der Hardware
 - Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung
   einmalig ladbar
+- Einzelne von Admins angelegte externe Speicher vom Index ausschließen (ab
+  1.7.0)
+- Die Verwaltungsseite zeigt, wie viele Plätze in den Listen für Ordner und
+  Muster noch frei sind (ab 1.7.0)
+- Oberfläche in neun Sprachen: Englisch, Deutsch, Französisch, Spanisch,
+  Italienisch, Niederländisch, Portugiesisch (Portugal und Brasilien) und
+  Traditionelles Chinesisch (ab 1.7.0)
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch,
+  Niederländisch, Portugiesisch und Tschechisch verfügbar
+
+## Bekannte Grenzen
+
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+- Tschechisch: keine Stammformreduktion, gebeugte Formen gelten als eigene Wörter
+
+Details auf Englisch: [docs/language-analyzers.md](docs/language-analyzers.md).
 
 ## Unterstützte Dateitypen
 

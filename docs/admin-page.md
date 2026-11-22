@@ -637,7 +637,7 @@ Absicht (ADM-04, D-08).
 | Ausschlüsse (Ordner und Muster) | zwei leere Listen; Ordner höchstens 64 Einträge mit je 256 Byte, Muster höchstens 32 mit je 60 Zeichen | nächster Lauf, plus sofortige aktive Räumung des Bestands und der Abgleich als Netz | Crawl, Ereignis-Listener, Abgleich, Diagnose (Stufe 2) |
 | Größen-Cap | 50 MiB (52428800 Byte), Untergrenze 1 MiB, Obergrenze der vom Container gemeldete Wert | nächster Lauf | Crawl (aus dem Cache-Eintrag), zusätzlich im Container |
 | Team Folders | AN | nächster Lauf | Mountliste des Crawls und des Abgleichs |
-| External Storage | AUS | nächster Lauf | Mountliste des Crawls und des Abgleichs |
+| External Storage | AUS; darunter seit 1.7.0 je Admin-Speicher ein Haken, voreingestellt an | nächster Lauf | Mountliste des Crawls und des Abgleichs |
 
 Gespeichert wird PHP-seitig in `appconfig`, und der Container übernimmt die Werte
 beim nächsten Lauf. Es gibt keinen Neustartzwang und kein Live-Signal an den
@@ -649,6 +649,64 @@ dort die Dokumente einer kleinen Organisation tatsächlich stehen. External
 Storage ist AUS, weil ein entferntes Laufwerk jede Annahme über Lesedauer und
 Datenmenge sprengt und niemand erwartet, dass die Installation einer App
 anfängt, ein Mehr-Terabyte-Share durch HTTP zu ziehen.
+
+### Einzelne externe Speicher ausschließen (ab 1.7.0)
+
+Unter dem Schalter "Externen Speicher indexieren" steht die Liste "Zu
+indexierende externe Speicher" (EXCL-04).
+
+- **Welche Speicher:** nur die, die ein Admin in der App External storage
+  (`files_external`) angelegt hat, je mit Einhängepunkt und Typ (etwa SMB/CIFS,
+  SFTP, Local). Tragen zwei Speicher denselben Einhängepunkt und Typ, steht
+  ihre Konfigurations-ID dahinter. Speicher, die Nutzer selbst anlegen, stehen
+  nicht in der Liste und folgen allein dem Schalter darüber.
+- **Opt-out:** jeder Speicher hat einen Haken und ist voreingestellt dabei. Ein
+  neu angelegter Speicher ist automatisch dabei. Gespeichert wird nur die Liste
+  der ausgeschlossenen Konfigurations-IDs (`appconfig`-Schlüssel
+  `excluded_external_mounts`, höchstens 1000 Einträge), mit den übrigen Regeln
+  in einem Schreibvorgang: ein Fehler in einem Feld hält alles auf.
+- **Hauptschalter aus:** die Liste ist gesperrt, kein externer Speicher wird
+  indexiert, und die Auswahl bleibt gespeichert. Sie gilt wieder, sobald der
+  Schalter an ist.
+- **Ausschließen:** vor dem Speichern fragt die Seite inline nach, mit dem
+  Einhängepunkt und ohne Zahl: "Indexierte Inhalte entfernen? Der Ausschluss
+  des externen Speichers `/Projekte` entfernt außerdem seine bereits
+  indexierten Dokumente aus dem Index. Die Dateien selbst bleiben unverändert
+  auf dem Speicher." Nach dem Speichern fehlt der Speicher in der Mountliste,
+  die Crawl und Abgleich lesen. Seine Dokumente verlassen den Index im
+  nächsten vollständigen Abgleich sofort, als `deselected` und ohne die Karenz
+  von 30 Tagen (siehe `docs/reconcile.md`, Abschnitt "Gelöschte, abgewählte
+  und verschwundene Speicher").
+- **Wieder zulassen:** Haken setzen und speichern. Der Speicher wird beim
+  nächsten regulären Abgleich nachindexiert; die Seite sagt das unter der
+  Liste.
+- **Ohne `files_external`** steht statt der Liste nur der Satz "Externer
+  Speicher ist auf diesem Server nicht aktiviert.", ohne Admin-Speicher "Es
+  gibt keinen von Admins angelegten externen Speicher."
+
+Das Protokoll nennt dazu nur Zähler, nie Konfigurations-IDs, Einhängepunkte
+oder Pfade.
+
+### Freie Plätze in den Listen (ab 1.7.0)
+
+Unter "Ausgeschlossene Ordner" und unter "Ausgeschlossene Muster" steht je ein
+Zähler gegen die Grenze der Liste (64 Ordner, 32 Muster), etwa "Noch 12 von 64
+frei". Bei einem freien Platz heißt er "Noch 1 von 64 frei. Das ist der letzte
+Platz.", bei keinem "Noch 0 von 64 frei. Einen Eintrag entfernen, um einen
+neuen hinzuzufügen."; diese beiden Stände sind farblich hervorgehoben, und der
+Wechsel auf einen von ihnen wird einmal für Bildschirmleser angesagt. Gezählt
+werden die Zeilen, die die Liste gerade zeigt, gespeichert oder nicht; der
+Zähler folgt also jedem Hinzufügen und Entfernen schon vor dem Speichern.
+
+### Ordnerfeld: `*` und `?` werden abgewiesen (ab 1.7.0)
+
+Ein neuer Eintrag unter "Ausgeschlossene Ordner" mit `*` oder `?` wird mit dem
+Code `wildcard` abgewiesen: "Ordner ohne * oder ?. Für Muster wie Backup* das
+Feld "Ausgeschlossene Muster" nutzen." Ein solcher Eintrag, der schon
+gespeichert ist (aus einer älteren Version oder per `occ`), bleibt geduldet und
+wirkt weiter als wörtlicher Text. Die Seite markiert ihn: "Dieser Eintrag
+enthält * oder ?, was Ordner nicht kennen; er passt daher nur auf genau diesen
+Text. Ihn entfernen und unter "Ausgeschlossene Muster" eintragen."
 
 ### Team Folders mit erweiterten Berechtigungen: wer eine Datei liest
 
@@ -855,15 +913,16 @@ nur den Code und höchstens die Grenzzahl.
 | `too_many` | beide | Mehr als 64 Ordner oder mehr als 32 Muster. |
 | `duplicate` | beide | Der Eintrag steht nach der Vereinheitlichung schon in der Liste. |
 | `traversal` | beide | Ein Ordnername `.` oder `..` im Eintrag; er würde aus dem Pfadraum hinausführen. |
+| `wildcard` | nur Ordner | Ein neuer Eintrag mit `*` oder `?` (ab 1.7.0). Satz an der Liste: "Ordner ohne * oder ?. Für Muster wie Backup* das Feld "Ausgeschlossene Muster" nutzen." Ein schon gespeicherter Eintrag bleibt geduldet und markiert. |
 | `double_star` | nur Muster | `**` hat keine eigene Bedeutung, ein einfacher `*` gilt schon über Ordner hinweg. |
 | `unsupported_character` | nur Muster | `[`, `]`, `{`, `}` oder Backslash, oder kein gültiges UTF-8. Nur `*` und `?` sind Platzhalter. |
 | `negation` | nur Muster | Ein führendes `!`. Muster schließen nur aus, eine Ausnahme von einer Regel gibt es nicht. |
 | `control_character` | nur Muster | Ein Steuerzeichen, etwa ein Zeilenumbruch. |
 | `no_literal` | nur Muster | Nur `*`, `?` und `/`, etwa `*`, `*/*` oder `?*`; so ein Muster schlösse alles aus. |
-| `no_wildcard` | nur Muster | Weder `*` noch `?`. So ein Eintrag gehört unter "Ausgeschlossene Ordner". |
+| `no_wildcard` | nur Muster | Weder `*` noch `?`. So ein Eintrag gehört unter "Ausgeschlossene Ordner". Satz an der Liste seit 1.7.0: "Dieser Eintrag hat kein * oder ?. Ganze Ordner unter "Ausgeschlossene Ordner" eintragen, oder ein Muster wie Name* verwenden." |
 
-Die sechs reinen Muster-Codes kann die Ordnerliste nicht auslösen, weil ihre
-Prüfung wie in 1.4.2 bleibt. Steht in `appconfig` eine Liste, die nicht über die
+Die sechs reinen Muster-Codes kann die Ordnerliste nicht auslösen. Ihre
+Prüfung ist bis auf `wildcard` (ab 1.7.0, nur für neue Einträge) die von 1.4.2. Steht in `appconfig` eine Liste, die nicht über die
 Seite kam (`occ config:app:set findling exclusion_patterns`), gilt dieselbe
 Prüfung beim Lesen: ein unbrauchbarer Eintrag gilt nicht und erscheint nicht,
 Einträge über der Grenze von 32 werden nicht angewendet, und das Protokoll nennt

@@ -39,6 +39,24 @@ You bring the model, and no content leaves your server.
   pre-check of the hardware
 - Search model: int8 built in, the more accurate fp32 can be downloaded once
   under Standard and Performance
+- Exclude single external storages set up by an admin from the index (from
+  1.7.0)
+- The admin page shows how many slots are still free in the lists of folders
+  and patterns (from 1.7.0)
+- Interface in nine languages: English, German, French, Spanish, Italian,
+  Dutch, Portuguese (Portugal and Brazil) and Traditional Chinese (from 1.7.0)
+- Search languages: German and English by default, Spanish, Italian, Dutch,
+  Portuguese and Czech available
+
+## Known limitations
+
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+- Czech: no stemming, inflected forms count as separate words
+
+Details: [docs/language-analyzers.md](docs/language-analyzers.md).
 
 ## Supported file types
 

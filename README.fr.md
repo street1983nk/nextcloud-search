@@ -42,6 +42,25 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
   une vérification préalable du matériel
 - Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une
   fois sous Standard et Performance
+- Exclure de l'index un à un les stockages externes créés par un
+  administrateur (à partir de 1.7.0)
+- La page d'administration indique combien de places restent libres dans les
+  listes de dossiers et de motifs (à partir de 1.7.0)
+- Interface en neuf langues : anglais, allemand, français, espagnol, italien,
+  néerlandais, portugais (Portugal et Brésil) et chinois traditionnel (à
+  partir de 1.7.0)
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien,
+  néerlandais, portugais et tchèque disponibles
+
+## Limites connues
+
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+- Tchèque : pas de racinisation, les formes fléchies comptent comme des mots distincts
+
+Détails (en anglais) : [docs/language-analyzers.md](docs/language-analyzers.md).
 
 ## Types de fichiers pris en charge
 

@@ -24,17 +24,18 @@ PHP and the browser pick (section 4, with the dated addendum for `zh_TW` at the 
 
 ## The key set, counted from the file
 
-Counted on 15.11.2026 with `json.load` over `php/l10n/de.json` and `php/l10n/zh_TW.json`:
+Counted on 15.11.2026 with `json.load` over `php/l10n/de.json` and `php/l10n/zh_TW.json`, and counted
+again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added, one removed):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **366** |
-| Keys in `zh_TW.json`, in the same order | **366** |
-| of them with printf directives (`%s`, `%1$s`, `%n`) | **96** |
-| with directives, plural keys excluded | **91** |
+| Keys in `de.json` | **380** |
+| Keys in `zh_TW.json`, in the same order | **380** |
+| of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
+| with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **366** |
+| rows in the table below | **380** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -67,7 +68,7 @@ spelling variant. A converted catalogue would be a second translation that no re
 
 ## Word choice
 
-So that the review is one decision per term and not 366 single cases. The line follows the
+So that the review is one decision per term and not 380 single cases. The line follows the
 Traditional Chinese catalogues Nextcloud itself ships (`core/l10n/zh_TW.json` and the bundled
 apps of 34.0.5), so that Findling reads like the pages around it.
 
@@ -125,7 +126,7 @@ Every rule below is machine checked; the results stand in the section "Machine c
 - **Full width parentheses**, also around Latin content: `%1$s（ID %2$s）`,
   `Office 鎖定檔（~$）`. This is why `%1$s (ID %2$s)` is no exception of gate G2 here although
   every other language lists it.
-- **No dash.** Chinese typography uses the double em dash 「——」 for an aside; this repository
+- **No dash.** Chinese typography uses the double em dash (U+2014 written twice) for an aside; this repository
   forbids U+2014 and U+2013, so the catalogue uses a comma or a colon instead. 0 of each.
 - **No bare percent sign.** "a hundred per cent" is 百分之百, and no value needs `%%`.
 - **No pipe character, no protected space** (U+00A0, U+202F) **and no ideographic space**
@@ -599,10 +600,10 @@ Run on 15.11.2026 over the two generated files, not by eye:
 
 | Check | Result |
 |---|---|
-| Key set of `zh_TW.json` equal to `de.json`, in the same order | yes, 366 of 366, missing 0 |
+| Key set of `zh_TW.json` equal to `de.json`, in the same order | yes, 380 of 380, missing 0 (recounted on 22.11.2026) |
 | `zh_TW.js` carries the same values as `zh_TW.json`, form for form | yes (`test_the_two_halves_of_every_language_carry_the_same_values`) |
 | Every key of `zh_TW.json` has a row in this file, with the catalogue wording | yes (`test_every_language_table_carries_every_key_with_the_catalogue_wording`) |
-| Placeholder parity key against value, over all 96 keys with directives | 0 deviations |
+| Placeholder parity key against value, over all 102 keys with directives (22.11.2026) | 0 deviations |
 | Plural keys with exactly **one** form | 5 of 5 |
 | `pluralForm` equal to the block in section 3 of `docs/l10n-catalogues.md` | yes, in both files |
 | U+2014 and U+2013 (dashes) | 0 |
