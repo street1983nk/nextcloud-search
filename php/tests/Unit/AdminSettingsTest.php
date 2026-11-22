@@ -178,6 +178,14 @@ final class AdminSettingsTest extends TestCase {
 		$appManager->method('isEnabledForAnyone')->willReturnCallback($enabled);
 		$factory = $this->createMock(IFactory::class);
 		$factory->method('findLanguage')->willReturn('en');
+		// The type names go through the catalogue of files_external (finding
+		// V-45-10-01); English keeps them as they are.
+		$factory->method('get')->willReturnCallback(function (string $app): IL10N {
+			$l10n = $this->createMock(IL10N::class);
+			$l10n->method('t')->willReturnCallback(static fn (string $text, array $parameters = []): string => $text);
+
+			return $l10n;
+		});
 
 		return new Admin(
 			$initialState,

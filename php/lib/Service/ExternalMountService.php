@@ -32,8 +32,9 @@ use Psr\Log\LoggerInterface;
  * the app off, the list is empty without a single query.
  *
  * The display name of a backend comes from BACKEND_NAMES, a copy of the texts
- * files_external sets; an identifier that is not in the table is shown as it
- * is. The mount point is handed back raw, markup included: escaping is the
+ * files_external sets, translated through the catalogue of files_external in
+ * the language of the page; an identifier that is not in the table is shown
+ * as it is and never handed to the catalogue. The mount point is handed back raw, markup included: escaping is the
  * business of the template, which prints it through p().
  *
  * A failed read logs one warning with a counter and no value, never a mount
@@ -135,6 +136,14 @@ final class ExternalMountService {
 			->from('external_mounts')
 			->where($qb->expr()->eq('type', $qb->createNamedParameter(StorageService::ADMIN_MOUNT_TYPE, IQueryBuilder::PARAM_INT)));
 
+		// The catalogue of files_external in the language of the page, so the
+		// list says "Lokal" under German like Nextcloud does (finding
+		// V-45-10-01). The short names of BACKEND_NAMES are keys of that
+		// catalogue in 34.0.3 (de, fr, zh_TW read on the dev instance); a key a
+		// later version drops comes back as the English text, which is what
+		// the list showed before.
+		$l10n = $this->l10nFactory->get(self::APP_ID_FILES_EXTERNAL);
+
 		$mounts = [];
 		$result = $qb->executeQuery();
 		try {
@@ -145,10 +154,11 @@ final class ExternalMountService {
 				}
 
 				$identifier = (string)($row['storage_backend'] ?? '');
+				$name = self::BACKEND_NAMES[$identifier] ?? null;
 				$mounts[] = [
 					'id' => $id,
 					'mountPoint' => (string)($row['mount_point'] ?? ''),
-					'backend' => self::BACKEND_NAMES[$identifier] ?? $identifier,
+					'backend' => $name === null ? $identifier : $l10n->t($name),
 					'duplicate' => false,
 				];
 			}

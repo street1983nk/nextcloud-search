@@ -11,6 +11,7 @@ use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
+use OCP\IL10N;
 use OCP\L10N\IFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +43,15 @@ final class ExternalMountServiceTest extends TestCase {
 	/** Every log call as level, message and context. @var list<array{string, string, array<mixed>}> */
 	private array $logs = [];
 
+	/** The catalogue of files_external in the language of the page, source text to translation. @var array<string, string> */
+	private array $catalogue = [];
+
+	/** The apps whose catalogue was asked for. @var list<string> */
+	private array $l10nApps = [];
+
+	/** Every text handed to t(). @var list<string> */
+	private array $translated = [];
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -52,6 +62,9 @@ final class ExternalMountServiceTest extends TestCase {
 		$this->closed = 0;
 		$this->scalars = [];
 		$this->logs = [];
+		$this->catalogue = [];
+		$this->l10nApps = [];
+		$this->translated = [];
 	}
 
 	private function service(bool $enabled = true): ExternalMountService {
@@ -66,6 +79,17 @@ final class ExternalMountServiceTest extends TestCase {
 
 		$factory = $this->createMock(IFactory::class);
 		$factory->method('findLanguage')->willReturn('de');
+		$factory->method('get')->willReturnCallback(function (string $app): IL10N {
+			$this->l10nApps[] = $app;
+			$l10n = $this->createMock(IL10N::class);
+			$l10n->method('t')->willReturnCallback(function (string $text, array $parameters = []): string {
+				$this->translated[] = $text;
+
+				return $this->catalogue[$text] ?? $text;
+			});
+
+			return $l10n;
+		});
 
 		$logger = $this->createMock(LoggerInterface::class);
 		foreach (['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'] as $level) {
@@ -189,6 +213,42 @@ final class ExternalMountServiceTest extends TestCase {
 		$mounts = $this->service()->adminMounts();
 		self::assertSame('/<img src=x onerror=alert(1)>', $mounts[0]['mountPoint']);
 		self::assertSame('Local', $mounts[0]['backend']);
+	}
+
+	/**
+	 * The type is shown in the language of the page, out of the catalogue of
+	 * files_external (finding V-45-10-01): under German the list said "Local"
+	 * where Nextcloud itself says "Lokal". The short texts of BACKEND_NAMES are
+	 * keys of that catalogue in 34.0.3.
+	 */
+	public function testTheTypeIsShownInTheLanguageOfThePage(): void {
+		$this->catalogue = ['Local' => 'Lokal', 'SMB/CIFS' => 'SMB/CIFS'];
+		$this->mount(3, '/Daten', 'local');
+		$this->mount(4, '/Share', 'smb');
+
+		$mounts = $this->service()->adminMounts();
+		self::assertSame(['Lokal', 'SMB/CIFS'], array_column($mounts, 'backend'));
+		self::assertSame(['files_external'], array_values(array_unique($this->l10nApps)));
+	}
+
+	public function testTwoTranslatedTypesStillMarkTheirDuplicates(): void {
+		$this->catalogue = ['Local' => 'Lokal'];
+		$this->mount(11, '/Gemeinsam', 'local');
+		$this->mount(12, '/Gemeinsam', 'local');
+
+		self::assertSame([
+			['id' => 11, 'mountPoint' => '/Gemeinsam', 'backend' => 'Lokal', 'duplicate' => true],
+			['id' => 12, 'mountPoint' => '/Gemeinsam', 'backend' => 'Lokal', 'duplicate' => true],
+		], $this->service()->adminMounts());
+	}
+
+	/** An identifier outside the table is no text of the catalogue and is never handed to t(). */
+	public function testAnUnknownIdentifierIsNotTranslated(): void {
+		$this->catalogue = ['acme' => 'Fremd'];
+		$this->mount(3, '/Cloud', 'acme');
+
+		self::assertSame('acme', $this->service()->adminMounts()[0]['backend']);
+		self::assertNotContains('acme', $this->translated);
 	}
 
 	public function testARowWithoutAPositiveIdIsSkipped(): void {

@@ -657,7 +657,8 @@ indexierende externe Speicher" (EXCL-04).
 
 - **Welche Speicher:** nur die, die ein Admin in der App External storage
   (`files_external`) angelegt hat, je mit Einhängepunkt und Typ (etwa SMB/CIFS,
-  SFTP, Local). Tragen zwei Speicher denselben Einhängepunkt und Typ, steht
+  SFTP, Lokal), der Typ in der Sprache der Seite, wie `files_external` ihn
+  übersetzt. Tragen zwei Speicher denselben Einhängepunkt und Typ, steht
   ihre Konfigurations-ID dahinter. Speicher, die Nutzer selbst anlegen, stehen
   nicht in der Liste und folgen allein dem Schalter darüber.
 - **Opt-out:** jeder Speicher hat einen Haken und ist voreingestellt dabei. Ein
