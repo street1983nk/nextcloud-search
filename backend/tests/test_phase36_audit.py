@@ -631,16 +631,17 @@ def test_the_upgrade_start_is_never_ahead_of_the_tree() -> None:
         assert start <= _version(version.group(1)), path
 
 
-def test_the_similar_documents_line_stands_in_all_six_descriptions_and_the_changelog() -> None:
-    """F6 (closed by 36-11): the feature of phase 35 is named where a user reads about the release."""
-    import xml.etree.ElementTree as ET
+def test_the_similar_documents_line_stands_in_all_three_readmes_and_the_changelog() -> None:
+    """F6 (closed by 36-11): the feature of phase 35 is named where a user reads about the release.
 
-    for path in INFO_XMLS:
-        root = ET.parse(path).getroot()  # noqa: S314 - a file of this repository
-        # The English description is the one without a lang attribute.
-        descriptions = {node.get("lang", "en"): node.text or "" for node in root.findall("description")}
-        for lang, line in SIMILAR_LINE.items():
-            assert descriptions[lang].count(line) == 1, (path.name, lang)
+    Until plan 45-07 the line was held in the six store descriptions. Owner
+    decision D-45-14 moved it into the three READMEs; the full wording is held
+    there by test_the_similar_documents_line_stands_once_in_every_readme in
+    test_store_metadata.py, and this gate keeps the opening per language.
+    """
+    readmes = {"en": REPO / "README.en.md", "de": REPO / "README.md", "fr": REPO / "README.fr.md"}
+    for lang, line in SIMILAR_LINE.items():
+        assert readmes[lang].read_text(encoding="utf-8").count(line) == 1, lang
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
     # Since the bump of 36-13 the line stands under the section of the release
     # it ships with, and [Unreleased] above it is empty.

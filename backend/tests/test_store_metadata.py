@@ -127,6 +127,15 @@ README = REPO_ROOT / "README.en.md"  # the English edition; README.md is German 
 README_DE = REPO_ROOT / "README.md"
 README_FR = REPO_ROOT / "README.fr.md"
 
+# Owner decision D-45-14 of 21.11.2026 (STORE-04, plan 45-07): the measured
+# figure, the five known limitations, the file type list, the share sentence
+# and the similar documents line leave the store descriptions, which keep only
+# the privacy sentence, the connector sentence, the migration link and the link
+# to the documentation. Those five contents live in the three READMEs instead,
+# and the gates that held them in the six descriptions hold them there now,
+# one README per language (READMES below). The language key is the one of the
+# store texts, so that one wording table serves both kinds of file.
+
 # The six store texts in one German document, side by side in three languages.
 # The rule of E-H2 reaches it too: it is German prose that a reader reads.
 STORE_LISTING = REPO_ROOT / "docs" / "store-listing.md"
@@ -448,44 +457,52 @@ SHARE_SENTENCE_FR = (
 )
 SHARE_SENTENCES = {DEFAULT_LANGUAGE: SHARE_SENTENCE_EN, "de": SHARE_SENTENCE_DE, "fr": SHARE_SENTENCE_FR}
 
+# The three READMEs with the language key of the store texts (D-45-14, see the
+# paragraph above README_DE).
+READMES = ((README, DEFAULT_LANGUAGE), (README_DE, "de"), (README_FR, "fr"))
+
 # The known limitations of the language work (HART-05, owner decision D-06 of
-# phase 23): a block of its own in every one of the six descriptions, under a
-# heading per language, with exactly five points since D-30-06 of phase 30,
-# which extends D-06 of phase 23 by the Czech entry. The French heading keeps
-# the space before the colon, like every other heading of the French texts.
-LIMITATION_HEADINGS = {
-    DEFAULT_LANGUAGE: "Known limitations:",
-    "de": "Bekannte Grenzen:",
-    "fr": "Limites connues :",
+# phase 23): a section of its own in every README, under a heading per
+# language, with exactly five points since D-30-06 of phase 30, which extends
+# D-06 of phase 23 by the Czech entry. Until plan 45-07 the block stood in the
+# six store descriptions under "Known limitations:" and its two translations;
+# D-45-14 moved it into the READMEs.
+README_LIMITATION_HEADINGS = {
+    DEFAULT_LANGUAGE: "## Known limitations",
+    "de": "## Bekannte Grenzen",
+    "fr": "## Limites connues",
 }
 LIMITATION_COUNT = 5
 
 # Where the long form of those limitations lives, and the heading of the short
-# list inside it. D-06 asks for the English list of the store text to stand in
-# this document character for character, so that a store text and the page it
-# summarises cannot say two different things.
+# list inside it. D-06 asks for the English list to stand in this document
+# character for character, so that the README and the page it summarises
+# cannot say two different things.
 LANGUAGE_ANALYZERS_DOC = REPO_ROOT / "docs" / "language-analyzers.md"
 LANGUAGE_ANALYZERS_HEADING = "### Known limitations (short list, HART-05)"
 
 # How the language line of decision D-11 opens in each language. It is the last
-# point of the first block and stands right before the limitation heading, with
-# one empty line between them, so that a reader sees which languages exist
-# before reading what they cannot do.
+# point of the feature list and stands right before the limitation heading,
+# with one empty line between them, so that a reader sees which languages exist
+# before reading what they cannot do. In a README a point may wrap over several
+# lines; the line that opens it is the one held here.
 LANGUAGE_LINE_OPENINGS = {
     DEFAULT_LANGUAGE: "- Search languages:",
     "de": "- Suchsprachen:",
     "fr": "- Langues de recherche :",
 }
 
-# Moved on 21.10.2026 by plan 36-11 (REL-05, D-36-08, D-36-16): the owner
-# accepted on 20.10.2026 (36-WORTLAUT.md, part B1) that the migration line of
-# phase 34 stands as a paragraph of its own right behind the feature list and
-# before the limitation heading. The language line stays the last point of the
-# first block; between it and the heading only this one paragraph may stand.
-MIGRATION_LINE_OPENINGS = {
-    DEFAULT_LANGUAGE: "Switching from fulltextsearch/Elasticsearch:",
-    "de": "Umstieg von fulltextsearch/Elasticsearch:",
-    "fr": "Passer de fulltextsearch/Elasticsearch à Findling :",
+# The similar documents line of phase 35 (STR-01, F6 of phase 36), in the
+# wording the six store descriptions carried since 1.5.0. D-45-14 moved it into
+# the READMEs, where it stands once per language as a point of the feature
+# list; the README wraps it, so it is compared after collapsing whitespace.
+SIMILAR_DOCUMENTS_LINES = {
+    DEFAULT_LANGUAGE: ("- Similar documents: a link at every hit on the results page lists files with related content"),
+    "de": "- Ähnliche Dokumente: ein Link an jedem Treffer der Ergebnisseite listet Dateien mit verwandtem Inhalt",
+    "fr": (
+        "- Documents similaires : un lien sur chaque résultat de la page de résultats liste les fichiers "
+        "au contenu proche"
+    ),
 }
 
 # The file type list of the store texts and of the READMEs (FMT-01 to FMT-05,
@@ -926,44 +943,23 @@ def scan_resident_figure(name: str, source: str, spelling: str = RESIDENT_SPELLI
     writes 730,2 Mo, and a gate that knew only one of the three would be green
     over a file that quietly carries another language's number.
 
-    Whitespace is collapsed first, because a README wraps its lines where an
-    info.xml does not and a line break between the figure and its unit says
-    nothing about what the text claims.
+    Whitespace is collapsed first, because a README wraps its lines and a line
+    break between the figure and its unit says nothing about what the text
+    claims.
+
+    Exactly once since plan 45-07: the figure left the store descriptions
+    (D-45-14), the README is now the one public place that carries it, and a
+    second copy in the same README is the start of two numbers drifting apart.
     """
-    if spelling in collapse(source):
+    found = collapse(source).count(spelling)
+    if found == 1:
         return []
 
-    return [f"{name}: does not carry the measured figure {spelling} of decision E1"]
-
-
-def scan_resident_figure_of_an_info(name: str, source: str) -> list[str]:
-    """The same figure in every description of one info.xml, language by language.
-
-    This is the half of the rule that did not exist before plan 16-12: nothing
-    compared a number in a README with the number in an info.xml, so the two
-    could have said different things about the same measurement for as long as
-    it took somebody to read both files in one sitting.
-    """
-    try:
-        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
-    except ElementTree.ParseError as broken:
-        return [f"{name}: is not well formed XML ({broken})"]
-
-    return [
-        message
-        for element in info.findall("description")
-        for language in [element.get("lang", DEFAULT_LANGUAGE)]
-        if language in RESIDENT_SPELLING
-        for message in scan_resident_figure(
-            f"{name}, the description for {_named(language)}",
-            element.text or "",
-            RESIDENT_SPELLING[language],
-        )
-    ]
+    return [f"{name}: carries the measured figure {spelling} of decision E1 {found} times, and it belongs there once"]
 
 
 def scan_one_measured_figure(name: str, source: str) -> list[str]:
-    """The short text rule: exactly one measured figure per store description.
+    """The short text rule: at most one measured figure per store description.
 
     The owner decided on 07.09.2026 that a store description is a short fact
     list and carries at most one number. The rule is about MEASURED numbers: the
@@ -971,9 +967,11 @@ def scan_one_measured_figure(name: str, source: str) -> list[str]:
     requirements rather than readings, and the pattern says so by matching MB
     and Mo and not GB and Go.
 
-    A description with no measured figure at all is reported as well. Without
-    that clause a text that lost the figure entirely would pass a rule whose
-    whole subject is that figure.
+    Until plan 45-07 a description with no measured figure was reported as
+    well, because the figure had to stand there. D-45-14 moved the figure into
+    the READMEs, where scan_resident_figure holds it exactly once per language;
+    what stays here is the half of the rule that is about the store text: a
+    second figure is a finding, none is not.
     """
     try:
         info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
@@ -984,10 +982,10 @@ def scan_one_measured_figure(name: str, source: str) -> list[str]:
     for element in info.findall("description"):
         language = element.get("lang", DEFAULT_LANGUAGE)
         figures = MEASURED_FIGURE.findall(element.text or "")
-        if len(figures) != 1:
+        if len(figures) > 1:
             violations.append(
                 f"{name}: the description for {_named(language)} carries {len(figures)} measured figures "
-                f"({', '.join(figures) or 'none at all'}) and the short text rule of 07.09.2026 allows exactly one"
+                f"({', '.join(figures)}) and the short text rule of 07.09.2026 allows at most one"
             )
 
     return violations
@@ -1026,30 +1024,42 @@ def scan_connector_sentence(name: str, source: str) -> list[str]:
     return violations
 
 
-def scan_share_sentence(name: str, source: str) -> list[str]:
-    """The share sentence of D-24-04, counted in every description: exactly once.
+def scan_share_sentence(name: str, source: str, language: str) -> list[str]:
+    """The share sentence of D-24-04 in the README of one language: exactly once.
 
     A reworded sentence counts as missing, which is the point: the wording is
     the owner's, and a gate that accepted a paraphrase would let it drift.
+    Until plan 45-07 this counted the sentence in the six store descriptions;
+    D-45-14 moved it into the READMEs, which wrap it, so whitespace is
+    collapsed before counting.
     """
-    try:
-        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
-    except ElementTree.ParseError as broken:
-        return [f"{name}: is not well formed XML ({broken})"]
+    found = collapse(source).count(SHARE_SENTENCES[language])
+    if found == 1:
+        return []
 
-    violations: list[str] = []
-    for element in info.findall("description"):
-        language = element.get("lang", DEFAULT_LANGUAGE)
-        if language not in SHARE_SENTENCES:
-            continue
-        found = collapse(element.text or "").count(SHARE_SENTENCES[language])
-        if found != 1:
-            violations.append(
-                f"{name}: the description for {_named(language)} carries the share sentence of D-24-04 "
-                f"{found} times, and it belongs there exactly once in the owner's wording"
-            )
+    return [
+        (
+            f"{name}: carries the share sentence of D-24-04 for {_named(language)} {found} times, "
+            f"and it belongs there exactly once in the owner's wording"
+        )
+    ]
 
-    return violations
+
+def scan_similar_documents(name: str, source: str, language: str) -> list[str]:
+    """The similar documents line of phase 35 in the README of one language: exactly once.
+
+    The successor of the six description gate of F6 in test_phase36_audit.py
+    (D-45-14, plan 45-07). The whole line is held and not only its opening, so
+    that a point that keeps its label and loses what the feature does is a
+    finding too.
+    """
+    found = collapse(source).count(SIMILAR_DOCUMENTS_LINES[language])
+    if found == 1:
+        return []
+
+    return [
+        f"{name}: carries the similar documents line for {_named(language)} {found} times, and it belongs there once"
+    ]
 
 
 def list_under(text: str, heading: str) -> list[str] | None:
@@ -1083,59 +1093,79 @@ def _descriptions(name: str, source: str) -> tuple[list[tuple[str, str]], list[s
     return [(element.get("lang", DEFAULT_LANGUAGE), element.text or "") for element in info.findall("description")], []
 
 
-def scan_limitations(name: str, source: str) -> list[str]:
-    """The five known limitations of D-06 and D-30-06 under their heading, in every description.
+def readme_points(text: str, heading: str) -> list[str] | None:
+    """The first run of points under a README heading, or None when the heading is not there.
 
-    A block that is gone and a block that lost or gained a point are both
-    findings, and each one names the half and the language, because the six
-    texts are edited by hand and the one that was edited alone is the one to
-    look at.
+    A README puts an empty line between a heading and its list, so the run
+    starts at the first point after the heading; it ends at the first line that
+    is not a point. The limitation points are single lines, so a point that
+    lost its dash, or was wrapped, shows up as a missing point.
     """
-    descriptions, broken = _descriptions(name, source)
-    violations = list(broken)
-    for language, text in descriptions:
-        if language not in LIMITATION_HEADINGS:
-            continue
-        points = list_under(text, LIMITATION_HEADINGS[language])
-        if points is None:
-            violations.append(
-                f"{name}: the description for {_named(language)} has no block "
-                f"{LIMITATION_HEADINGS[language]!r} (D-06, HART-05)"
-            )
-        elif len(points) != LIMITATION_COUNT:
-            violations.append(
-                f"{name}: the description for {_named(language)} carries {len(points)} known limitations "
+    lines = [line.rstrip() for line in text.splitlines()]
+    if heading not in lines:
+        return None
+
+    after = lines[lines.index(heading) + 1 :]
+    first = next((at for at, line in enumerate(after) if line.startswith("- ")), len(after))
+    if any(line != "" for line in after[:first]):
+        return []
+    points: list[str] = []
+    for line in after[first:]:
+        if not line.startswith("- "):
+            break
+        points.append(line)
+
+    return points
+
+
+def scan_limitations(name: str, source: str, language: str) -> list[str]:
+    """The five known limitations of D-06 and D-30-06 under their heading in one README.
+
+    A section that is gone and a list that lost or gained a point are both
+    findings, and each one names the file and the language. Until plan 45-07
+    this scanned the six store descriptions; D-45-14 moved the block into the
+    READMEs.
+    """
+    heading = README_LIMITATION_HEADINGS[language]
+    points = readme_points(source, heading)
+    if points is None:
+        return [f"{name}: has no section {heading!r} (D-06, HART-05, D-45-14)"]
+    if len(points) != LIMITATION_COUNT:
+        return [
+            (
+                f"{name}: carries {len(points)} known limitations for {_named(language)} "
                 f"and D-06 asks for exactly {LIMITATION_COUNT}"
             )
+        ]
 
-    return violations
+    return []
 
 
-def scan_language_line(name: str, source: str) -> list[str]:
-    """The language line of D-11, right before the limitation heading in every description.
+def scan_language_line(name: str, source: str, language: str) -> list[str]:
+    """The language line of D-11, the last point right before the limitation heading of one README.
 
-    Right before means: the line above the heading is empty, and the line above
-    that one opens like the language line of its language. A language line that
-    moved elsewhere, or a heading that lost it, is reported with half and
+    Right before means: one empty line above the heading, and above it the
+    point that opens like the language line of its language, possibly wrapped
+    over continuation lines that open with two spaces. A language line that
+    moved elsewhere, or a heading that lost it, is reported with file and
     language.
     """
-    descriptions, broken = _descriptions(name, source)
-    violations = list(broken)
-    for language, text in descriptions:
-        if language not in LANGUAGE_LINE_OPENINGS:
-            continue
-        lines = [line.rstrip() for line in text.splitlines()]
-        heading = LIMITATION_HEADINGS[language]
-        at = lines.index(heading) if heading in lines else -1
-        if at >= 4 and lines[at - 2].startswith(MIGRATION_LINE_OPENINGS[language]) and lines[at - 3] == "":
-            at -= 2
-        if at < 2 or lines[at - 1] != "" or not lines[at - 2].startswith(LANGUAGE_LINE_OPENINGS[language]):
-            violations.append(
-                f"{name}: the description for {_named(language)} does not carry the language line "
-                f"{LANGUAGE_LINE_OPENINGS[language]!r} right before {heading!r} (D-11)"
+    lines = [line.rstrip() for line in source.splitlines()]
+    heading = README_LIMITATION_HEADINGS[language]
+    at = lines.index(heading) - 2 if heading in lines else -1
+    if at >= 0 and lines[at + 1] != "":
+        at = -1
+    while at > 0 and lines[at].startswith("  "):
+        at -= 1
+    if at < 0 or not lines[at].startswith(LANGUAGE_LINE_OPENINGS[language]):
+        return [
+            (
+                f"{name}: does not carry the language line for {_named(language)} {LANGUAGE_LINE_OPENINGS[language]!r} "
+                f"right before {heading!r} (D-11)"
             )
+        ]
 
-    return violations
+    return []
 
 
 def documented_limitations(doc: str) -> list[str] | None:
@@ -1160,61 +1190,33 @@ def documented_limitations(doc: str) -> list[str] | None:
 
 
 def scan_limitations_against_doc(name: str, source: str, doc: str) -> list[str]:
-    """The English limitations of one info.xml against the short list of the doc, character for character.
+    """The limitations of the English README against the short list of the doc, character for character.
 
-    D-06 says the store text and docs/language-analyzers.md carry the same
+    D-06 says the English list and docs/language-analyzers.md are the same
     list. A comparison is the only way that claim can go red: two lists that
-    are each five points long can still say different things.
+    are each five points long can still say different things. Until plan 45-07
+    the English store descriptions were compared; D-45-14 moved the list into
+    the READMEs, and README.en.md is the English one.
     """
     documented = documented_limitations(doc)
     if documented is None:
         return [f"docs/language-analyzers.md: has no section {LANGUAGE_ANALYZERS_HEADING!r}"]
 
-    descriptions, broken = _descriptions(name, source)
-    violations = list(broken)
-    for language, text in descriptions:
-        if language != DEFAULT_LANGUAGE:
-            continue
-        shipped = list_under(text, LIMITATION_HEADINGS[DEFAULT_LANGUAGE]) or []
-        if shipped != documented:
-            violations.append(
+    shipped = readme_points(source, README_LIMITATION_HEADINGS[DEFAULT_LANGUAGE]) or []
+    if shipped != documented:
+        return [
+            (
                 f"{name}: the English known limitations differ from the short list in "
-                f"docs/language-analyzers.md (D-06): store {shipped!r}, doc {documented!r}"
+                f"docs/language-analyzers.md (D-06): README {shipped!r}, doc {documented!r}"
             )
+        ]
 
-    return violations
+    return []
 
 
 def formats_missing(text: str) -> list[str]:
     """The format words of 1.5 that do not stand in a text as whole words."""
     return [word for word in FORMATS_OF_1_5 if re.search(rf"\b{word}\b", text) is None]
-
-
-def scan_file_types(name: str, source: str) -> list[str]:
-    """The file type list of every description names the five formats of 1.5.
-
-    A list that is gone and a list that lost a format are both findings, and each
-    names the half and the language, like the limitation block above.
-    """
-    descriptions, broken = _descriptions(name, source)
-    violations = list(broken)
-    for language, text in descriptions:
-        if language not in FILE_TYPE_HEADINGS:
-            continue
-        points = list_under(text, FILE_TYPE_HEADINGS[language])
-        if points is None:
-            violations.append(
-                f"{name}: the description for {_named(language)} has no block {FILE_TYPE_HEADINGS[language]!r}"
-            )
-            continue
-        missing = formats_missing("\n".join(points))
-        if missing:
-            violations.append(
-                f"{name}: the file type list for {_named(language)} does not name {', '.join(missing)} "
-                f"(FMT-01 to FMT-05)"
-            )
-
-    return violations
 
 
 def scan_readme_file_types(name: str, source: str) -> list[str]:
@@ -1255,7 +1257,14 @@ def drafted_file_types(listing: str) -> dict[str, list[str]] | None:
 
 
 def scan_file_types_against_draft(name: str, source: str, listing: str) -> list[str]:
-    """Every file type list of one info.xml against the draft of its language, character for character."""
+    """Every file type list of one info.xml against the draft of its language, character for character.
+
+    Since plan 45-07 only where a description still carries the list: D-45-14
+    moves the file type list out of the store descriptions, and the READMEs
+    name the formats instead (scan_readme_file_types). A list that does stand
+    in a description still has to be the drafted one, so a half that is edited
+    alone cannot drift away from the draft before the short store text arrives.
+    """
     drafted = drafted_file_types(listing)
     if drafted is None:
         return [f"docs/store-listing.md: has no section {DRAFT_OF_PHASE_31!r}"]
@@ -1265,8 +1274,8 @@ def scan_file_types_against_draft(name: str, source: str, listing: str) -> list[
     for language, text in descriptions:
         if language not in FILE_TYPE_HEADINGS:
             continue
-        shipped = list_under(text, FILE_TYPE_HEADINGS[language]) or []
-        if shipped != drafted.get(language):
+        shipped = list_under(text, FILE_TYPE_HEADINGS[language])
+        if shipped is not None and shipped != drafted.get(language):
             violations.append(
                 f"{name}: the file type list for {_named(language)} differs from the draft in "
                 f"docs/store-listing.md ({DRAFT_OF_PHASE_31}): store {shipped!r}, draft {drafted.get(language)!r}"
@@ -1852,25 +1861,25 @@ def test_the_measured_figure_stands_in_the_english_readme() -> None:
     assert scan_resident_figure("README.en.md", README.read_text(encoding="utf-8")) == []
 
 
-def test_the_measured_figure_stands_in_every_language_of_the_companion_half() -> None:
-    # The second place, and it is three texts rather than one: the figure has to
-    # stand in the English, the German and the French description, each in the
-    # spelling of its language.
-    violations = scan_resident_figure_of_an_info("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"))
+def test_the_measured_figure_stands_once_in_every_readme_in_the_spelling_of_its_language() -> None:
+    # D-45-14 (plan 45-07): the successor of the two gates that held the figure
+    # in the three descriptions of each half. The figure left the store text,
+    # so the three READMEs are the places that carry it, each in the spelling
+    # of its language and each exactly once.
+    violations = [
+        message
+        for readme, language in READMES
+        for message in scan_resident_figure(
+            readme.name, readme.read_text(encoding="utf-8"), RESIDENT_SPELLING[language]
+        )
+    ]
 
     assert violations == []
 
 
-def test_the_measured_figure_stands_in_every_language_of_the_backend_half() -> None:
-    # The third place. Both halves carry the same hardware block, and a half
-    # that was edited alone is the failure this comparison exists for.
-    violations = scan_resident_figure_of_an_info("backend/appinfo/info.xml", BACKEND_INFO.read_text(encoding="utf-8"))
-
-    assert violations == []
-
-
-def test_every_store_description_carries_exactly_one_measured_figure() -> None:
-    # The short text rule of 07.09.2026 over all six descriptions at once.
+def test_no_store_description_carries_more_than_one_measured_figure() -> None:
+    # The short text rule of 07.09.2026 over all six descriptions at once. Since
+    # D-45-14 a description may carry none; it may still not carry two.
     violations = [
         message
         for path in (PHP_INFO, BACKEND_INFO)
@@ -1905,48 +1914,41 @@ def test_the_language_analyzers_doc_carries_its_short_list_before_it_is_compared
     assert len(documented) == LIMITATION_COUNT
 
 
-def test_every_description_carries_the_five_known_limitations_under_its_heading() -> None:
-    # D-06 and HART-05 over all six descriptions at once.
+def test_every_readme_carries_the_five_known_limitations_under_its_heading() -> None:
+    # D-06 and HART-05 over the three READMEs (D-45-14, successor of the gate
+    # over the six descriptions).
     violations = [
         message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_limitations(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+        for readme, language in READMES
+        for message in scan_limitations(readme.name, readme.read_text(encoding="utf-8"), language)
     ]
 
     assert violations == []
 
 
-def test_the_english_known_limitations_of_both_halves_stand_verbatim_in_the_doc() -> None:
+def test_the_english_known_limitations_of_the_readme_stand_verbatim_in_the_doc() -> None:
     doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8")
-    violations = [
-        message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_limitations_against_doc(
-            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"), doc
-        )
-    ]
 
-    assert violations == []
+    assert scan_limitations_against_doc(README.name, README.read_text(encoding="utf-8"), doc) == []
 
 
-def test_the_language_line_stands_right_before_the_limitations_in_all_six_descriptions() -> None:
+def test_the_language_line_stands_right_before_the_limitations_in_all_three_readmes() -> None:
     # D-11: the languages that exist, read right before what they cannot do.
     violations = [
         message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_language_line(
-            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
-        )
+        for readme, language in READMES
+        for message in scan_language_line(readme.name, readme.read_text(encoding="utf-8"), language)
     ]
 
     assert violations == []
 
 
-def test_every_description_names_the_formats_of_1_5_in_its_file_type_list() -> None:
+def test_the_similar_documents_line_stands_once_in_every_readme() -> None:
+    # F6 of phase 36, moved by D-45-14 out of the six descriptions.
     violations = [
         message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_file_types(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+        for readme, language in READMES
+        for message in scan_similar_documents(readme.name, readme.read_text(encoding="utf-8"), language)
     ]
 
     assert violations == []
@@ -2229,20 +2231,27 @@ def test_a_mutated_figure_in_the_readme_is_reported() -> None:
     assert scan_resident_figure("README.en.md", _with_another_figure(README.read_text(encoding="utf-8"))) != []
 
 
-def test_a_mutated_figure_in_the_companion_half_is_reported_in_all_three_languages() -> None:
-    violations = scan_resident_figure_of_an_info(
-        "php/appinfo/info.xml", _with_another_figure(PHP_INFO.read_text(encoding="utf-8"))
-    )
+def test_a_mutated_figure_is_reported_in_each_of_the_three_readmes() -> None:
+    # Successor of the two mutation cases over the halves (plan 45-07): every
+    # README with another number in place of its own is a finding, and each
+    # one in the spelling of its language.
+    for readme, language in READMES:
+        source = readme.read_text(encoding="utf-8")
+        assert scan_resident_figure(readme.name, source, RESIDENT_SPELLING[language]) == [], readme.name
+        violations = scan_resident_figure(readme.name, _with_another_figure(source), RESIDENT_SPELLING[language])
+        assert len(violations) == 1, readme.name
+        assert "0 times" in violations[0]
 
-    assert len(violations) == len(RESIDENT_SPELLING)
 
+def test_a_readme_that_carries_the_figure_twice_is_reported() -> None:
+    # Exactly once: a second copy is where two numbers start to drift apart.
+    source = README_FR.read_text(encoding="utf-8")
+    doubled = source.replace(RESIDENT_SPELLING["fr"], f"{RESIDENT_SPELLING['fr']} ({RESIDENT_SPELLING['fr']})", 1)
 
-def test_a_mutated_figure_in_the_backend_half_is_reported_in_all_three_languages() -> None:
-    violations = scan_resident_figure_of_an_info(
-        "backend/appinfo/info.xml", _with_another_figure(BACKEND_INFO.read_text(encoding="utf-8"))
-    )
+    violations = scan_resident_figure("README.fr.md", doubled, RESIDENT_SPELLING["fr"])
 
-    assert len(violations) == len(RESIDENT_SPELLING)
+    assert len(violations) == 1
+    assert "2 times" in violations[0]
 
 
 def test_the_spellings_of_the_figure_do_not_stand_in_for_one_another() -> None:
@@ -2269,24 +2278,38 @@ def test_the_hardware_requirements_are_not_counted_as_measured_figures() -> None
     assert MEASURED_FIGURE.findall(french) == ["730,2 Mo"]
 
 
-def test_a_second_measured_figure_in_a_description_is_reported() -> None:
-    doubled = PHP_INFO.read_text(encoding="utf-8").replace(
-        "730.2 MB resident after an index run", "730.2 MB resident after an index run, 103.2 MB idle", 1
+def _description_sample(english: str, german: str = "Kurz.", french: str = "Court.") -> str:
+    """An info.xml of three descriptions, written out so that the case does not depend on today's store text."""
+    return (
+        '<?xml version="1.0"?>\n<info>\n'
+        f"\t<description><![CDATA[{english}]]></description>\n"
+        f'\t<description lang="de"><![CDATA[{german}]]></description>\n'
+        f'\t<description lang="fr"><![CDATA[{french}]]></description>\n'
+        "</info>\n"
     )
 
-    violations = scan_one_measured_figure("php/appinfo/info.xml", doubled)
+
+def test_a_second_measured_figure_in_a_description_is_reported() -> None:
+    doubled = _description_sample("- RAM: 4 GB is enough, 730.2 MB resident after an index run, 103.2 MB idle")
+
+    violations = scan_one_measured_figure("sample.xml", doubled)
 
     assert len(violations) == 1
     assert "carries 2 measured figures" in violations[0]
+    assert "the English default" in violations[0]
 
 
-def test_a_description_that_lost_its_measured_figure_is_reported_by_the_short_text_rule() -> None:
-    emptied = PHP_INFO.read_text(encoding="utf-8").replace(", 730.2 MB resident after an index run", "", 1)
+def test_a_description_without_a_measured_figure_passes_and_the_readme_without_it_does_not() -> None:
+    # D-45-14 in one case: the short store text may drop the figure, and the
+    # README of the same language may not (plan 45-07).
+    assert scan_one_measured_figure("sample.xml", _description_sample("- RAM: 4 GB is enough")) == []
 
-    violations = scan_one_measured_figure("php/appinfo/info.xml", emptied)
+    source = README_DE.read_text(encoding="utf-8")
+    emptied = collapse(source).replace(RESIDENT_SPELLING["de"], "", 1)
+    violations = scan_resident_figure("README.md", emptied, RESIDENT_SPELLING["de"])
 
     assert len(violations) == 1
-    assert "none at all" in violations[0]
+    assert "0 times" in violations[0]
 
 
 def test_a_description_that_lost_the_connector_sentence_is_reported_by_language() -> None:
@@ -2313,43 +2336,27 @@ def test_a_second_connector_sentence_is_reported_because_the_rule_says_exactly_o
     assert "2 times" in violations[0]
 
 
-def test_the_share_sentence_stands_once_in_all_three_languages_of_both_halves() -> None:
+def test_the_share_sentence_stands_in_the_readme_of_its_language() -> None:
     # D-24-04, plan 29-12. The German sentence is the owner's wording and the
     # English and French ones are the versions he accepted on 06.10.2026; none
-    # of the three is reworded here or anywhere else.
+    # of the three is reworded here or anywhere else. Since D-45-14 (plan
+    # 45-07) the READMEs are the places that hold it; the gate over the six
+    # descriptions and the narrow companion case of plan 29-12 went with it.
     violations = [
         message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_share_sentence(
-            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
-        )
+        for readme, language in READMES
+        for message in scan_share_sentence(readme.name, readme.read_text(encoding="utf-8"), language)
     ]
 
     assert violations == []
 
 
-def test_the_german_companion_description_carries_the_owner_sentence_character_for_character() -> None:
-    # The success criterion of plan 29-12 in its narrowest form: the companion's
-    # German store text, without collapsing any whitespace, holds SHARE_SENTENCE_DE.
-    descriptions, broken = _descriptions("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"))
-
-    assert broken == []
-    assert SHARE_SENTENCE_DE in dict(descriptions)["de"]
-
-
-def test_the_share_sentence_stands_in_the_readme_of_its_language() -> None:
-    # The same three wordings as the last point of the requirements in the
-    # three READMEs; the READMEs wrap their lines, so whitespace is collapsed.
-    for readme, language in ((README, DEFAULT_LANGUAGE), (README_DE, "de"), (README_FR, "fr")):
-        assert collapse(readme.read_text(encoding="utf-8")).count(SHARE_SENTENCES[language]) == 1, readme.name
-
-
 def test_a_reworded_share_sentence_is_reported_by_language() -> None:
-    reworded = PHP_INFO.read_text(encoding="utf-8").replace(
-        SHARE_SENTENCE_DE, SHARE_SENTENCE_DE.replace("höchstens", "maximal"), 1
-    )
+    source = README_DE.read_text(encoding="utf-8")
+    reworded = collapse(source).replace(SHARE_SENTENCE_DE, SHARE_SENTENCE_DE.replace("höchstens", "maximal"), 1)
+    assert reworded != collapse(source)
 
-    violations = scan_share_sentence("php/appinfo/info.xml", reworded)
+    violations = scan_share_sentence("README.md", reworded, "de")
 
     assert len(violations) == 1
     assert "lang=de" in violations[0]
@@ -2358,56 +2365,81 @@ def test_a_reworded_share_sentence_is_reported_by_language() -> None:
 
 def test_a_second_share_sentence_is_reported() -> None:
     sentence = SHARE_SENTENCES["fr"]
-    doubled = BACKEND_INFO.read_text(encoding="utf-8").replace(sentence, f"{sentence} {sentence}", 1)
+    doubled = collapse(README_FR.read_text(encoding="utf-8")).replace(sentence, f"{sentence} {sentence}", 1)
 
-    violations = scan_share_sentence("backend/appinfo/info.xml", doubled)
+    violations = scan_share_sentence("README.fr.md", doubled, "fr")
 
     assert len(violations) == 1
     assert "lang=fr" in violations[0]
     assert "2 times" in violations[0]
 
 
-def test_the_two_new_scans_report_a_broken_document_instead_of_raising() -> None:
+def test_the_share_sentence_of_another_language_does_not_stand_in() -> None:
+    # The English README with the German sentence in it is a finding for English.
+    english = collapse(README.read_text(encoding="utf-8")).replace(SHARE_SENTENCE_EN, SHARE_SENTENCE_DE, 1)
+
+    assert scan_share_sentence("README.en.md", english, DEFAULT_LANGUAGE) != []
+
+
+def test_the_xml_scans_report_a_broken_document_instead_of_raising() -> None:
     # The shape every scanner of this file keeps: a document that is not well
     # formed is a finding and not a stack trace, so that one broken edit does
-    # not hide every other finding behind an error.
+    # not hide every other finding behind an error. Since plan 45-07 the
+    # figure, limitation and language line scanners read READMEs and not XML.
     broken = PHP_INFO.read_text(encoding="utf-8").replace("</info>", "")
 
-    assert len(scan_resident_figure_of_an_info("sample.xml", broken)) == 1
     assert len(scan_one_measured_figure("sample.xml", broken)) == 1
     assert len(scan_connector_sentence("sample.xml", broken)) == 1
-    assert len(scan_limitations("sample.xml", broken)) == 1
-    assert len(scan_language_line("sample.xml", broken)) == 1
+    assert len(scan_file_types_against_draft("sample.xml", broken, STORE_LISTING.read_text(encoding="utf-8"))) == 1
 
 
-def test_a_description_that_lost_a_known_limitation_is_reported_with_half_and_language() -> None:
-    # A staged real file, as in the other mutation cases: the German block of
-    # the backend half loses its third point, and only that one text is named.
+def test_a_readme_that_lost_a_known_limitation_is_reported_with_file_and_language() -> None:
+    # A staged real file, as in the other mutation cases: the German README
+    # loses its third point, and only that one file is named.
     point = "- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt\n"
-    source = BACKEND_INFO.read_text(encoding="utf-8")
+    source = README_DE.read_text(encoding="utf-8")
     assert point in source
 
-    violations = scan_limitations("backend/appinfo/info.xml", source.replace(point, "", 1))
+    violations = [
+        message
+        for readme, language in READMES
+        for message in scan_limitations(
+            readme.name,
+            source.replace(point, "", 1) if readme == README_DE else readme.read_text(encoding="utf-8"),
+            language,
+        )
+    ]
 
     assert len(violations) == 1
-    assert "backend/appinfo/info.xml" in violations[0]
+    assert "README.md" in violations[0]
     assert "lang=de" in violations[0]
     assert f"carries {LIMITATION_COUNT - 1} known limitations" in violations[0]
 
 
-def test_a_description_that_lost_its_limitation_block_is_reported() -> None:
-    source = PHP_INFO.read_text(encoding="utf-8").replace(LIMITATION_HEADINGS["fr"], "Limites :", 1)
+def test_a_readme_that_lost_its_limitation_section_is_reported() -> None:
+    source = README_FR.read_text(encoding="utf-8").replace(README_LIMITATION_HEADINGS["fr"], "## Limites", 1)
 
-    violations = scan_limitations("php/appinfo/info.xml", source)
+    violations = scan_limitations("README.fr.md", source, "fr")
 
     assert len(violations) == 1
-    assert "lang=fr" in violations[0]
-    assert "has no block" in violations[0]
+    assert "has no section" in violations[0]
+
+
+def test_a_readme_whose_limitations_follow_a_paragraph_is_reported() -> None:
+    # The list has to be the first thing under the heading, so that a section
+    # that is prose with a list of something else below it does not count.
+    heading = README_LIMITATION_HEADINGS[DEFAULT_LANGUAGE]
+    source = README.read_text(encoding="utf-8").replace(f"{heading}\n", f"{heading}\n\nSome words.\n", 1)
+
+    violations = scan_limitations("README.en.md", source, DEFAULT_LANGUAGE)
+
+    assert len(violations) == 1
+    assert "carries 0 known limitations" in violations[0]
 
 
 def test_a_doc_list_that_differs_in_one_character_fails_the_comparison() -> None:
-    # One letter of the doc changes and both halves are reported, because both
-    # ship the list the doc no longer carries.
+    # One letter of the doc changes and the English README is reported,
+    # because it carries the list the doc no longer carries.
     doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8")
     mutated = doc.replace(
         "- Compound words are split for German and Dutch only",
@@ -2416,58 +2448,90 @@ def test_a_doc_list_that_differs_in_one_character_fails_the_comparison() -> None
     )
     assert mutated != doc
 
-    violations = [
-        message
-        for path in (PHP_INFO, BACKEND_INFO)
-        for message in scan_limitations_against_doc(path.name, path.read_text(encoding="utf-8"), mutated)
-    ]
+    violations = scan_limitations_against_doc("README.en.md", README.read_text(encoding="utf-8"), mutated)
 
-    assert len(violations) == 2
-    assert all("differ from the short list" in message for message in violations)
+    assert len(violations) == 1
+    assert "differ from the short list" in violations[0]
+
+
+def test_a_readme_list_that_differs_in_one_character_fails_the_comparison() -> None:
+    # The other side of the same comparison: the README changes, the doc not.
+    source = README.read_text(encoding="utf-8")
+    mutated = source.replace("- Czech: no stemming", "- Czech: no stemming at all", 1)
+    assert mutated != source
+
+    violations = scan_limitations_against_doc(
+        "README.en.md", mutated, LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8")
+    )
+
+    assert len(violations) == 1
+    assert "README.en.md" in violations[0]
 
 
 def test_a_doc_without_its_short_list_section_is_reported() -> None:
     doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8").replace(LANGUAGE_ANALYZERS_HEADING, "### Gone", 1)
 
-    violations = scan_limitations_against_doc("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"), doc)
+    violations = scan_limitations_against_doc("README.en.md", README.read_text(encoding="utf-8"), doc)
 
     assert len(violations) == 1
     assert "has no section" in violations[0]
 
 
 def test_a_language_line_that_moved_away_from_the_limitations_is_reported() -> None:
-    # The English language line of the companion half is swapped with the
-    # privacy point above it: both lines are still there, and the order of D-11
-    # is not.
-    source = PHP_INFO.read_text(encoding="utf-8")
+    # The English language line of the README moves to the top of the feature
+    # list: the line is still there, and the order of D-11 is not.
+    source = README.read_text(encoding="utf-8")
     language = (
-        "- Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available"
+        "- Search languages: German and English by default, Spanish, Italian, Dutch,\n"
+        "  Portuguese and Czech available\n"
     )
-    privacy = "- Privacy: everything runs locally, no telemetry, nothing leaves your server"
-    swapped = source.replace(f"{privacy}\n{language}", f"{language}\n{privacy}", 1)
-    assert swapped != source
+    assert language in source
+    moved = source.replace(language, "", 1).replace(
+        "## What Findling does\n\n", f"## What Findling does\n\n{language}", 1
+    )
+    assert moved != source
 
-    violations = scan_language_line("php/appinfo/info.xml", swapped)
+    violations = scan_language_line("README.en.md", moved, DEFAULT_LANGUAGE)
 
     assert len(violations) == 1
     assert "the English default" in violations[0]
     assert "(D-11)" in violations[0]
 
 
-def test_a_file_type_list_that_lost_heic_is_reported_with_half_and_language() -> None:
-    # A staged real file: the French list of the backend half loses HEIC, and
-    # only that one text is named.
-    source = BACKEND_INFO.read_text(encoding="utf-8")
-    line = "- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC\n"
-    assert line in source
+def test_a_readme_without_the_limitation_heading_has_no_language_line_before_it() -> None:
+    source = README_DE.read_text(encoding="utf-8").replace(README_LIMITATION_HEADINGS["de"], "## Grenzen", 1)
 
-    violations = scan_file_types(
-        "backend/appinfo/info.xml",
-        source.replace(line, "- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP\n", 1),
-    )
+    violations = scan_language_line("README.md", source, "de")
 
     assert len(violations) == 1
-    assert "lang=fr" in violations[0]
+    assert "lang=de" in violations[0]
+
+
+def test_a_readme_that_lost_or_doubled_the_similar_documents_line_is_reported() -> None:
+    line = SIMILAR_DOCUMENTS_LINES["fr"]
+    source = collapse(README_FR.read_text(encoding="utf-8"))
+    assert line in source
+
+    lost = scan_similar_documents("README.fr.md", source.replace(line, "", 1), "fr")
+    doubled = scan_similar_documents("README.fr.md", source.replace(line, f"{line} {line}", 1), "fr")
+    shortened = scan_similar_documents("README.fr.md", source.replace(line, line.split(" : ")[0], 1), "fr")
+
+    assert len(lost) == 1
+    assert "0 times" in lost[0]
+    assert len(doubled) == 1
+    assert "2 times" in doubled[0]
+    assert len(shortened) == 1
+
+
+def test_a_readme_that_lost_heic_is_reported() -> None:
+    # Successor of the HEIC case over the French list of the backend half.
+    source = README_FR.read_text(encoding="utf-8")
+    mutated = source.replace("WebP, HEIC)", "WebP)", 1)
+    assert mutated != source
+
+    violations = scan_readme_file_types("README.fr.md", mutated)
+
+    assert len(violations) == 1
     assert "does not name HEIC" in violations[0]
 
 
@@ -2483,14 +2547,32 @@ def test_docx_does_not_stand_in_for_doc_nor_xlsx_for_xls() -> None:
     ]
 
 
-def test_a_description_without_its_file_type_list_is_reported() -> None:
-    source = PHP_INFO.read_text(encoding="utf-8").replace(FILE_TYPE_HEADINGS["de"], "Dateitypen:", 1)
+def test_a_readme_without_its_file_type_section_is_reported() -> None:
+    # Successor of the case of a description without its list (plan 45-07).
+    source = README_DE.read_text(encoding="utf-8").replace(README_FILE_TYPE_HEADINGS["README.md"], "## Dateitypen", 1)
 
-    violations = scan_file_types("php/appinfo/info.xml", source)
+    violations = scan_readme_file_types("README.md", source)
 
     assert len(violations) == 1
-    assert "lang=de" in violations[0]
-    assert "has no block" in violations[0]
+    assert "has no section" in violations[0]
+
+
+def _drafted_sample(mutate: str = "") -> str:
+    """Three descriptions that carry the drafted file type lists, the English one with a tail added."""
+    drafted = drafted_file_types(STORE_LISTING.read_text(encoding="utf-8")) or {}
+    texts = {
+        language: "\n".join([FILE_TYPE_HEADINGS[language], *drafted.get(language, [])])
+        for language in FILE_TYPE_HEADINGS
+    }
+    return _description_sample(texts[DEFAULT_LANGUAGE] + mutate, texts["de"], texts["fr"])
+
+
+def test_a_description_with_the_drafted_list_or_without_any_list_passes_the_draft() -> None:
+    # D-45-14: the short store text may drop the list; a list that stays is the drafted one.
+    listing = STORE_LISTING.read_text(encoding="utf-8")
+
+    assert scan_file_types_against_draft("sample.xml", _drafted_sample(), listing) == []
+    assert scan_file_types_against_draft("sample.xml", _description_sample("No list."), listing) == []
 
 
 def test_a_readme_that_lost_zip_is_reported() -> None:
@@ -2505,16 +2587,11 @@ def test_a_readme_that_lost_zip_is_reported() -> None:
 
 
 def test_a_file_type_list_that_differs_from_the_draft_in_one_character_is_reported() -> None:
-    # The English list of the companion half gains one letter; the comparison
-    # names that one text and no other.
-    source = PHP_INFO.read_text(encoding="utf-8")
-    line = "- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC\n"
-    assert line in source
-
+    # The English list gains a few letters; the comparison names that one
+    # text and no other. A written out sample, so that the case keeps working
+    # once the short store text of plan 45-11 no longer carries any list.
     violations = scan_file_types_against_draft(
-        "php/appinfo/info.xml",
-        source.replace(line, "- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC, BMP\n", 1),
-        STORE_LISTING.read_text(encoding="utf-8"),
+        "sample.xml", _drafted_sample(", BMP"), STORE_LISTING.read_text(encoding="utf-8")
     )
 
     assert len(violations) == 1
