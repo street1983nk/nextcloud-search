@@ -8,6 +8,17 @@ dans [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
+### Ajouté
+
+- Chinois traditionnel (Taïwan) pour l'interface, contribution de
+  foolfitz (#56).
+
+### Corrigé
+
+- La page d'administration fonctionne avec une locale en trois parties
+  comme zh_Hant_TW, y compris lorsqu'elle se rabat sur la langue de la
+  page (#57).
+
 ## [1.6.5] - 2026-11-16
 
 ### Sécurité

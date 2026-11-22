@@ -6,6 +6,16 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+### Added
+
+- Traditional Chinese (Taiwan) for the user interface, contributed by
+  foolfitz (#56).
+
+### Fixed
+
+- The admin page works under a three part locale such as zh_Hant_TW, also
+  when it falls back to the language of the page (#57).
+
 ## [1.6.5] - 2026-11-16
 
 ### Security

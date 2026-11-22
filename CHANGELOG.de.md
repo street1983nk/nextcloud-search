@@ -7,6 +7,16 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- Traditionelles Chinesisch (Taiwan) für die Oberfläche, beigetragen von
+  foolfitz (#56).
+
+### Behoben
+
+- Die Verwaltungsseite funktioniert unter einer dreiteiligen Locale wie
+  zh_Hant_TW, auch wenn sie auf die Sprache der Seite zurückfällt (#57).
+
 ## [1.6.5] - 2026-11-16
 
 ### Sicherheit

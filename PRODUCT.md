@@ -32,7 +32,7 @@ Erfolg heißt, dass ein Nutzer ein Dokument über ein Wort aus dem Inhalt oder e
 - Zwei Store-Einträge in derselben Version: `findling` (Apps, PHP) und `findling_backend` (External Apps, Container über AppAPI/HaRP). Nextcloud 33 bis 35 (Quelle: README).
 - Nutzeroberflächen: Treffer in der Unified Search inklusive Typ- und Ordnerfilter, die Ergebnisseite mit Dateityp-, Zeitraumfilter, Sortierung, Paginierung und "Ähnliche Dokumente", die Verwaltungsseite unter den Admin-Einstellungen (Quelle: README, PROJECT.md).
 - Die Ergebnisseite funktioniert vollständig ohne JavaScript (Quelle: `php/templates/search.php`).
-- Oberfläche in acht Sprachen: EN, DE, FR, ES, IT, NL, pt_PT, pt_BR (Quelle: PROJECT.md).
+- Oberfläche in neun Sprachen: EN, DE, FR, ES, IT, NL, pt_PT, pt_BR, Traditional Chinese (zh_TW, seit 1.7.0, Beitrag von foolfitz, #56) (Quelle: PROJECT.md, `php/l10n/`).
 
 ## Capabilities and Constraints
 
