@@ -184,7 +184,7 @@ Plans:
   4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen.
   5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56 und #57.
 
-**Plans**: 17 plans
+**Plans**: 21 plans
 
 Plans:
 - [x] 45-01-PLAN.md: PRs #56 und #57 prüfen, je nach Owner-Freigabe mergen, root.lang-Nit, PRODUCT.md, CHANGELOG (KAT-03, KAT-04)
@@ -203,7 +203,12 @@ Plans:
 - [ ] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette
 - [ ] 45-15-PLAN.md: Antworten in #45, #56, #57 und Bitte in #53 nach dem Store-Release
 - [ ] 45-16-PLAN.md: Nachprüfung der späten Threats, /gsd:secure-phase 45 ohne offene Threats, Phasenabschluss (REL-07)
-- [ ] 45-17-PLAN.md: Fix #59 (Besitzer zuerst, Rückfall im Gateway bei Richtlinie, eigener Grund policy_blocked, Altzustände), Volltest-Befunde V-45-10-02/03, Nachbau und Gegenprobe auf echter Instanz, neuer audited_head; läuft VOR der Fortsetzung von 45-10 (COMP-05, EXCL-04, REL-07)
+- [ ] 45-17-PLAN.md: #59 Freigaben, Nachbau auf v1.6.5, Owner-Checkpoint aller Texte, PHP-Lesepfad (Besitzer zuerst, Rückfall nur bei Secure View, 403 policy) (COMP-05, REL-07)
+- [ ] 45-18-PLAN.md: #59 Urteil policy_blocked, Vokabular Generation 4, Serie und einmalige Erneuerung, Admin-Texte in 18 Katalogen (COMP-05, REL-07)
+- [ ] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
+- [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0, files_accesscontrol-Beleg, CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07)
+- [ ] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit, neuer audited_head (COMP-05, REL-07)
+  Reihenfolge: 45-17 bis 45-21 nacheinander VOR dem kompletten Neulauf von 45-10, danach 45-11 bis 45-14, 45-16 secure-phase vor dem Tag
 **UI hint**: yes
 
 ## Progress
@@ -218,7 +223,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 9/17 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 9/21 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
