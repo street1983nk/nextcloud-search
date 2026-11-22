@@ -1408,8 +1408,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gave ef4f5a19; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # ef4f5a19 as well; the recipe and the pipeline over git archive of 92a662c7, the last commit before
 # this change, gave 5b54386c with 137 files (positive control).
+# Moved on 2026-11-22 by plan 45-18, task 1 (issue #59): lib/Service/FileStateService.php and
+# lib/Service/AdminViewService.php know the reason policy_blocked and its texts, the remedy of
+# unreadable names the owner first, lib/Controller/ProfileController.php announces the verdict
+# generation 4, lib/Service/ReaderCandidates.php says in a comment that the mount cache knows only
+# users who logged in (I-45-17-04), and ProfileControllerTest.php, AdminViewServiceTest.php and
+# FileStateServiceCoverageTest.php follow. No file came or went, so PHP_FILES_TODAY stays at 141.
+# The recipe gave 34d00c1f; the independent pipeline of find, sort, sed and sha256sum over the
+# same tree gave 34d00c1f as well; the recipe and the pipeline over git archive of 006c2983, the
+# last commit before this change, gave ef4f5a19 with 141 files (positive control).
 PHP_FILES_TODAY = 141
-PHP_TREE_HASH_TODAY = "ef4f5a19056a7fd94531d9a28679ff6c2ce026d910ea9e73aa01f2a359a2e996"
+PHP_TREE_HASH_TODAY = "34d00c1f0492eade5592ec7609157c6660d60ebc2fb98cc28f7084c2788c6974"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2868,8 +2877,20 @@ PHP_TREE_HASH_TODAY = "ef4f5a19056a7fd94531d9a28679ff6c2ce026d910ea9e73aa01f2a35
 # sha256sum over the CRLF normalised tree: 76a4f649... both ways, and the same
 # pipeline over git archive HEAD before the step gave 872596c6... (positive
 # control).
+#
+# Moved on 2026-11-22 by plan 45-18, task 1 (issue #59): extract/errors.py
+# and store/repo.py know failed(policy_blocked), nc/queue.py speaks the
+# verdict generation 4 with an empty skipped table for it (W3) and sends
+# policy_blocked as gateway_error to a companion of 3 or less, and
+# worker/poller.py starts the catch-up of 1.5 from generation 3 on instead of
+# only on the generation of this code. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair moves as well, see above.
+# Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: 7249fe45... both ways, and the recipe and the same
+# pipeline over git archive of 006c2983 before the step gave 76a4f649...
+# (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "76a4f6499b4a9e06f5165f80b8afed67848ff658858658a2f2827dc3ee893a08"
+PACKAGE_TREE_HASH_TODAY = "7249fe45e517ec890f24204696a16304aa8e4aae0fb6cc0eb1f693b885e38387"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

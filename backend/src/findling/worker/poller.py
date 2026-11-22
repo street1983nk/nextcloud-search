@@ -115,7 +115,6 @@ from findling.nc.queue import (
     KNOWN_VERDICTS_GENERATIONS,
     LANE_INDEX,
     TOPUP_SUPPLIED,
-    VERDICTS_GENERATION,
     DocumentQueue,
     QueueJob,
 )
@@ -156,6 +155,12 @@ ROUND_PAUSED_STORE_ERROR: Final = "paused_store_error"
 # RUNNER_PARK_WAIT_SECONDS. The pass claims nothing rather than run OCR beside
 # an embedding (IDX-08); the next pass asks again.
 ROUND_WAITING_FOR_RUNNER: Final = "waiting_for_runner"
+
+# The lowest verdict generation (K6) whose companion stores the formats of 1.5,
+# the condition of the catch-up after the upgrade to 1.5 (FMT-06, D-31-01).
+# Until 1.7.0 it was the generation of this code; since 1.7.0 raised that to 4
+# for policy_blocked (#59), a 1.6 companion announcing 3 still qualifies.
+CATCHUP_MIN_GENERATION: Final = 3
 
 # How one job of the second track ended, the names of the embedding track since
 # plan 25-07 (worker/embedding.py). They are imported here because this module
@@ -1146,8 +1151,16 @@ class Poller:
         # crawl; part B is one reconcile cycle the mark makes due. Only on
         # generation 3, because only a 1.5 companion queues and stores the new
         # types, and only after the re-check of 1.4 above, which a 1.3.x stock
-        # still needs first. Same failure rule as the re-check.
-        if self._recheck_done and not self._catchup_done and choice.verdicts == VERDICTS_GENERATION:
+        # still needs first. Same failure rule as the re-check. From 3 on and
+        # not only on the generation of this code: 1.7.0 raised it to 4 (#59),
+        # and a 1.6 companion, which announces 3, stores the formats of 1.5 all
+        # the same.
+        if (
+            self._recheck_done
+            and not self._catchup_done
+            and choice.verdicts is not None
+            and choice.verdicts >= CATCHUP_MIN_GENERATION
+        ):
             try:
                 self._catchup_done = await catchup_step(self._store_or_die(), queue)
             except Exception as error:

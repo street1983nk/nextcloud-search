@@ -6271,13 +6271,17 @@ async def test_below_generation_3_the_catch_up_never_starts(
     assert CATCHUP_MARK not in store.read_meta()
 
 
-async def test_on_generation_3_the_catch_up_hands_the_refused_zip_back_once(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
+@pytest.mark.parametrize("generation", [3, VERDICTS_GENERATION])
+async def test_from_generation_3_on_the_catch_up_hands_the_refused_zip_back_once(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, generation: int
 ) -> None:
+    # Generation 3 stays enough after 1.7.0 raised the generation to 4 (#59):
+    # a 1.6 companion stores the formats of 1.5 the catch-up is about, and a
+    # 1.7 container in front of it must not wait for the companion update.
     store.write_meta(RECHECK_MARK, "done")
     _refused_zip(store)
     queue = _FakeQueue()
-    queue.verdicts_answer = VERDICTS_GENERATION
+    queue.verdicts_answer = generation
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
 
     for _ in range(3):

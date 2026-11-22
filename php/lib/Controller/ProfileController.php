@@ -43,14 +43,19 @@ final class ProfileController extends OCSController {
 	 * unsupported_variant under skipped (release 1.4.0). 3 means: also
 	 * archive_limit and blocked_malicious, and the formats of 1.5 (mail, ZIP,
 	 * .doc, .xls, HEIC) (D-31-03, D-31-08, D-36-03). blocked_malicious joins 3
-	 * without a new generation, because 1.5.0 has not reached anyone yet. A container may send a code only to a companion that
+	 * without a new generation, because 1.5.0 has not reached anyone yet. 4
+	 * means: also failed(policy_blocked), a file a rule keeps from every user
+	 * asked (release 1.7.0, issue #59). A container may send a code only to a
+	 * companion that
 	 * announces a generation which knows it, because QueueController refuses
 	 * the whole failure or skip list with a 400 as soon as one code in it is
 	 * unknown. A 1.3 companion sends no such field, and the container then maps
 	 * the codes onto older ones on the wire; a 1.5 container still treats 2 as
-	 * known and maps only archive_limit and blocked_malicious for it.
+	 * known and maps only archive_limit and blocked_malicious for it, and a 1.7
+	 * container sends policy_blocked as gateway_error to a companion of 3 or
+	 * less.
 	 */
-	public const VERDICTS_GENERATION = 3;
+	public const VERDICTS_GENERATION = 4;
 
 	public function __construct(
 		IRequest $request,
@@ -65,8 +70,9 @@ final class ProfileController extends OCSController {
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance",
 	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null,
-	 * "verdicts": 3}. verdicts is the constant VERDICTS_GENERATION, the
-	 * capability signal for the skipped codes of releases 1.4.0 and 1.5.0 (K6).
+	 * "verdicts": 4}. verdicts is the constant VERDICTS_GENERATION, the
+	 * capability signal for the skipped codes of releases 1.4.0 and 1.5.0 and
+	 * the failed code policy_blocked of release 1.7.0 (K6).
 	 * null is a stored precision outside the set; the container keeps its last
 	 * known precision on it rather than reindexing for a typo. confirmed is the
 	 * token the admin stored to lift a lowering of the memory guard (D-26-04),

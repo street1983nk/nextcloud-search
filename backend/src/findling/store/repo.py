@@ -365,6 +365,7 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "timeout",
             "out_of_memory",
             "gateway_error",
+            "policy_blocked",  # a rule keeps every user asked from reading it (#59)
             "repeatedly_stuck",
             "ocr_failed",  # the engine ended with a non zero code or was killed by a signal
             "ocr_unavailable",  # no engine and no language data in this image

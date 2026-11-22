@@ -861,6 +861,41 @@ final class AdminViewServiceTest extends TestCase {
 		self::assertStringNotContainsString('php-smbclient', $gateway);
 	}
 
+	// -- a refusal by a rule and the owner first (issue #59, plan 45-18) -----
+
+	public function testTheRowOfPolicyBlockedCarriesTheApprovedWording(): void {
+		// Owner approval 2026-11-22 11:52, texts 1 and 2 of 45-17-PLAN.md.
+		$table = (new \ReflectionClassConstant(AdminViewService::class, 'REASON_TEXT'))->getValue();
+
+		self::assertIsArray($table);
+		self::assertSame(
+			[
+				'Blocked by a rule',
+				'A rule keeps Findling from reading the file as any of the users asked, for example a watermark of Nextcloud Office that applies to the owner as well. The nightly comparison tries it again up to three times, and a change to the file tries it at once.',
+			],
+			$table['policy_blocked'] ?? null,
+		);
+	}
+
+	public function testTheRemedyOfUnreadableNamesTheOwnerFirst(): void {
+		// Text 3 of 45-17-PLAN.md: the old "asks the first 20 of its users in
+		// alphabetical order" is no longer true, the owner is asked first.
+		[$label, $remedy] = $this->reasonTextWithProbe('unreadable', true);
+
+		self::assertSame('Not readable for the users asked', $label);
+		self::assertSame(
+			'The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks its owner first, then its other users in alphabetical order, 20 at most. A file that is locked or offline is tried again a few times.',
+			$remedy,
+		);
+	}
+
+	public function testARefusalByARuleNeverCarriesTheSmbHint(): void {
+		[$label, $remedy] = $this->reasonTextWithProbe('policy_blocked', false);
+
+		self::assertSame('Blocked by a rule', $label);
+		self::assertStringNotContainsString('php-smbclient', $remedy);
+	}
+
 	// -- the limits per file, read only (POL-01, plan 33-06) -----------------
 
 	/**

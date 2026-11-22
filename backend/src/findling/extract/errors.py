@@ -127,6 +127,10 @@ class Reason(StrEnum):
     TIMEOUT = "timeout"
     OUT_OF_MEMORY = "out_of_memory"
     GATEWAY_ERROR = "gateway_error"
+    # a rule keeps every user asked from reading the file, for example a
+    # watermark of Nextcloud Office that applies to the owner as well (#59);
+    # the gateway answers 403 with X-Findling-Refusal: policy
+    POLICY_BLOCKED = "policy_blocked"
     REPEATEDLY_STUCK = "repeatedly_stuck"
     OCR_FAILED = "ocr_failed"  # the engine ended with a non zero code or was killed by a signal
     OCR_UNAVAILABLE = "ocr_unavailable"  # no engine and no language data in this image
@@ -164,6 +168,7 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.TIMEOUT,
             Reason.OUT_OF_MEMORY,
             Reason.GATEWAY_ERROR,
+            Reason.POLICY_BLOCKED,  # a rule, not a broken storage; retried like gateway_error (#59)
             Reason.REPEATEDLY_STUCK,
             Reason.OCR_FAILED,
             Reason.OCR_UNAVAILABLE,

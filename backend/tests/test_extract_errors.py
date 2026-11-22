@@ -283,6 +283,31 @@ def test_blocked_malicious_of_plan_36_06_is_a_decision_and_never_a_failure() -> 
         ExtractionOutcome.failed(reason)
 
 
+def test_policy_blocked_of_plan_45_18_is_a_failure_and_never_a_decision() -> None:
+    """A file a rule keeps from every user asked is failed, in every copy (#59).
+
+    The watermark of Nextcloud Office that applies to the owner as well is no
+    decision of Findling about the file: Findling wanted to read it and could
+    not, so the verdict counts as an error on the page and the reconcile asks
+    again, like gateway_error. skipped(policy_blocked) would hide it among the
+    deliberate decisions.
+    """
+    reason = Reason("policy_blocked")
+
+    assert reason is Reason.POLICY_BLOCKED
+    assert reason in STATE_REASONS[State.FAILED]
+    assert reason not in STATE_REASONS[State.SKIPPED]
+    assert "policy_blocked" in repo.STATE_REASONS["failed"]
+    assert "policy_blocked" not in repo.STATE_REASONS["skipped"]
+    assert "policy_blocked" in _php_reasons()
+    assert "policy_blocked" in _php_state_reasons()["failed"]
+    assert "policy_blocked" not in _php_state_reasons()["skipped"]
+
+    assert ExtractionOutcome.failed(reason).reason is reason
+    with pytest.raises(ValueError, match="does not belong"):
+        ExtractionOutcome.skipped(reason)
+
+
 def test_a_skipped_verdict_carries_the_signature_code_as_its_detail() -> None:
     # D-36-03, Pitfall 2: the detail is no longer reserved for a failure.
     outcome = ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="zip_ratio")

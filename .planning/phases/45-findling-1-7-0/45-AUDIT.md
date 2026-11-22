@@ -680,3 +680,70 @@ Befunde Task 3:
 |---|---|---|---|---|
 | I-45-17-06 | INFO | Die Spalte `path` eines Auftrags folgt jetzt dem Leser: liest der Besitzer, ist der Pfad relativ zu seinem Ordner, nicht mehr zu dem der alphabetisch ersten Empfängerin. Gewollt (Behavior "path relativ zu bobs Ordner"); docKey kommt weiter aus oc_filecache und ist unberührt | QueueServiceReaderTest `testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient` | In 45-20 an einem echten Treffer (Titel, Pfad, Link) gegenprüfen |
 | I-45-17-07 | INFO | `asked` zählt die Leser der zweiten Runde einschließlich übersprungener; die benannte Person ohne Besitzer wird in der zweiten Runde in actAs erneut gefragt (sie steht in readingOrder) | GatewayReaderTest `testWithoutAnOwnerAReaderWhoDoesNotResolveIsPassedOver` (asked 3) | So belassen: ein Versuch mehr, dafür eine Reihenfolge für Claim und Gateway; Zeitmessung mit 20 Kandidaten in 45-20 (T-45-61) |
+
+### RED und GREEN 45-18
+
+Plan 45-18, 2026-11-22, nach den Owner-Entscheiden von 11:52 UTC (Texte 1 bis 3 wörtlich, c1, Serie bis 3 Nächte vom 08:47). Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer.
+
+Task 1 (Vokabular, Generation 4, Texte, Gates), RED (nicht committet, nur die neuen und die mit der Generation wandernden Fälle):
+
+`PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_extract_errors.py tests/test_queue_client.py tests/test_admin_ui_contract.py tests/test_store_metadata.py` -> `24 failed, 576 passed in 3.43s`, wörtlich:
+
+```
+FAILED tests/test_extract_errors.py::test_policy_blocked_of_plan_45_18_is_a_failure_and_never_a_decision
+FAILED tests/test_queue_client.py::test_the_container_knows_the_generations_2_3_and_4
+FAILED tests/test_queue_client.py::test_a_companion_announcing_a_known_generation_reads_as_that_generation[4]
+FAILED tests/test_queue_client.py::test_verdicts_is_a_closed_set_of_three_generations[4-4]
+FAILED tests/test_queue_client.py::test_policy_blocked_reaches_only_a_companion_of_generation_4[profile0-gateway_error]
+FAILED tests/test_queue_client.py::test_policy_blocked_reaches_only_a_companion_of_generation_4[profile1-gateway_error]
+FAILED tests/test_queue_client.py::test_policy_blocked_reaches_only_a_companion_of_generation_4[profile2-gateway_error]
+FAILED tests/test_queue_client.py::test_towards_generation_4_the_skipped_codes_of_3_keep_their_name
+FAILED tests/test_queue_client.py::test_the_skipped_fallback_per_generation
+FAILED tests/test_queue_client.py::test_the_failed_fallback_per_generation
+FAILED tests/test_queue_client.py::test_every_skipped_fallback_is_a_skipped_pair_that_generation_stores[4]
+FAILED tests/test_queue_client.py::test_every_failed_fallback_is_a_failed_pair_that_generation_stores[None]
+FAILED tests/test_queue_client.py::test_every_failed_fallback_is_a_failed_pair_that_generation_stores[2]
+FAILED tests/test_queue_client.py::test_every_failed_fallback_is_a_failed_pair_that_generation_stores[3]
+FAILED tests/test_queue_client.py::test_every_failed_fallback_is_a_failed_pair_that_generation_stores[4]
+FAILED tests/test_admin_ui_contract.py::test_policy_blocked_has_its_row_and_its_sentences_in_every_catalogue
+FAILED tests/test_admin_ui_contract.py::test_the_remedy_of_unreadable_names_the_owner_first_in_every_catalogue
+FAILED tests/test_admin_ui_contract.py::test_the_number_in_the_remedy_of_unreadable_is_max_reader_tries
+FAILED tests/test_admin_ui_contract.py::test_the_reader_tries_gate_reports_a_number_that_is_not_the_constant
+FAILED tests/test_admin_ui_contract.py::test_the_three_in_both_retry_remedies_is_gateway_error_retries
+FAILED tests/test_admin_ui_contract.py::test_the_retry_gate_reports_another_count
+FAILED tests/test_admin_ui_contract.py::test_the_german_catalogue_covers_both_german_language_codes
+FAILED tests/test_store_metadata.py::test_the_full_text_1_6_3_carries_its_date_the_accepted_sentences_and_the_release_note
+FAILED tests/test_store_metadata.py::test_the_superseded_sentence_is_the_old_remedy_of_unreadable_and_an_accepted_one
+```
+
+Die zwei Fehl-Sample-Fälle der Zahl-Gates (`..._reports_a_number_that_is_not_the_constant`, `..._reports_another_count`) waren im RED mit KeyError rot, weil die Sätze noch in keinem Katalog standen; nach GREEN prüfen sie das Fehl-Sample selbst (21 statt 20 in `es.json`, "vier keer" in `nl.js`, 4 statt 3). Die 1.6.3-Fehl-Samples (`test_a_sentence_without_its_key_and_not_on_the_superseded_list_is_reported`, `test_a_superseded_sentence_the_catalogue_still_carries_is_reported`, `test_a_superseded_sentence_whose_german_left_the_listing_is_reported`, `test_a_superseded_sentence_is_checked_against_the_listing_only`) laufen auf der Stichprobe und waren schon im RED grün: sie prüfen den Gate selbst, nicht den Baum; rot wurde der Gate am echten Baum (`test_the_full_text_1_6_3_...`: `still has an entry for the sentence ..., superseded in 1.7.0`).
+
+`bash scripts/dev/phpunit_docker.sh --filter 'ProfileControllerTest|FileStateServiceCoverageTest|AdminViewServiceTest'` -> `Tests: 239, Assertions: 1097, Failures: 5.`, wörtlich:
+
+```
+1) OCA\Findling\Tests\Unit\AdminViewServiceTest::testTheRowOfPolicyBlockedCarriesTheApprovedWording
+Failed asserting that null is identical to Array &0 [
+2) OCA\Findling\Tests\Unit\AdminViewServiceTest::testTheRemedyOfUnreadableNamesTheOwnerFirst
+Failed asserting that two strings are identical.
+3) OCA\Findling\Tests\Unit\AdminViewServiceTest::testARefusalByARuleNeverCarriesTheSmbHint
+Failed asserting that two strings are identical.
+4) OCA\Findling\Tests\Unit\FileStateServiceCoverageTest::testARefusalByARuleIsAFailureTheStoreAccepts
+Failed asserting that false is true.
+5) OCA\Findling\Tests\Unit\ProfileControllerTest::testTheAnswerAnnouncesTheVerdictGeneration
+Failed asserting that 3 is identical to 4.
+```
+
+`testARefusalByARuleIsNeverADecision` (skipped(policy_blocked) abgelehnt, keine Anweisung) war im RED grün, weil record() das Paar schon vor dem Fix ablehnte (unbekannter Code); er bleibt als Wächter.
+
+Zwei Nachzügler, die der gefilterte RED nicht zeigen konnte, weil sie den alten Wert 3 wörtlich tragen und erst mit dem Fix wanderten: sieben Erwartungs-Arrays in `ProfileControllerTest.php` (`'verdicts' => 3` -> `4`, im vollen PHPUnit-Lauf vor dem Commit `Failures: 13`, alle Datensätze dieser sieben Fälle) und `test_phase31_audit.py::test_no_code_reaches_a_companion_that_does_not_know_it` (volle pytest-Suite `7 failed, 7295 passed, 305 skipped`, alle sieben Parameter dieses Falls). Beide sind angepasst (Abweichungen in 45-18-SUMMARY.md).
+
+Regression durch die Generation (Rule 1): `poller.py` startete den Nachlauf von 1.5 nur bei `choice.verdicts == VERDICTS_GENERATION`. Mit 4 hätte ein 1.7-Container vor einer 1.6-Begleit-App (3) ihn nie gestartet. RED nach dem Hochsetzen der Konstante, vor dem Fix: `tests/test_poller.py -k catch_up` -> `1 failed, 6 passed` (`test_from_generation_3_on_the_catch_up_hands_the_refused_zip_back_once[3]`). Fix: `CATCHUP_MIN_GENERATION: Final = 3`, Bedingung `choice.verdicts >= CATCHUP_MIN_GENERATION`; danach `7 passed`.
+
+Fix in einem Zug: errors.py `POLICY_BLOCKED` (Reason und failed-Menge), repo.py STATE_REASONS, FileStateService (REASONS und STATE_REASONS['failed']), AdminViewService (Zeile `policy_blocked` mit Label und Abhilfe hinter gateway_error, neue Abhilfe von unreadable, Docblock 26 statt 25 Codes), queue.py Generation 4 (KNOWN {2, 3, 4}, skipped-Tabelle 4 leer (W3), failed-Tabelle 4 leer und 3/2/None `policy_blocked -> gateway_error`), ProfileController `VERDICTS_GENERATION = 4` mit Docblock, 18 Katalogdateien (zwei neue Schlüssel hinter der Abhilfe von gateway_error, der unreadable-Schlüssel an Ort und Stelle ersetzt; DE und FR wörtlich wie freigegeben, es, it, nl, pt_BR, pt_PT, zh_TW nach den Wortwahl-Tabellen der Sprachdokumente), sechs Sprachtabellen samt Nachtrag (fünf deutsch, docs/l10n-chinese.md englisch mit Schlüsselzahl 382), Schlüsselzahl 380 -> 382, Docblock von ReaderCandidates::forFile() (I-45-17-04, nur Kommentar), Baumhashes.
+
+Gates neu: `scan_reader_tries` (jede Zahl im unreadable-Satz in Schlüssel und allen 18 Katalogen gleich `MAX_READER_TRIES` aus ReaderCandidates.php, Fehl-Sample 21 -> rot), `scan_retry_words` (die Drei in Worten in den Abhilfen von policy_blocked und gateway_error in allen 18 Katalogen gleich `GATEWAY_ERROR_RETRIES`, Fehl-Samples "vier keer" und 4 -> rot), 1.6.3-Gate nach c1 (`SUPERSEDED_IN_1_7_0` mit dem alten unreadable-Satz und seinem abgenommenen deutschen Wortlaut; der Satz wird nur gegen docs/store-listing.md geprüft, ein Katalog, der ihn noch trägt, ist ein Verstoß; Fehl-Samples: abgelöster Satz ohne Listeneintrag und ohne Schlüssel -> rot, Satz in der Liste und noch im Katalog -> rot, deutscher Wortlaut nicht mehr im Abschnitt -> rot).
+
+GREEN:
+verify-Zeile von Task 1 wörtlich aus `<scratchpad>/v18_t1.sh` -> Exit 0: die neun pytest-Dateien `1262 passed, 12 skipped`; ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund; `bash scripts/dev/phpunit_docker.sh` -> `OK (1347 tests, 8616 assertions)` (`1347 tests executed, floor 28`); `bash scripts/dev/php_gates_docker.sh all` -> `psalm taint gate green against 3 nextcloud/ocp tags` (je `No errors found!`, `0 findings, probe found 3`), `php-cs-fixer: no violation`, zizmor und actionlint grün. Dazu `tests/test_poller.py tests/test_profile_wire.py tests/test_phase31_audit.py` -> `360 passed, 1 skipped`; die volle pytest-Suite vor den zwei Nachzüglern `7 failed, 7295 passed, 305 skipped` (nur der Fall aus test_phase31_audit.py), danach dieser Fall `98 passed` über die Datei.
+
+Baumhashes: php/ Rezept und unabhängige Pipeline `34d00c1f...` mit 141 Dateien, Positivkontrolle `git archive 006c2983` -> `ef4f5a19...` mit 141; backend/src/findling Rezept und Pipeline `7249fe45...` mit 83 Dateien, Positivkontrolle `git archive 006c2983` -> `76a4f649...` mit 83.

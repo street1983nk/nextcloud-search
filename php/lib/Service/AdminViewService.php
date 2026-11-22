@@ -477,7 +477,7 @@ final class AdminViewService {
 	 * blank cell is also what a drift between the three reason lists would look
 	 * like, so the two cases have to stay distinguishable.
 	 *
-	 * Twenty-five codes, exactly the ones FileStateService::REASONS holds and the
+	 * Twenty-six codes, exactly the ones FileStateService::REASONS holds and the
 	 * reason codes of the container. `excluded`, the reason of the exclusion rules
 	 * of plan 04-08, had its row here before it reached that list. The other
 	 * direction is the one that would hurt, and it cannot happen unnoticed: a
@@ -488,7 +488,7 @@ final class AdminViewService {
 	 * The strings are read from here and handed to IL10N::t() rather than being
 	 * written as literals at the call site. This app has no string extractor, its
 	 * translation files are written by hand, and one table next to the contract
-	 * it copies is easier to check against that contract than twenty-five calls spread
+	 * it copies is easier to check against that contract than twenty-six calls spread
 	 * over a match expression.
 	 *
 	 * @var array<string, array{0:string, 1:string}> reason code to label and remedy
@@ -536,7 +536,7 @@ final class AdminViewService {
 		],
 		'unreadable' => [
 			'Not readable for the users asked',
-			'The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times.',
+			'The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks its owner first, then its other users in alphabetical order, 20 at most. A file that is locked or offline is tried again a few times.',
 		],
 		'system_file' => [
 			'System or helper file',
@@ -585,6 +585,13 @@ final class AdminViewService {
 		'gateway_error' => [
 			'File was not retrievable',
 			'Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.',
+		],
+		// Issue #59, plan 45-18: the content gateway answered 403 with
+		// X-Findling-Refusal: policy, a rule keeps every user asked from
+		// reading the file. Wording approved by the owner on 2026-11-22.
+		'policy_blocked' => [
+			'Blocked by a rule',
+			'A rule keeps Findling from reading the file as any of the users asked, for example a watermark of Nextcloud Office that applies to the owner as well. The nightly comparison tries it again up to three times, and a change to the file tries it at once.',
 		],
 		'repeatedly_stuck' => [
 			'Stuck repeatedly',

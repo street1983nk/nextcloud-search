@@ -50,7 +50,7 @@ from typing import Any, cast
 import pytest
 
 from findling.extract import sandbox
-from findling.extract.errors import STATE_REASONS, Reason, State
+from findling.extract.errors import STATE_REASONS, ExtractionOutcome, Reason, State
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import (
@@ -788,19 +788,30 @@ _NEW_IN_GENERATION_2 = frozenset({"system_file", "legacy_format", "unsupported_v
 # blocked_malicious joins generation 3 (36-06, D-36-03): 1.5.0 is unreleased, so
 # the generation it belongs to has not reached a companion yet.
 _NEW_IN_GENERATION_3 = frozenset({"archive_limit", "blocked_malicious"})
+# policy_blocked joins generation 4 (release 1.7.0, issue #59, plan 45-18), a
+# failed code; towards 3, 2 and no signal it travels as gateway_error.
+_NEW_IN_GENERATION_4 = frozenset({"policy_blocked"})
+_NEW_IN_GENERATION_4_FAILED_ONLY = frozenset({Reason.POLICY_BLOCKED})
 
 
-@pytest.mark.parametrize("generation", [None, 0, 1, 2, 3, 4, 99])
+@pytest.mark.parametrize("generation", [None, 0, 1, 2, 3, 4, 5, 99])
 def test_no_code_reaches_a_companion_that_does_not_know_it(generation: int | None) -> None:
     unknown = {
-        2: _NEW_IN_GENERATION_3,
-        3: frozenset[str](),
-    }.get(cast("int", generation), _NEW_IN_GENERATION_2 | _NEW_IN_GENERATION_3)
+        2: _NEW_IN_GENERATION_3 | _NEW_IN_GENERATION_4,
+        3: _NEW_IN_GENERATION_4,
+        4: frozenset[str](),
+    }.get(cast("int", generation), _NEW_IN_GENERATION_2 | _NEW_IN_GENERATION_3 | _NEW_IN_GENERATION_4)
     for tables, state in (
         (_SKIPPED_FALLBACK_BY_GENERATION, State.SKIPPED),
         (_FAILED_FALLBACK_BY_GENERATION, State.FAILED),
     ):
         for reason in Reason:
+            if state is State.SKIPPED and reason in _NEW_IN_GENERATION_4_FAILED_ONLY:
+                # The first failed code an older companion does not know. The
+                # skip list cannot carry it at all, ExtractionOutcome.skipped
+                # refuses the pair (asserted below), so the skipped tables
+                # stay as plan 45-18 sets them and have no entry for it.
+                continue
             sent = _wire_reason(reason.value, generation, tables)
             assert sent not in unknown, (generation, reason)
             if reason in STATE_REASONS[state] and reason.value not in unknown:
@@ -815,6 +826,14 @@ def test_no_code_reaches_a_companion_that_does_not_know_it(generation: int | Non
         assert _wire_reason("blocked_malicious", generation, _FAILED_FALLBACK_BY_GENERATION) == "corrupt"
     if generation == 3:
         assert _wire_reason("blocked_malicious", 3, _SKIPPED_FALLBACK_BY_GENERATION) == "blocked_malicious"
+    with pytest.raises(ValueError, match="does not belong"):
+        ExtractionOutcome.skipped(Reason.POLICY_BLOCKED)
+    # policy_blocked reaches only generation 4, and gateway_error stands in for it below.
+    if generation == 4:
+        assert _wire_reason("policy_blocked", 4, _FAILED_FALLBACK_BY_GENERATION) == "policy_blocked"
+        assert _wire_reason("archive_limit", 4, _SKIPPED_FALLBACK_BY_GENERATION) == "archive_limit"
+    else:
+        assert _wire_reason("policy_blocked", generation, _FAILED_FALLBACK_BY_GENERATION) == "gateway_error"
 
 
 # -- the catch-up mark under manipulation ------------------------------------------------

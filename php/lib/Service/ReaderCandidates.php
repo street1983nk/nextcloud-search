@@ -118,7 +118,12 @@ final class ReaderCandidates {
 	 *
 	 * A user the mount cache does not know yet (somebody who never logged in
 	 * since a Team Folder was given to their group, I-45-17-04) is in no list
-	 * and therefore no reader either.
+	 * and therefore no reader either. The mount cache learns a user at the
+	 * first setup of their file system, so it only knows users who have
+	 * logged in at least once: a user who never logged in is no candidate in
+	 * readingOrder() and is missing from the read rights of the index
+	 * until the file is read again;
+	 * pre-existing, not fixed in 1.7.0.
 	 *
 	 * @return array{users: list<string>, truncated: bool, owner: ?string}
 	 */

@@ -2930,6 +2930,205 @@ def test_the_remedy_of_a_gateway_error_says_when_it_is_tried_again() -> None:
     assert carrying == sorted(document.name for document, _ in LANGUAGE_TABLES)
 
 
+# Plan 45-18 (issue #59): a refusal by a rule has its own reason, and the remedy
+# of unreadable names the owner first. Texts 1 to 3 of 45-17-PLAN.md, approved
+# by the owner on 2026-11-22 11:52 ("Go", 45-FREIGABEN.md); DE and FR are the
+# approved wordings, the six other languages are drafts after their documents.
+POLICY_BLOCKED_LABEL = "Blocked by a rule"
+POLICY_BLOCKED_REMEDY = (
+    "A rule keeps Findling from reading the file as any of the users asked, for example a watermark of Nextcloud "
+    "Office that applies to the owner as well. The nightly comparison tries it again up to three times, and a "
+    "change to the file tries it at once."
+)
+UNREADABLE_REMEDY = (
+    "The file is still there. Check the advanced permissions of the Team Folder or the access rights on the "
+    "external storage: Findling reads a file only as a user who may open it and asks its owner first, then its "
+    "other users in alphabetical order, 20 at most. A file that is locked or offline is tried again a few times."
+)
+#: The remedy of 1.6.3 it replaces (decision c1: the old key leaves every catalogue).
+UNREADABLE_REMEDY_BEFORE = (
+    "The file is still there. Check the advanced permissions of the Team Folder or the access rights on the "
+    "external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users "
+    "in alphabetical order. A file that is locked or offline is tried again a few times."
+)
+APPROVED_59: dict[str, dict[str, str]] = {
+    "de": {
+        POLICY_BLOCKED_LABEL: "Durch eine Regel blockiert",
+        POLICY_BLOCKED_REMEDY: (
+            "Eine Regel verhindert, dass Findling die Datei als einer der gefragten Nutzer liest, zum Beispiel ein "
+            "Wasserzeichen von Nextcloud Office, das auch für den Besitzer gilt. Der nächtliche Abgleich versucht es "
+            "bis zu dreimal erneut, eine Änderung an der Datei sofort."
+        ),
+        UNREADABLE_REMEDY: (
+            "Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte "
+            "auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und "
+            "fragt zuerst ihren Besitzer, dann ihre übrigen Nutzer in alphabetischer Reihenfolge, höchstens 20. Eine "
+            "gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht."
+        ),
+    },
+    "fr": {
+        POLICY_BLOCKED_LABEL: "Bloqué par une règle",
+        POLICY_BLOCKED_REMEDY: (
+            "Une règle empêche Findling de lire le fichier au nom des utilisateurs interrogés, par exemple un "
+            "filigrane de Nextcloud Office qui s'applique aussi au propriétaire. La comparaison nocturne réessaie "
+            "jusqu'à trois fois, et une modification du fichier relance la lecture immédiatement."
+        ),
+        UNREADABLE_REMEDY: (
+            "Le fichier existe toujours. Vérifiez les permissions avancées du Team Folder ou les droits d'accès sur "
+            "le stockage externe : Findling ne lit un fichier qu'en tant qu'utilisateur autorisé à l'ouvrir et "
+            "interroge d'abord son propriétaire, puis ses autres utilisateurs par ordre alphabétique, 20 au plus. "
+            "Un fichier verrouillé ou hors ligne est réessayé quelques fois."
+        ),
+    },
+}
+READER_CANDIDATES = REPO_ROOT / "php" / "lib" / "Service" / "ReaderCandidates.php"
+
+#: A number of retries in words, per catalogue, as the remedies of gateway_error
+#: and policy_blocked spell it. A catalogue is named by its file stem.
+RETRY_WORDS: dict[int, dict[str, str]] = {
+    3: {
+        "en": "three times",
+        "de": "dreimal",
+        "de_DE": "dreimal",
+        "fr": "trois fois",
+        "es": "tres veces",
+        "it": "tre volte",
+        "nl": "drie keer",
+        "pt_BR": "três vezes",
+        "pt_PT": "três vezes",
+        "zh_TW": "三次",
+    }
+}
+
+
+def max_reader_tries(source: str) -> int:
+    """MAX_READER_TRIES of ReaderCandidates.php, read out of its source."""
+    found = re.findall(r"public const MAX_READER_TRIES = (\d+);", source)
+    assert len(found) == 1, "MAX_READER_TRIES is no longer where this gate looks for it"
+    return int(found[0])
+
+
+def scan_reader_tries(texts: Mapping[str, str], tries: int) -> list[str]:
+    """Every number in the unreadable remedy, per language, has to be ``tries``.
+
+    The sentence promises how many users are asked; the constant decides it.
+    One number per sentence and exactly that one, so a 21 in one language or a
+    second figure that crept in is a violation of its own.
+    """
+    violations: list[str] = []
+    for name, text in texts.items():
+        numbers = re.findall(r"\d+", text)
+        if numbers != [str(tries)]:
+            violations.append(f"{name}: the remedy of unreadable carries {numbers}, MAX_READER_TRIES is {tries}")
+    return violations
+
+
+def scan_retry_words(texts: Mapping[str, str], retries: int) -> list[str]:
+    """Every wording of a remedy that promises retries names ``retries`` in words.
+
+    ``texts`` is named the way ``_wordings`` names it, the language is the part
+    of the name before the suffix.
+    """
+    words = RETRY_WORDS.get(retries)
+    if words is None:
+        return [f"no words for {retries} retries, the remedies say three"]
+    violations: list[str] = []
+    for name, text in texts.items():
+        word = words.get(name.split(".")[0])
+        if word is None or word not in text:
+            violations.append(f"{name}: the remedy does not say {word!r} for {retries} retries")
+    return violations
+
+
+def _wordings(english: str) -> dict[str, str]:
+    """The sentence in English and in every catalogue, named by file stem and suffix."""
+    texts = {"en": english}
+    for catalogue in L10N_CATALOGUES:
+        texts[f"{catalogue.stem}{catalogue.suffix}"] = str(catalogue_of(catalogue)[english])
+    return texts
+
+
+def test_policy_blocked_has_its_row_and_its_sentences_in_every_catalogue() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    entry = _reason_entry(view, "policy_blocked")
+    assert f"'{POLICY_BLOCKED_LABEL}'," in entry
+    assert f"'{POLICY_BLOCKED_REMEDY}'," in entry
+
+    assert len(L10N_CATALOGUES) == 18
+    for catalogue in L10N_CATALOGUES:
+        values = catalogue_of(catalogue)
+        assert POLICY_BLOCKED_LABEL in values, catalogue.name
+        assert POLICY_BLOCKED_REMEDY in values, catalogue.name
+    for catalogue in (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS):
+        values = catalogue_of(catalogue)
+        for english in (POLICY_BLOCKED_LABEL, POLICY_BLOCKED_REMEDY):
+            assert values[english] == APPROVED_59["de"][english], catalogue.name
+    for catalogue in (L10N_FR_JSON, L10N_FR_JS):
+        values = catalogue_of(catalogue)
+        for english in (POLICY_BLOCKED_LABEL, POLICY_BLOCKED_REMEDY):
+            assert values[english] == APPROVED_59["fr"][english], catalogue.name
+
+
+def test_the_remedy_of_unreadable_names_the_owner_first_in_every_catalogue() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    entry = _reason_entry(view, "unreadable")
+    assert f"'{UNREADABLE_REMEDY}'," in entry
+    assert UNREADABLE_REMEDY_BEFORE not in view
+
+    for catalogue in L10N_CATALOGUES:
+        values = catalogue_of(catalogue)
+        assert UNREADABLE_REMEDY in values, catalogue.name
+        assert UNREADABLE_REMEDY_BEFORE not in values, catalogue.name
+    for code, catalogues in (
+        ("de", (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS)),
+        ("fr", (L10N_FR_JSON, L10N_FR_JS)),
+    ):
+        for catalogue in catalogues:
+            assert catalogue_of(catalogue)[UNREADABLE_REMEDY] == APPROVED_59[code][UNREADABLE_REMEDY], catalogue.name
+    for document, _ in LANGUAGE_TABLES:
+        rows = language_table(document)
+        assert UNREADABLE_REMEDY in rows, document.name
+        assert UNREADABLE_REMEDY_BEFORE not in rows, document.name
+
+
+def test_the_number_in_the_remedy_of_unreadable_is_max_reader_tries() -> None:
+    tries = max_reader_tries(READER_CANDIDATES.read_text(encoding="utf-8"))
+
+    assert tries == 20
+    assert scan_reader_tries(_wordings(UNREADABLE_REMEDY), tries) == []
+
+
+def test_the_reader_tries_gate_reports_a_number_that_is_not_the_constant() -> None:
+    texts = _wordings(UNREADABLE_REMEDY)
+    texts["es.json"] = texts["es.json"].replace("20", "21")
+
+    violations = scan_reader_tries(texts, 20)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("es.json: ")
+    assert len(scan_reader_tries(_wordings(UNREADABLE_REMEDY), 21)) == len(texts)
+
+
+def test_the_three_in_both_retry_remedies_is_gateway_error_retries() -> None:
+    retries = reconcile.GATEWAY_ERROR_RETRIES
+
+    assert scan_retry_words(_wordings(POLICY_BLOCKED_REMEDY), retries) == []
+    assert scan_retry_words(_wordings(GATEWAY_ERROR_REMEDY), retries) == []
+
+
+def test_the_retry_gate_reports_another_count() -> None:
+    texts = _wordings(POLICY_BLOCKED_REMEDY)
+    texts["nl.js"] = texts["nl.js"].replace("drie keer", "vier keer")
+
+    violations = scan_retry_words(texts, 3)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("nl.js: ")
+    assert scan_retry_words(texts, 4) == ["no words for 4 retries, the remedies say three"]
+
+
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
 # phase 31 travels in one bundle, two new ones for the ZIP code archive_limit and
 # three changed ones. Each sentence is held in each catalogue as its own test
@@ -4135,8 +4334,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     sentence, the sentence without files_external and the id that tells two
     equal rows apart) and the two sentences of its line in the confirmation.
     All eighteen files moved together, zh_TW included (D-45-12), and the six
-    language documents carry the rows. Whoever moves it next writes the next
-    paragraph.
+    language documents carry the rows.
+
+    It stands at 382 since 2026-11-22, plan 45-18 (issue #59, COMP-05): two
+    more, the label and the remedy of the new reason failed(policy_blocked), a
+    file a rule keeps from every user asked. The remedy of unreadable now names
+    the owner first; it changed its key, and the old key left every catalogue
+    and every language table (owner decision c1), so it moved nothing. All
+    eighteen files moved together, the six language documents carry the rows;
+    the German and French wording is the one the owner approved on 2026-11-22
+    11:52, the six other languages are drafts under the same dated reservation
+    as the rest. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4194,8 +4402,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # remedy of unreadable changed its key and so moved nothing); five of plan
     # 45-04 (six new sentences of the two lists, D-45-07 and D-45-08, less the
     # old key of no_wildcard, whose sentence changed its key, D-45-09); nine of
-    # plan 45-05 (the storage selection and its confirmation line, EXCL-04)
-    assert len(keys_of["de.json"]) == 380
+    # plan 45-05 (the storage selection and its confirmation line, EXCL-04);
+    # two of plan 45-18 (label and remedy of policy_blocked, #59; the remedy of
+    # unreadable changed its key and so moved nothing)
+    assert len(keys_of["de.json"]) == 382
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

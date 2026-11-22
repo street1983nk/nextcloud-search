@@ -25,17 +25,19 @@ PHP and the browser pick (section 4, with the dated addendum for `zh_TW` at the 
 ## The key set, counted from the file
 
 Counted on 15.11.2026 with `json.load` over `php/l10n/de.json` and `php/l10n/zh_TW.json`, and counted
-again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added, one removed):
+again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added, one removed) and after
+plan 45-18 (three keys added, one removed: the reason policy_blocked of issue #59 and the remedy of
+unreadable that names the owner first):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **380** |
-| Keys in `zh_TW.json`, in the same order | **380** |
+| Keys in `de.json` | **382** |
+| Keys in `zh_TW.json`, in the same order | **382** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **380** |
+| rows in the table below | **382** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -316,7 +318,7 @@ this table cannot break on a wording.
 | `File blocked as malicious` | Datei als bösartig gesperrt | 檔案被判定為惡意而封鎖 |
 | `None. The file carries the signature of an attack (see the detail) and is not read any further, so the container keeps running. Remove or replace the file if it is not meant to be there.` | Keine. Die Datei trägt die Signatur eines Angriffs (siehe Detail) und wird nicht weiter gelesen, damit der Container weiterläuft. Die Datei entfernen oder ersetzen, wenn sie dort nicht hingehört. | 無。此檔案帶有攻擊特徵（請見詳細資訊），因此不再繼續讀取，以確保容器持續運作。如果這個檔案不該出現在這裡，請移除或替換它。 |
 | `Not readable for the users asked` | Für die gefragten Nutzer nicht lesbar | 所詢問的使用者皆無法讀取 |
-| `The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht. | 檔案仍然存在。請檢查團隊資料夾的進階權限，或外部儲存空間上的存取權限：Findling 只會以有權開啟檔案的使用者身分讀取檔案，並依字母順序詢問該檔案的前 20 位使用者。遭鎖定或離線的檔案會再嘗試幾次。 |
+| `The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks its owner first, then its other users in alphabetical order, 20 at most. A file that is locked or offline is tried again a few times.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt zuerst ihren Besitzer, dann ihre übrigen Nutzer in alphabetischer Reihenfolge, höchstens 20. Eine gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht. | 檔案仍然存在。請檢查團隊資料夾的進階權限，或外部儲存空間上的存取權限：Findling 只會以有權開啟檔案的使用者身分讀取檔案，並先詢問其擁有者，再依字母順序詢問其他使用者，最多 20 位。遭鎖定或離線的檔案會再嘗試幾次。 |
 | `On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config).` | Bei SMB-Speichern ohne die Erweiterung php-smbclient diese von Nextcloud empfohlene Erweiterung installieren, alternativ die Speicher-Option timeout erhöhen (occ files_external:config). | 若使用 SMB 儲存空間且未安裝 php-smbclient 擴充功能，請安裝這個 Nextcloud 建議的擴充功能，或調高該儲存空間的逾時選項（occ files_external:config）。 |
 | `The user named in front of the path may not open this file. The diagnosis is about the file itself.` | Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst. | 路徑前所列的使用者無權開啟此檔案。此診斷針對的是檔案本身。 |
 | `File is empty` | Datei ist leer | 檔案是空的 |
@@ -330,6 +332,8 @@ this table cannot break on a wording.
 | `Timed out while reading` | Zeitüberschreitung beim Lesen | 讀取逾時 |
 | `The next run tries again.` | Wird beim nächsten Lauf erneut versucht. | 下一輪會再試一次。 |
 | `Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.` | Nextcloud konnte die Datei nicht öffnen, oft weil ihr Speicher nicht verfügbar war. Der nächtliche Abgleich versucht es bis zu dreimal erneut, eine Änderung an der Datei sofort. | Nextcloud 無法開啟此檔案，通常是因為其儲存空間無法使用。每晚的比對作業最多會再試三次，檔案一有變更也會立即再試。 |
+| `Blocked by a rule` | Durch eine Regel blockiert | 被規則封鎖 |
+| `A rule keeps Findling from reading the file as any of the users asked, for example a watermark of Nextcloud Office that applies to the owner as well. The nightly comparison tries it again up to three times, and a change to the file tries it at once.` | Eine Regel verhindert, dass Findling die Datei als einer der gefragten Nutzer liest, zum Beispiel ein Wasserzeichen von Nextcloud Office, das auch für den Besitzer gilt. Der nächtliche Abgleich versucht es bis zu dreimal erneut, eine Änderung an der Datei sofort. | 有規則阻止 Findling 以任何一位所詢問的使用者身分讀取此檔案，例如同樣適用於擁有者的 Nextcloud Office 浮水印。每晚的比對作業最多會再試三次，檔案一有變更也會立即再試。 |
 | `Not enough memory while reading` | Zu wenig Speicher beim Lesen | 讀取時記憶體不足 |
 | `The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung jedem Dokument mehr Speicher geben: Findling Backend mit einem größeren FINDLING_EXTRACT_ADDRESS_SPACE_BYTES bereitstellen, zum Beispiel 1073741824 (1 GiB). | 下一輪會再試一次。如果再次發生，請給每份文件更多記憶體：以較大的 FINDLING_EXTRACT_ADDRESS_SPACE_BYTES 重新部署 Findling Backend，例如 1073741824（1 GiB）。 |
 | `File was not retrievable` | Datei war nicht abrufbar | 無法取得檔案 |

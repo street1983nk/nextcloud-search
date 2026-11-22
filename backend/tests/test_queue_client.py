@@ -1019,11 +1019,16 @@ async def test_a_requeue_error_without_a_status_says_none(caplog: pytest.LogCapt
 PHP_FILE_STATE_SERVICE = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Service" / "FileStateService.php"
 FORMATS_DOC = PACKAGE_ROOT.parents[2] / "docs" / "formats.md"
 NEW_CODES = ("system_file", "legacy_format", "unsupported_variant")
-# The codes each generation added to the vocabulary of the companion. A code
-# reaches a companion only if it announced a generation at least as high.
+# The skipped codes each generation added to the vocabulary of the companion. A
+# code reaches a companion only if it announced a generation at least as high.
 # blocked_malicious joins generation 3 (36-06, D-36-03): 1.5.0 is unreleased.
+# Generation 4 (release 1.7.0, #59) adds no skipped code, only the failed code
+# below, so the skipped table of 4 is empty (W3).
 CODES_OF_GENERATION: dict[int, tuple[str, ...]] = {2: NEW_CODES, 3: ("archive_limit", "blocked_malicious")}
 ALL_NEW_CODES = (*NEW_CODES, "archive_limit", "blocked_malicious")
+# The failed codes a generation added: policy_blocked with 4 (#59). Towards an
+# older companion it travels as gateway_error, the refusal it was in 1.6.
+FAILED_CODES_OF_GENERATION: dict[int, tuple[str, ...]] = {4: ("policy_blocked",)}
 
 
 def _php_state_reasons() -> dict[str, set[str]]:
@@ -1039,23 +1044,28 @@ def _php_state_reasons() -> dict[str, set[str]]:
     return mapping
 
 
-def _codes_unknown_to(generation: int | None) -> set[str]:
+def _codes_unknown_to(generation: int | None, codes_of: dict[int, tuple[str, ...]] = CODES_OF_GENERATION) -> set[str]:
     """The codes a companion of this generation (None: no signal) does not store."""
     return {
         code
-        for introduced, codes in CODES_OF_GENERATION.items()
+        for introduced, codes in codes_of.items()
         if generation is None or introduced > generation
         for code in codes
     }
 
 
-def test_the_container_knows_the_generations_2_and_3() -> None:
+def _failed_codes_unknown_to(generation: int | None) -> set[str]:
+    """The codes the failed list must not carry to a companion of this generation."""
+    return _codes_unknown_to(generation) | _codes_unknown_to(generation, FAILED_CODES_OF_GENERATION)
+
+
+def test_the_container_knows_the_generations_2_3_and_4() -> None:
     known = queue_module.KNOWN_VERDICTS_GENERATIONS
-    assert known == frozenset({2, 3})
-    assert queue_module.VERDICTS_GENERATION == 3 == max(known)
+    assert known == frozenset({2, 3, 4})
+    assert queue_module.VERDICTS_GENERATION == 4 == max(known)
 
 
-@pytest.mark.parametrize("generation", [2, 3])
+@pytest.mark.parametrize("generation", [2, 3, 4])
 async def test_a_companion_announcing_a_known_generation_reads_as_that_generation(generation: int) -> None:
     session = _FakeSession(
         {("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8", "verdicts": generation}}
@@ -1066,7 +1076,7 @@ async def test_a_companion_announcing_a_known_generation_reads_as_that_generatio
     assert choice.verdicts == generation
 
 
-@pytest.mark.parametrize("value", [None, True, False, 0, 1, 4, "2", "3", 2.0, 3.0, [2], {"v": 3}])
+@pytest.mark.parametrize("value", [None, True, False, 0, 1, 5, "2", "3", "4", 2.0, 3.0, 4.0, [2], {"v": 3}])
 async def test_any_other_verdicts_value_reads_as_none(value: object) -> None:
     # T-29-02, T-31-04: a closed set like profile and precision. True is an int
     # in Python and 2.0 compares equal to 2, neither of them is the signal.
@@ -1076,9 +1086,9 @@ async def test_any_other_verdicts_value_reads_as_none(value: object) -> None:
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"), [(2, 2), (3, 3), (1, None), (4, None), (True, None), ("3", None), (None, None)]
+    ("value", "expected"), [(2, 2), (3, 3), (4, 4), (1, None), (5, None), (True, None), ("3", None), (None, None)]
 )
-def test_verdicts_is_a_closed_set_of_two_generations(value: object, expected: int | None) -> None:
+def test_verdicts_is_a_closed_set_of_three_generations(value: object, expected: int | None) -> None:
     assert queue_module._verdicts(value) == expected
 
 
@@ -1239,6 +1249,41 @@ async def test_towards_generation_3_every_code_travels_unchanged() -> None:
     assert body["failed"] == [{"queueId": queue_id, "reason": reason} for queue_id, reason in _FAILS.items()]
 
 
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    [
+        ({"profile": "standard"}, "gateway_error"),
+        ({"profile": "standard", "verdicts": 2}, "gateway_error"),
+        ({"profile": "standard", "verdicts": 3}, "gateway_error"),
+        ({"profile": "standard", "verdicts": 4}, "policy_blocked"),
+    ],
+)
+async def test_policy_blocked_reaches_only_a_companion_of_generation_4(profile: dict[str, Any], expected: str) -> None:
+    # #59, T-45-63: a 1.6 companion refuses a whole failure list with one
+    # unknown code, so the refusal by a rule travels as the refusal it was in
+    # 1.6, gateway_error, which every older companion stores under failed.
+    session = _FakeSession({("GET", PROFILE_PATH): profile, ("DELETE", ACK_PATH): {"acknowledged": 1}})
+    queue = _queue(session)
+    await queue.companion_choice()
+
+    await queue.acknowledge([1], {31: "policy_blocked", 32: "timeout"}, {})
+
+    assert _ack_body(session)["failed"] == [
+        {"queueId": 31, "reason": expected},
+        {"queueId": 32, "reason": "timeout"},
+    ]
+
+
+def test_towards_generation_4_the_skipped_codes_of_3_keep_their_name() -> None:
+    # W3: without the entry 4 in the skipped table, generation 4 would read like
+    # no signal and archive_limit would travel as too_large to a companion that
+    # stores it.
+    tables = queue_module._SKIPPED_FALLBACK_BY_GENERATION
+    assert queue_module._wire_reason("archive_limit", 4, tables) == "archive_limit"
+    assert queue_module._wire_reason("blocked_malicious", 4, tables) == "blocked_malicious"
+    assert queue_module._wire_reason("system_file", 4, tables) == "system_file"
+
+
 def test_the_fallback_without_signal_is_public_and_holds_the_three_pairs_of_1_4() -> None:
     # 31-11 re-judges a file only where the Nextcloud row carries exactly one of
     # these substitutes (Befund 7), so the table is public and holds nothing
@@ -1253,7 +1298,8 @@ def test_the_fallback_without_signal_is_public_and_holds_the_three_pairs_of_1_4(
 
 def test_the_skipped_fallback_per_generation() -> None:
     tables = queue_module._SKIPPED_FALLBACK_BY_GENERATION
-    assert set(tables) == {None, 2, 3}
+    assert set(tables) == {None, 2, 3, 4}
+    assert dict(tables[4]) == {}
     assert dict(tables[3]) == {}
     assert dict(tables[2]) == {"archive_limit": "too_large", "blocked_malicious": "too_large"}
     assert dict(tables[None]) == {
@@ -1265,13 +1311,18 @@ def test_the_skipped_fallback_per_generation() -> None:
 
 def test_the_failed_fallback_per_generation() -> None:
     tables = queue_module._FAILED_FALLBACK_BY_GENERATION
-    assert set(tables) == {None, 2, 3}
-    assert dict(tables[3]) == {}
-    assert dict(tables[2]) == {"archive_limit": "corrupt", "blocked_malicious": "corrupt"}
-    assert dict(tables[None]) == dict.fromkeys(ALL_NEW_CODES, "corrupt")
+    assert set(tables) == {None, 2, 3, 4}
+    assert dict(tables[4]) == {}
+    assert dict(tables[3]) == {"policy_blocked": "gateway_error"}
+    assert dict(tables[2]) == {
+        "archive_limit": "corrupt",
+        "blocked_malicious": "corrupt",
+        "policy_blocked": "gateway_error",
+    }
+    assert dict(tables[None]) == {**dict.fromkeys(ALL_NEW_CODES, "corrupt"), "policy_blocked": "gateway_error"}
 
 
-@pytest.mark.parametrize("generation", [None, 2, 3])
+@pytest.mark.parametrize("generation", [None, 2, 3, 4])
 def test_every_skipped_fallback_is_a_skipped_pair_that_generation_stores(generation: int | None) -> None:
     # FileStateService::record drops a pair that is not in STATE_REASONS, and
     # the file then has no verdict in the PHP mirror at all. A skipped fallback
@@ -1289,10 +1340,10 @@ def test_every_skipped_fallback_is_a_skipped_pair_that_generation_stores(generat
     assert "corrupt" not in table.values()
 
 
-@pytest.mark.parametrize("generation", [None, 2, 3])
+@pytest.mark.parametrize("generation", [None, 2, 3, 4])
 def test_every_failed_fallback_is_a_failed_pair_that_generation_stores(generation: int | None) -> None:
     php = _php_state_reasons()
-    unknown = _codes_unknown_to(generation)
+    unknown = _failed_codes_unknown_to(generation)
     table = queue_module._FAILED_FALLBACK_BY_GENERATION[generation]
 
     assert set(table) == unknown
@@ -1309,7 +1360,7 @@ def test_the_new_codes_are_skipped_only_in_the_companion() -> None:
         assert code not in php["failed"]
 
 
-@pytest.mark.parametrize("verdicts", [None, 1, 2, 3])
+@pytest.mark.parametrize("verdicts", [None, 1, 2, 3, 4])
 def test_every_other_code_travels_unchanged(verdicts: int | None) -> None:
     for code in ("too_large", "excluded", "unreadable", "gone", "corrupt", "timeout"):
         assert queue_module._wire_reason(code, verdicts, queue_module._SKIPPED_FALLBACK_BY_GENERATION) == code

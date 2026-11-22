@@ -239,6 +239,56 @@ final class FileStateServiceCoverageTest extends TestCase {
 		self::assertSame([], $this->queries);
 	}
 
+	// -- the refusal by a rule (issue #59, plan 45-18) --------------------------
+
+	/**
+	 * A service whose database counts the statements record() starts, and whose
+	 * update always finds the row.
+	 *
+	 * @param list<string> $statements
+	 */
+	private function recordingService(array &$statements): FileStateService {
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnCallback(function () use (&$statements): IQueryBuilder {
+			$qb = $this->createMock(IQueryBuilder::class);
+			$expr = $this->createMock(IExpressionBuilder::class);
+			$expr->method('eq')->willReturn('eq');
+			$qb->method('expr')->willReturn($expr);
+			$qb->method('update')->willReturnSelf();
+			$qb->method('set')->willReturnSelf();
+			$qb->method('where')->willReturnSelf();
+			$qb->method('createNamedParameter')->willReturn(':p');
+			$qb->method('executeStatement')->willReturnCallback(static function () use (&$statements): int {
+				$statements[] = 'update';
+
+				return 1;
+			});
+
+			return $qb;
+		});
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getDateTime')->willReturn(new \DateTime('2026-11-22 12:00:00', new \DateTimeZone('UTC')));
+
+		return new FileStateService($db, $time, $this->createMock(LoggerInterface::class));
+	}
+
+	public function testARefusalByARuleIsAFailureTheStoreAccepts(): void {
+		$statements = [];
+
+		self::assertTrue($this->recordingService($statements)->record(4711, 'failed', 'policy_blocked'));
+		self::assertSame(['update'], $statements);
+		self::assertContains('policy_blocked', FileStateService::REASONS);
+	}
+
+	public function testARefusalByARuleIsNeverADecision(): void {
+		// skipped(policy_blocked) would hide the refusal among the deliberate
+		// decisions, and no writer of this app produces it.
+		$statements = [];
+
+		self::assertFalse($this->recordingService($statements)->record(4711, 'skipped', 'policy_blocked'));
+		self::assertSame([], $statements);
+	}
+
 	// -- distinctPathsByReasons -------------------------------------------------
 
 	/** The PHP only rows of backend/tests/fixtures/coverage_topology.json, group 0 and the single storages. */

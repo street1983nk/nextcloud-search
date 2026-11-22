@@ -127,7 +127,9 @@ MAX_ACK_LIST: Final = 256
 # on the other side. 2 means it stores system_file, legacy_format and
 # unsupported_variant under skipped (release 1.4.0); 3 means it stores
 # archive_limit and blocked_malicious as well (release 1.5.0, D-31-03,
-# D-36-03). A companion that does not announce it, a 1.3.2 for instance,
+# D-36-03); 4 means it stores failed(policy_blocked) as well, a file a rule
+# keeps from every user asked (release 1.7.0, #59). A companion that does not
+# announce it, a 1.3.2 for instance,
 # refuses the WHOLE failure or skip list with a 400 as soon as one code in it
 # is unknown (QueueController), so a code leaves
 # this container only towards a companion that announced a generation which
@@ -144,8 +146,8 @@ MAX_ACK_LIST: Final = 256
 # order that avoids it, and the one time run after the upgrade (plan 31-11)
 # re-judges exactly the files whose Nextcloud row carries a substitute out of
 # SKIPPED_FALLBACK_WITHOUT_SIGNAL while this container holds the real code.
-VERDICTS_GENERATION: Final = 3
-KNOWN_VERDICTS_GENERATIONS: Final = frozenset({2, 3})
+VERDICTS_GENERATION: Final = 4
+KNOWN_VERDICTS_GENERATIONS: Final = frozenset({2, 3, 4})
 
 # What the codes become on the wire towards a companion that does not know them,
 # one table per list and generation. FileStateService::record judges the PAIR of
@@ -174,8 +176,14 @@ SKIPPED_FALLBACK_WITHOUT_SIGNAL: Final[Mapping[str, str]] = MappingProxyType(
 # substitute: not read, and over what the container accepts. It joins
 # generation 3 without a new generation, because 1.5.0, the release that brings
 # generation 3, has not reached a companion yet.
+#
+# Generation 4 (release 1.7.0, #59) adds no skipped code, and its table is
+# empty on purpose (W3): an announced generation without a table reads like
+# no signal in _wire_reason, so without the entry 4 a 1.7 companion would get
+# archive_limit and blocked_malicious as too_large, codes it stores as they are.
 _SKIPPED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
     {
+        4: MappingProxyType({}),
         3: MappingProxyType({}),
         2: MappingProxyType({"archive_limit": "too_large", "blocked_malicious": "too_large"}),
         None: MappingProxyType(
@@ -184,13 +192,22 @@ _SKIPPED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] =
     }
 )
 
-# failed: purely defensive. ExtractionOutcome.failed refuses the five codes, so
-# the failure list never carries them; should a defect put one there, corrupt is
-# the failed code every older companion knows.
+# failed: for the five skipped codes purely defensive. ExtractionOutcome.failed
+# refuses them, so the failure list never carries them; should a defect put one
+# there, corrupt is the failed code every older companion knows.
+#
+# policy_blocked (release 1.7.0, #59, generation 4) is a real failed code and
+# travels for real. Towards a companion of generation 3, 2 or without the
+# signal it becomes gateway_error, which is what that refusal was in 1.6: the
+# admin page of the older companion shows "File was not retrievable" and the
+# reconcile of this container retries it the same way (T-45-63).
 _FAILED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
     {
-        3: MappingProxyType({}),
-        2: MappingProxyType({"archive_limit": "corrupt", "blocked_malicious": "corrupt"}),
+        4: MappingProxyType({}),
+        3: MappingProxyType({"policy_blocked": "gateway_error"}),
+        2: MappingProxyType(
+            {"archive_limit": "corrupt", "blocked_malicious": "corrupt", "policy_blocked": "gateway_error"}
+        ),
         None: MappingProxyType(
             {
                 "system_file": "corrupt",
@@ -198,6 +215,7 @@ _FAILED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = 
                 "unsupported_variant": "corrupt",
                 "archive_limit": "corrupt",
                 "blocked_malicious": "corrupt",
+                "policy_blocked": "gateway_error",
             }
         ),
     }

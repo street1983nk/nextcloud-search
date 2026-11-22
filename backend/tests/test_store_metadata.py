@@ -1599,6 +1599,27 @@ ACCEPTED_SENTENCES_1_6_3 = (
         "or raise the timeout option of the storage (occ files_external:config)."
     ),
 )
+# The accepted 1.6.3 sentences that release 1.7.0 replaced, English source to
+# the German wording the owner accepted for 1.6.3 (owner decision c1, 45-18,
+# 2026-11-22 11:52). The remedy of unreadable said "the first 20 of its users
+# in alphabetical order"; since issue #59 the owner is asked first, so the
+# sentence would be wrong on the page and its key left every catalogue. The
+# acceptance of 1.6.3 stays history: such a sentence is checked only against
+# its section in docs/store-listing.md, with the wording written down here, and
+# a catalogue that still carries it is a violation, because it would be a dead
+# key nobody renders.
+SUPERSEDED_IN_1_7_0: dict[str, str] = {
+    (
+        "The file is still there. Check the advanced permissions of the Team Folder or the access rights on the "
+        "external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users "
+        "in alphabetical order. A file that is locked or offline is tried again a few times."
+    ): (
+        "Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf "
+        "dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die "
+        "ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch "
+        "einige Male erneut versucht."
+    ),
+}
 FULL_CHANGELOG_1_6_3 = "**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3"
 # The release note the owner accepted in round 2 (point C, variant a): five
 # points and the known limitation for %U and %S, without the optional sixth
@@ -1730,7 +1751,12 @@ def _scan_changelog_sentences_1_6_3(section: str, changelogs: dict[str, str]) ->
     return violations
 
 
-def scan_full_text_1_6_3(source: str, catalogue: dict[str, str], changelogs: dict[str, str]) -> list[str]:
+def scan_full_text_1_6_3(
+    source: str,
+    catalogue: dict[str, str],
+    changelogs: dict[str, str],
+    superseded: dict[str, str] | None = None,
+) -> list[str]:
     """The full text 1.6.3, round 2, in docs/store-listing.md (plan 43-12 task 3).
 
     The section opens with the line that starts with FULL_TEXT_1_6_3 and reaches
@@ -1742,7 +1768,13 @@ def scan_full_text_1_6_3(source: str, catalogue: dict[str, str], changelogs: dic
     in the section [1.6.3] of its CHANGELOG file (changelogs maps en, de and fr
     to the text of the file); the three files date that section alike, and the
     retired limitation on roots is gone.
+
+    A sentence in ``superseded`` (SUPERSEDED_IN_1_7_0 unless given, plan
+    45-18, decision c1) is held against the section with the German wording
+    written down there, and the catalogue must no longer carry it.
     """
+    if superseded is None:
+        superseded = SUPERSEDED_IN_1_7_0
     offset = 0
     heading = None
     for line in source.splitlines(keepends=True):
@@ -1763,7 +1795,15 @@ def scan_full_text_1_6_3(source: str, catalogue: dict[str, str], changelogs: dic
             f"in the form 'abgenommen am TT.MM.JJJJ'"
         )
     for english in ACCEPTED_SENTENCES_1_6_3:
-        german = catalogue.get(english)
+        german: str | None
+        if english in superseded:
+            if english in catalogue:
+                violations.append(
+                    f"php/l10n/de.json: still has an entry for the sentence {english!r}, superseded in 1.7.0"
+                )
+            german = superseded[english]
+        else:
+            german = catalogue.get(english)
         if german is None:
             violations.append(f"php/l10n/de.json: has no entry for the accepted sentence {english!r}")
         elif f"- de: {german}" not in flat:
@@ -3355,12 +3395,19 @@ def _scan_sample_1_6_3(
     listing: str | None = None,
     catalogue: dict[str, str] | None = None,
     changelogs: dict[str, str] | None = None,
+    superseded: dict[str, str] | None = None,
 ) -> list[str]:
-    """The gate over the clean sample, with the one part a test replaces."""
+    """The gate over the clean sample, with the one part a test replaces.
+
+    The sample supersedes nothing unless a test says so: its sentences are the
+    real ones, and SUPERSEDED_IN_1_7_0 would otherwise judge them against a
+    German wording the sample does not carry.
+    """
     return scan_full_text_1_6_3(
         _full_text_sample_1_6_3() if listing is None else listing,
         _FULL_TEXT_CATALOGUE_1_6_3 if catalogue is None else catalogue,
         _changelog_sample_1_6_3() if changelogs is None else changelogs,
+        {} if superseded is None else superseded,
     )
 
 
@@ -3408,6 +3455,53 @@ def test_a_1_6_3_sentence_the_catalogue_lost_is_reported() -> None:
 
     assert len(violations) == 1
     assert violations[0].startswith("php/l10n/de.json: has no entry")
+
+
+# -- decision c1 of plan 45-18: a 1.6.3 sentence superseded in 1.7.0 ---------
+_SUPERSEDED_INDEX = 4
+
+
+def _catalogue_without_the_superseded_sentence() -> dict[str, str]:
+    catalogue = dict(_FULL_TEXT_CATALOGUE_1_6_3)
+    del catalogue[ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]]
+    return catalogue
+
+
+def test_the_superseded_sentence_is_the_old_remedy_of_unreadable_and_an_accepted_one() -> None:
+    assert set(SUPERSEDED_IN_1_7_0) <= set(ACCEPTED_SENTENCES_1_6_3)
+    assert list(SUPERSEDED_IN_1_7_0) == [ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]]
+    assert "asks the first 20 of its users" in ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]
+    assert ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX] not in _german_catalogue()
+
+
+def test_a_superseded_sentence_is_checked_against_the_listing_only() -> None:
+    superseded = {ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]: f"Deutsch {_SUPERSEDED_INDEX}."}
+
+    assert _scan_sample_1_6_3(catalogue=_catalogue_without_the_superseded_sentence(), superseded=superseded) == []
+
+
+def test_a_sentence_without_its_key_and_not_on_the_superseded_list_is_reported() -> None:
+    violations = _scan_sample_1_6_3(catalogue=_catalogue_without_the_superseded_sentence(), superseded={})
+
+    assert len(violations) == 1
+    assert violations[0].startswith("php/l10n/de.json: has no entry")
+
+
+def test_a_superseded_sentence_the_catalogue_still_carries_is_reported() -> None:
+    superseded = {ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]: f"Deutsch {_SUPERSEDED_INDEX}."}
+    violations = _scan_sample_1_6_3(superseded=superseded)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("php/l10n/de.json: still has an entry")
+    assert "superseded in 1.7.0" in violations[0]
+
+
+def test_a_superseded_sentence_whose_german_left_the_listing_is_reported() -> None:
+    superseded = {ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]: f"Deutsch {_SUPERSEDED_INDEX}, anders."}
+    violations = _scan_sample_1_6_3(catalogue=_catalogue_without_the_superseded_sentence(), superseded=superseded)
+
+    assert len(violations) == 1
+    assert "does not carry" in violations[0]
 
 
 def test_a_1_6_3_release_note_without_its_full_changelog_line_is_reported_even_when_a_later_section_has_it() -> None:
