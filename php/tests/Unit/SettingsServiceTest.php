@@ -550,6 +550,47 @@ final class SettingsServiceTest extends TestCase {
 		}
 	}
 
+	public function testAnOccWrittenListLongerThanTheCeilingIsCutOnReadAndTheRestCounted(): void {
+		// L-45-09-01 of audit 45-09: occ has no ceiling, the read keeps one.
+		// The first 1000 usable ids in stored order stay, the surplus is
+		// counted as unusable, and the log names counters only.
+		$this->recordWarnings();
+		$this->values[self::EXCLUDED_KEY] = array_merge(range(1200, 1, -1), [0, 'x']);
+
+		$ids = $this->settings()->excludedExternalMounts();
+
+		self::assertSame(range(201, 1200), $ids);
+		self::assertCount(SettingsService::MAX_EXCLUDED_EXTERNAL_MOUNTS, $ids);
+		self::assertCount(1, $this->warnings);
+		self::assertSame(202, $this->warnings[0][1]['unusable'] ?? null);
+		self::assertSame(1000, $this->warnings[0][1]['inForce'] ?? null);
+		foreach ($this->warnings[0][1] as $value) {
+			self::assertIsInt($value, 'a context value that is no counter');
+		}
+		self::assertStringNotContainsString('1200', $this->warnings[0][0]);
+	}
+
+	public function testAListAtTheCeilingIsReadWholeAndADoubleBeyondItIsNoSurplus(): void {
+		// The boundary of L-45-09-01: exactly 1000 ids stay whole, and an id
+		// that repeats one already kept is a double and not a surplus.
+		$this->recordWarnings();
+		$this->values[self::EXCLUDED_KEY] = array_merge(range(1, 1000), [5, 1000]);
+
+		self::assertSame(range(1, 1000), $this->settings()->excludedExternalMounts());
+		self::assertSame([], $this->warnings);
+	}
+
+	public function testAStoredObjectFormIsStillReadAsItsValues(): void {
+		// L-45-09-02: the route refuses an object since 1.7.0, the read stays
+		// tolerant, so a list an older version or occ stored as an object keeps
+		// working after the upgrade and locks nobody out.
+		$this->recordWarnings();
+		$this->values[self::EXCLUDED_KEY] = ['a' => 7, 'b' => 3];
+
+		self::assertSame([3, 7], $this->settings()->excludedExternalMounts());
+		self::assertSame([], $this->warnings);
+	}
+
 	public function testATypeConflictReadsAsAnEmptyListWithACounterOnly(): void {
 		$this->recordWarnings();
 		$appConfig = $this->createMock(IAppConfig::class);

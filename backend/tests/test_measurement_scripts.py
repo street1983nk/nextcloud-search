@@ -1367,8 +1367,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # came or went, so PHP_FILES_TODAY stays at 136. The recipe gave f20a3153; the independent pipeline of
 # find, sort, sed and sha256sum over the same tree gave f20a3153 as well; the recipe over git archive
 # of 802434fd, the last commit before this change, gave 6638875f with 136 files (positive control).
+# Moved on 2026-11-22 a third time by plan 45-09 (finding L-45-09-01, owner decision "beheben"):
+# lib/Service/SettingsService.php keeps the ceiling of 1000 excluded mounts on the read as well and
+# counts the surplus as unusable; tests/Unit/SettingsServiceTest.php holds the cases, a stored object
+# form included. No file came or went, so PHP_FILES_TODAY stays at 136. The recipe gave 77b20880; the
+# independent pipeline of find, sort, sed and sha256sum over the same tree gave 77b20880 as well; the
+# recipe over git archive of fcfa50b2, the last commit before this change, gave f20a3153 with 136
+# files (positive control).
 PHP_FILES_TODAY = 136
-PHP_TREE_HASH_TODAY = "f20a3153c63beb8dae913b5fa2470f66167386784ab26187db7930b952de2fe2"
+PHP_TREE_HASH_TODAY = "77b208804c069e0d046248b7bc6ae1d391ba59d22e8bc64e09c333354baff204"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

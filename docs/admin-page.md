@@ -664,7 +664,10 @@ indexierende externe Speicher" (EXCL-04).
   neu angelegter Speicher ist automatisch dabei. Gespeichert wird nur die Liste
   der ausgeschlossenen Konfigurations-IDs (`appconfig`-Schlüssel
   `excluded_external_mounts`, höchstens 1000 Einträge), mit den übrigen Regeln
-  in einem Schreibvorgang: ein Fehler in einem Feld hält alles auf.
+  in einem Schreibvorgang: ein Fehler in einem Feld hält alles auf. Die Grenze
+  gilt auch beim Lesen: von einer längeren Liste, die per `occ
+  config:app:set` gesetzt wurde, gelten die ersten 1000 IDs, der Rest wird
+  ignoriert und im Protokoll nur gezählt.
 - **Hauptschalter aus:** die Liste ist gesperrt, kein externer Speicher wird
   indexiert, und die Auswahl bleibt gespeichert. Sie gilt wieder, sobald der
   Schalter an ist.

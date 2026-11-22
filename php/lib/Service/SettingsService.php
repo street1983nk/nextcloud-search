@@ -94,7 +94,7 @@ final class SettingsService {
 	/** The name of the list in the form and in the answers of the page. */
 	public const FIELD_EXCLUDED_EXTERNAL_MOUNTS = 'excludedExternalMounts';
 
-	/** The most entries the list takes on writing (T-45-06). */
+	/** The most entries the list takes on writing (T-45-06) and on reading (L-45-09-01). */
 	public const MAX_EXCLUDED_EXTERNAL_MOUNTS = 1000;
 
 	/**
@@ -599,8 +599,10 @@ final class SettingsService {
 	 * Read defensively like ExclusionService::prefixes(), because occ
 	 * config:app:set is a second writer without any check (T-45-05): a key of
 	 * another type reads as an empty list, every entry that is not a positive
-	 * int is dropped, and both are named in one warning with counters and never
-	 * with a value. Read whatever the switch says, so the page shows the stored
+	 * int is dropped, everything beyond MAX_EXCLUDED_EXTERNAL_MOUNTS ids is
+	 * dropped, and all of it is named in one warning with counters and never
+	 * with a value. An object stored by occ reads as its values, so a stored
+	 * form never locks an admin out (L-45-09-02); the route refuses one. Read whatever the switch says, so the page shows the stored
 	 * list while the switch is off (D-45-04); whether it applies is decided in
 	 * StorageService. Once per request, see the field.
 	 *
@@ -625,13 +627,23 @@ final class SettingsService {
 			return $this->excludedMounts;
 		}
 
+		// The ceiling of the route holds on the read as well (L-45-09-01 of
+		// audit 45-09): occ writes without one, and every id costs a band of
+		// the queries in StorageService on each request. The first usable ids
+		// in stored order stay, every further new one is counted as unusable,
+		// like ExclusionService::prefixes() cuts its list. A double of an id
+		// already kept is no surplus.
 		$ids = [];
 		$unusable = 0;
 		foreach ($stored as $id) {
-			if (is_int($id) && $id > 0) {
-				$ids[$id] = true;
-			} else {
+			if (!is_int($id) || $id <= 0) {
 				$unusable++;
+			} elseif (isset($ids[$id])) {
+				continue;
+			} elseif (count($ids) >= self::MAX_EXCLUDED_EXTERNAL_MOUNTS) {
+				$unusable++;
+			} else {
+				$ids[$id] = true;
 			}
 		}
 		$ids = array_keys($ids);
