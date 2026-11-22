@@ -82,7 +82,7 @@ Wirksame Laufzeit-Änderungen: PHP-Companion (php/lib: SettingsService, StorageS
 | 13a | keine Abfrage bei leerer Liste | `StorageServiceTest::testAnEmptyListAsksNoMountTable` (`getQueryBuilder` never) und Schalter aus ohne external_mounts-Abfrage (Probe 8) | bestanden |
 | 13b | eine Abfragekette pro Request, gebändert | `testALongListIsAskedInBandsAndOncePerRequest`: 250 IDs -> external_mounts 200/50, mounts 200/50, zweiter `getMounts()` ohne neue Abfrage; Cache `$excludedStorages`, `isIndexedStorage()` liest `getMounts()` einmal je Request; `SettingsService::$excludedMounts` gecacht | bestanden |
 | 13c | Seitenlast mit 200 Admin-Mounts | Abschätzung aus dem Code: `ExternalMountService::adminMounts()` stellt genau eine Abfrage (`external_mounts WHERE type = 1`), sortiert per Collator in O(n log n) (200 Einträge, Mikrosekunden bis wenige Millisekunden), Duplikat-Zählung O(n); das Template prüft je Zeile `in_array` gegen die ausgeschlossenen IDs (höchstens 1000 per Route) -> höchstens 200 x 1000 Vergleiche; 200 `<li>` mit je drei `p()`. Die Liste reist nicht im Initial State und nicht im Poll von fünf Sekunden (AdminSettingsTest::testTheMountListIsATemplateParameterAndNeverInTheInitialState) | unkritisch, kein Befund |
-| 13d | Leseseite ohne Obergrenze | `excludedExternalMounts()` liest eine per occ geschriebene Liste in voller Länge; `excludedStorageIds()` fragt dann je 200 IDs eine Runde, also bei 100 000 IDs etwa 500 Abfragen einmal je Request (auch im Request eines Datei-Schreibvorgangs über den Listener) | Befund L-45-09-01 |
+| 13d | Leseseite ohne Obergrenze | `excludedExternalMounts()` liest eine per occ geschriebene Liste in voller Länge; `excludedStorageIds()` fragt dann je 200 IDs eine Runde, also bei 100 000 IDs etwa 500 Abfragen einmal je Request (auch im Request eines Datei-Schreibvorgangs über den Listener) | Befund L-45-09-01, behoben 2b623a3f (Obergrenze 1000 auch beim Lesen, höchstens 5 Bänder je Request) |
 
 ## Upgrade und Installation
 
@@ -101,13 +101,13 @@ Wirksame Laufzeit-Änderungen: PHP-Companion (php/lib: SettingsService, StorageS
 | T-45-02 | mitigate | Diff von integration.yml gelesen (45-PR-REVIEW.md); zizmor/actionlint lokal und "Workflow security lint" in CI grün (Lauf 44982244168) | mitigated |
 | T-45-03 | mitigate | Katalogwerte nur über `p()`/Textknoten, Gate `test_no_catalogue_value_can_break_the_page`, Platzhalter-Paritäts-Gate grün | mitigated |
 | T-45-04 | mitigate | Zeilen `Freigabe Merge PR57/PR56 45-01` in 45-FREIGABEN.md vor den Merges | mitigated |
-| T-45-05 | mitigate | Probe 3 (Typkonflikt, Fremdwerte, nur Zähler) | mitigated; Resthinweise L-45-09-02 und L-45-09-03 (LOW, Owner) |
-| T-45-06 | mitigate | Obergrenze 1000 beim Schreiben (Probe 2 mit Mutation), Bänder und Cache (Probe 13b) | mitigated für den Schreibweg; Leseseite L-45-09-01 (LOW, Owner) |
+| T-45-05 | mitigate | Probe 3 (Typkonflikt, Fremdwerte, nur Zähler) | mitigated; L-45-09-02 (af0e5e13) und L-45-09-03 (fcfa50b2) behoben |
+| T-45-06 | mitigate | Obergrenze 1000 beim Schreiben (Probe 2 mit Mutation), Bänder und Cache (Probe 13b) | mitigated für Schreib- und Leseweg (L-45-09-01 behoben, 2b623a3f) |
 | T-45-07 | mitigate | Probe 12, `testADeletedMountIdInTheListHasNoEffectAndLeavesNoTrace` | mitigated |
 | T-45-08 | mitigate | Probe 4 und 5 | mitigated |
 | T-45-09 | mitigate | `!isIndexedStorage()` in `deselected()`, Probe 5, M-45-01 | mitigated |
 | T-45-10 | mitigate | Probe 1 | mitigated |
-| T-45-11 | mitigate | Probe 2 | mitigated; Objekt-Form L-45-09-02 (LOW, Owner) |
+| T-45-11 | mitigate | Probe 2 | mitigated; Objekt-Form L-45-09-02 behoben (af0e5e13) |
 | T-45-12 | mitigate | `AdminSettingsTest::testTheMountListIsATemplateParameterAndNeverInTheInitialState`; `rules()` nur IDs; Probe 12 | mitigated |
 | T-45-13 | mitigate | Probe 10 | mitigated |
 | T-45-14 | mitigate | Upgrade-Abschnitt (Feld fehlt -> unverändert) | mitigated |
@@ -136,12 +136,105 @@ Wirksame Laufzeit-Änderungen: PHP-Companion (php/lib: SettingsService, StorageS
 
 | ID | Schwere | Bereich | Befund | Beleg | Empfehlung | Status |
 |---|---|---|---|---|---|---|
-| L-45-09-01 | LOW | Performance/DoS | `SettingsService::excludedExternalMounts()` liest eine per occ geschriebene Liste ohne Obergrenze; `excludedStorageIds()` fragt sie in Bändern zu 200 ab, bei 100 000 IDs rund 500 Abfragen je Request (auch im Request eines Schreibvorgangs über den Listener). Nur per occ erreichbar, die Route begrenzt auf 1000. `ExclusionService::prefixes()` schneidet beim Lesen an der Grenze und zählt den Rest | SettingsService.php `excludedExternalMounts()` (foreach ohne Grenze); StorageService.php `excludedStorageIds()` `array_chunk($wanted, self::ABSENT_LOOKUP_BAND)` | beheben: beim Lesen nach `MAX_EXCLUDED_EXTERNAL_MOUNTS` gültigen IDs abschneiden und den Rest als `unusable` zählen (wie prefixes()), Test zuerst | offen, Owner-Entscheid |
-| L-45-09-02 | LOW | Eingabeform | Ein Objekt mit Zahlwerten wird als Liste seiner Werte genommen: Route `{"a": 4}` -> `listOf()` macht `array_values` -> [4] gespeichert; occ-Wert `{"a": 4}` (Typ array) liest als [4]. Dokumentierte Regel H-33-01 ("An object stays what it was before, its values in order", SettingsController `listOf()`), gilt gleich für Ordner- und Musterliste; nur Admins, Wirkung gleich dem Senden der Liste | SettingsController.php `listOf()` Z. 621 bis 627; SettingsService `excludedExternalMounts()` prüft nur die Werte | akzeptieren: bewusste, dokumentierte Regel für alle drei Listen, keine Rechte-Grenze berührt | offen, Owner-Entscheid |
-| L-45-09-03 | LOW | Robustheit | Ist files_external nie aktiviert worden, gibt es die Tabelle `oc_external_mounts` nicht (angelegt erst von der Migration Version1011Date20200630192246 beim Aktivieren; files_external steht nicht in `defaultEnabled` von core/shipped.json, stable34). Schreibt ein Admin per occ trotzdem IDs in `excluded_external_mounts` und ist der Schalter für externe Speicher an, wirft Abfrage 1 von `excludedStorageIds()`; damit werfen `getMounts()` und `isIndexedStorage()`: Crawl, Abgleich und Ereignisse stocken, der Listener schreibt je Schreibvorgang eine Warnung (nur Klassenname). Über die Seite nicht erreichbar (die Liste erscheint nur mit aktivem files_external), aus dem Code abgeleitet und nicht auf einer echten Instanz nachgestellt | StorageService.php `excludedStorageIds()` Abfrage 1 ohne Tabellen- oder App-Prüfung; FileEventListener.php Z. 150 fängt und loggt; Quellen per raw.githubusercontent.com am 22.11.2026 | beheben: vor Abfrage 1 prüfen, ob es Admin-Mounts geben kann (Tabelle vorhanden bzw. files_external für jemanden aktiv), sonst leere Menge, ohne Logzeile mit Wert; Test zuerst (Datenbank wirft) | offen, Owner-Entscheid |
+| L-45-09-01 | LOW | Performance/DoS | `SettingsService::excludedExternalMounts()` liest eine per occ geschriebene Liste ohne Obergrenze; `excludedStorageIds()` fragt sie in Bändern zu 200 ab, bei 100 000 IDs rund 500 Abfragen je Request (auch im Request eines Schreibvorgangs über den Listener). Nur per occ erreichbar, die Route begrenzt auf 1000. `ExclusionService::prefixes()` schneidet beim Lesen an der Grenze und zählt den Rest | SettingsService.php `excludedExternalMounts()` (foreach ohne Grenze); StorageService.php `excludedStorageIds()` `array_chunk($wanted, self::ABSENT_LOOKUP_BAND)` | beheben: beim Lesen nach `MAX_EXCLUDED_EXTERNAL_MOUNTS` gültigen IDs abschneiden und den Rest als `unusable` zählen (wie prefixes()), Test zuerst | behoben 2b623a3f (Owner: beheben); RED `testAnOccWrittenListLongerThanTheCeilingIsCutOnReadAndTheRestCounted`, GREEN mit Grenzfall 1000 und Doppel |
+| L-45-09-02 | LOW | Eingabeform | Ein Objekt mit Zahlwerten wird als Liste seiner Werte genommen: Route `{"a": 4}` -> `listOf()` macht `array_values` -> [4] gespeichert; occ-Wert `{"a": 4}` (Typ array) liest als [4]. Dokumentierte Regel H-33-01 ("An object stays what it was before, its values in order", SettingsController `listOf()`), gilt gleich für Ordner- und Musterliste; nur Admins, Wirkung gleich dem Senden der Liste | SettingsController.php `listOf()` Z. 621 bis 627; SettingsService `excludedExternalMounts()` prüft nur die Werte | akzeptieren: bewusste, dokumentierte Regel für alle drei Listen, keine Rechte-Grenze berührt | behoben af0e5e13 (Owner: beheben, für alle drei Listen; Empfehlung "akzeptieren" überstimmt); Route lehnt Objekt und Liste mit Lücke ab (`empty` bzw. `out_of_range` für die Mount-Liste), Lesen bleibt duldsam; neue Regel ersetzt H-33-01 "An object stays what it was" |
+| L-45-09-03 | LOW | Robustheit | Ist files_external nie aktiviert worden, gibt es die Tabelle `oc_external_mounts` nicht (angelegt erst von der Migration Version1011Date20200630192246 beim Aktivieren; files_external steht nicht in `defaultEnabled` von core/shipped.json, stable34). Schreibt ein Admin per occ trotzdem IDs in `excluded_external_mounts` und ist der Schalter für externe Speicher an, wirft Abfrage 1 von `excludedStorageIds()`; damit werfen `getMounts()` und `isIndexedStorage()`: Crawl, Abgleich und Ereignisse stocken, der Listener schreibt je Schreibvorgang eine Warnung (nur Klassenname). Über die Seite nicht erreichbar (die Liste erscheint nur mit aktivem files_external), aus dem Code abgeleitet und nicht auf einer echten Instanz nachgestellt | StorageService.php `excludedStorageIds()` Abfrage 1 ohne Tabellen- oder App-Prüfung; FileEventListener.php Z. 150 fängt und loggt; Quellen per raw.githubusercontent.com am 22.11.2026 | beheben: vor Abfrage 1 prüfen, ob es Admin-Mounts geben kann (Tabelle vorhanden bzw. files_external für jemanden aktiv), sonst leere Menge, ohne Logzeile mit Wert; Test zuerst (Datenbank wirft) | behoben fcfa50b2 (Owner: beheben); auf echter Instanz nachgestellt und nach dem Fix gegengeprüft, Abschnitt "L-45-09-03 auf einer echten Instanz"; Guard nur `tableExists(external_mounts)` |
 | I-45-09-04 | INFO | Datenpflege | IDs gelöschter Mounts bleiben in der gespeicherten Liste, bis die Seite das nächste Mal speichert (sie sendet nur gerenderte Haken, die verwaiste ID fällt dann heraus); bis dahin ohne Wirkung (Probe 6). Entspricht D-45-06 ("ignoriert") | admin.js `excludedMountsOf()`; Probe 6 | keine Aktion | geschlossen |
 
-Keine Befunde CRITICAL, HIGH oder MEDIUM.
+Keine Befunde CRITICAL, HIGH oder MEDIUM. Alle drei LOW-Befunde nach Owner-Entscheid vom 2026-11-22 05:36 UTC behoben (45-FREIGABEN.md).
+
+## Fixes nach Owner-Entscheid (Task 2 und 3)
+
+Owner "Ok" am 2026-11-22 05:36 UTC (45-FREIGABEN.md): alle drei LOW beheben, Test zuerst.
+
+RED am Stand 802434fd (Tests geschrieben, Quellcode unverändert), `bash scripts/dev/phpunit_docker.sh --filter 'SettingsControllerTest|SettingsServiceTest|StorageServiceTest'`: `Tests: 211, Errors: 1, Failures: 10`, genau die neuen Fälle:
+
+- L-45-09-03: `StorageServiceTest::testWithoutTheTableOfFilesExternalAStoredListExcludesNothingAndStallsNothing` (Error: die Abfrage auf external_mounts wirft)
+- L-45-09-02: `SettingsControllerTest::testAnUnusableSelectionIsRefusedAndWritesNothing` mit "an object of ids" und "a list with a hole"; `testAPatternListThatIsNoListIsRefusedWithACodeAndWritesNothing`, `testAPrefixListThatIsNoListIsRefusedWithACodeAndWritesNothing`, `testThePreviewRefusesEitherListThatIsNoList` je mit "an object" und "a list with a hole"; `testAnObjectInsteadOfAListIsRefusedInEveryListAndWritesNothing`
+- L-45-09-01: `SettingsServiceTest::testAnOccWrittenListLongerThanTheCeilingIsCutOnReadAndTheRestCounted` (1200 IDs gelesen statt 1000)
+
+Schon im RED grün und als Schutz behalten: `testAListAtTheCeilingIsReadWholeAndADoubleBeyondItIsNoSurplus`, `testAStoredObjectFormIsStillReadAsItsValues`, `testStoredObjectFormsAreStillReadAndSaveBackAsLists` (das duldsame Lesen gilt schon und muss bleiben), `testWithTheTableInPlaceAFailingQueryIsNotSwallowed` (der Guard darf keinen anderen Datenbankfehler schlucken), `testWithAnEmptyListOrTheSwitchOffTheTableIsNotAskedFor`. Der RED-Lauf ist zugleich die Positivkontrolle (B8): ohne den jeweiligen Fix sind genau diese Fälle rot.
+
+| Befund | Commit | Änderung |
+|---|---|---|
+| L-45-09-03 | fcfa50b2 | `StorageService::excludedStorageIds()`: ohne Tabelle `external_mounts` (`IDBConnection::tableExists`) leere Menge, ohne Logzeile; erst gefragt, wenn Schalter an und Liste nicht leer, einmal je Request (Cache) |
+| L-45-09-01 | 2b623a3f | `SettingsService::excludedExternalMounts()`: die ersten 1000 brauchbaren IDs in gespeicherter Reihenfolge bleiben, jede weitere neue zählt als `unusable`; Doppel sind kein Überschuss; eine Warnung nur mit Zählern |
+| L-45-09-02 | af0e5e13 | `SettingsController::listOf()`: `!array_is_list` wie Nicht-Liste, Code `empty` (Ordner, Muster, auch Vorschau-Route), `out_of_range` für `excludedExternalMounts`; nichts geschrieben. Lesen unverändert duldsam. Regel H-33-01 neu gefasst im Docblock von `listOf()`, im Docblock von `SettingsService::excludedExternalMounts()`, in docs/admin-page.md ("Abgelehnte Eingaben") und in test_phase33_audit.py (Objekt-Fall jetzt `empty`, zwei neue Objekt-Fälle im Instanztest) |
+
+Gates je Commit (B3), am Arbeitsbaum genau des Commits: PHPUnit voll `OK (1287 tests, 8204 assertions)`, `OK (1290 tests, 8216 assertions)`, `OK (1299 tests, 8351 assertions)`; `php_gates_docker.sh all` je Exit 0 (Psalm-Taint OCP 33/34/35 je 0 Befunde, Probe 3; php-cs 0; zizmor und actionlint ohne Befund, Proben gesehen); ruff, ruff format (260), pyright latest 0, vulture grün; pytest test_measurement_scripts, test_admin_ui_contract, test_phase33_audit, test_phase34_audit, test_php_static_gates, test_php_trust_boundary, test_exclusion_path_space zuletzt `971 passed, 107 skipped`. Baumhash PHP-Hälfte je Commit per Rezept und unabhängiger Pipeline (find, sort, sed, sha256sum) gleich: f20a3153, 77b20880, a2b061ac; Positivkontrolle je über git archive des Vorgänger-Commits (6638875f, f20a3153, 77b20880).
+
+Abweichung: Beim Commit 2b623a3f lief der erste `php_gates_docker.sh all` rot, weil das Paket vimeo/psalm im Container unvollständig entpackt war (`include(.../vimeo/psalm/psalm): Failed to open stream`, "psalm wrote no SARIF report"); der Commit war durch eine Befehlskette mit `;` schon erstellt. Der zweite Lauf am unveränderten Baum desselben Commits war grün (drei Mal `taint findings: 0`, php-cs 0, zizmor und actionlint ohne Befund). Kein Codebefund, nur Werkzeug.
+
+Keine neue nutzersichtbare Zeichenkette: `empty` und `out_of_range` haben ihre Sätze auf der Seite schon, kein Katalog geändert.
+
+## L-45-09-03 auf einer echten Instanz
+
+Nachgestellt am 2026-11-22 (UTC) auf einer frischen Nextcloud 34.0.3 (Image `nextcloud:34.0.3-apache`, SQLite, eigenes Volume `findling-l03-html`, Container `findling-l03-repro`, Port 8089), seriell, ohne andere Docker-Arbeit daneben; die PHP-App per Bind-Mount aus dem Arbeitsbaum. Zwischen vorher und nachher nur `php/lib/Service/StorageService.php` getauscht (vorher: `git show HEAD:...` mit HEAD 802434fd, nachher: Fassung mit Guard) und der Container neu gestartet.
+
+Ausgangslage (files_external aus, Tabelle fehlt, IDs per occ, Schalter an):
+
+```
+$ docker run -d --name findling-l03-repro -p 8089:80 -e SQLITE_DATABASE=nextcloud -e NEXTCLOUD_ADMIN_USER=admin -e NEXTCLOUD_ADMIN_PASSWORD=... -e NEXTCLOUD_TRUSTED_DOMAINS=localhost -v findling-l03-html:/var/www/html -v ".../php:/var/www/html/custom_apps/findling" nextcloud:34.0.3-apache
+$ occ status            ->  installed: true, version: 34.0.3.2
+$ occ app:enable findling
+findling 1.7.0 enabled
+$ occ app:list          ->  Enabled: Z. 1, Disabled: Z. 53, "  - files_external: 1.26.0" in Z. 56 (also unter Disabled)
+$ php -r '... SELECT name FROM sqlite_master WHERE type="table" AND name LIKE "oc_%mounts%"'
+oc_mounts
+$ occ config:app:set findling index_external_storage --value=true --type=boolean
+Config value 'index_external_storage' for app 'findling' is now set to '1', stored as boolean in fast cache
+$ occ config:app:set findling excluded_external_mounts --value='[5]' --type=array
+Config value 'excluded_external_mounts' for app 'findling' is now set to '[5]', stored as array in fast cache
+```
+
+Vorher (ohne Guard). Probe `/tmp/l03_probe.php` ruft `StorageService::getMounts()` über `\OCP\Server::get()` und `IDBConnection::tableExists()`:
+
+```
+$ php /tmp/l03_probe.php
+getMounts: OC\DB\Exceptions\DbalException: An exception occurred while executing a query: SQLSTATE[HY000]: General error: 1 no such table: oc_external_mounts
+tableExists(external_mounts): false
+tableExists(mounts): true
+$ curl -u admin:... -T l03-probe.txt .../remote.php/dav/files/admin/l03-before.txt
+upload HTTP 201
+queue rows: 0
+$ occ background-job:execute <SchedulerJob> --force-execute
+Job executed!
+nextcloud.log, Meldungen gezählt:
+      2 "Message":"An exception occurred while executing a query: SQLSTATE[HY000]: General error: 1 no such table: oc_external_mounts"
+      2 "Message":"SQLSTATE[HY000]: General error: 1 no such table: oc_external_mounts"
+      2 "error":"OC\\DB\\Exceptions\\DbalException"
+      2 "message":"Error while running background job OCA\\Findling\\BackgroundJobs\\SchedulerJob (id: 154831771661922304, arguments: null)"
+      2 "message":"Findling: an event could not be turned into queued work"
+```
+
+Erste Runde mit `cron.php` am selben Stand gab dasselbe Bild (SchedulerJob: `no such table: oc_external_mounts`, Listener: `"error":"OC\\DB\\Exceptions\\DbalException"`, Arbeitsvorrat 0). Damit ist L-45-09-03 auf der echten Instanz belegt: der Upload kommt nicht in die Warteschlange, der Crawl-Planer bricht ab.
+
+Nachher (mit Guard, gleicher appconfig-Stand `1` und `[5]`):
+
+```
+$ php /tmp/l03_probe.php
+getMounts: ok, mounts=1
+tableExists(external_mounts): false
+tableExists(mounts): true
+$ curl -u admin:... -T l03-probe.txt .../remote.php/dav/files/admin/l03-after.txt
+upload HTTP 201
+queue rows: 1
+$ occ findling:index --restart -n
+Cleared 1 stale jobs of the earlier run.
+The crawl was queued. It starts with the next run of the background jobs.
+$ occ background-job:execute 154832109429223424 --force-execute     (SchedulerJob)
+Job executed!
+log lines: 0
+background-job:list: OCA\Findling\BackgroundJobs\StorageCrawlJob {"storage_id":2,"root_id":1,"overridden_root":7,"last_file_id":0}
+$ occ background-job:execute 154832137031938048 --force-execute     (StorageCrawlJob)
+log lines: 0
+queue rows: 54
+$ occ findling:index --status
+Work stock
+  scheduled            54
+```
+
+Ergebnis: mit Guard keine Ausnahme, keine Logzeile, das Ereignis wird eingereiht, Planer und Crawl laufen durch (54 Dateien eingereiht). `tableExists('mounts')` = true ist die Positivkontrolle, dass die Abfrage den Präfix `oc_` selbst setzt. Bewusst nicht umgesetzt: die zusätzliche Bedingung "files_external nicht aktiviert -> leere Menge". Ist die App deaktiviert, die Tabelle aber da, läuft die Abfrage fehlerfrei, und alte Zeilen des Providers in `oc_mounts` könnten sonst ihre Speicher wieder in den Index bringen (Ausschluss fiele offen aus); der Guard prüft nur das, was die Ausnahme auslöst.
 
 ## Lokale Gates
 
