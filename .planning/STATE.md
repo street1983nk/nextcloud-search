@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-01-PLAN.md (PRs #57 und #56 gemergt, Nachträge lokal f6eff1a1, Push in 45-06)"
-last_updated: "2026-11-22T01:08:02.438Z"
-last_activity: "2026-11-22, 45-01 abgeschlossen: PR #57 (8cd9a0b4) und #56 (edc08233) gemergt, root.lang-Nachtrag ebd924cf, PRODUCT und CHANGELOG f6eff1a1"
+stopped_at: "Completed 45-02-PLAN.md (Ausschluss je Admin-Speicher serverseitig, fa288361 RED, 5445be3c GREEN, lokal, Push in 45-06)"
+last_updated: "2026-11-22T01:29:00.000Z"
+last_activity: "2026-11-22, 45-02 abgeschlossen: excluded_external_mounts in SettingsService, Filter in getMounts() und Abwahl in deselected() (5445be3c)"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 26
-  completed_plans: 11
-  percent: 42
+  completed_plans: 12
+  percent: 46
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-01 von 16 abgeschlossen, nächster 45-02
+Plan: 45-02 von 16 abgeschlossen, nächster 45-03
 Status: Executing
-Last activity: 2026-11-22, 45-01 abgeschlossen: PRs #57 und #56 auf die geprüften Köpfe gemergt, root.lang-Nachtrag, PRODUCT.md und drei CHANGELOGs (lokal, Push gebündelt in 45-06)
+Last activity: 2026-11-22, 45-02 abgeschlossen: Ausschluss je externem Admin-Speicher serverseitig (SettingsService, StorageService, Struktur-Gate), lokal, Push gebündelt in 45-06
 
 ## Performance Metrics
 
@@ -99,6 +99,7 @@ Last activity: 2026-11-22, 45-01 abgeschlossen: PRs #57 und #56 auf die geprüft
 - v1.7: 44-03 in ca. 45 min inkl. ca. 25 min Docker-Läufe (2 Tasks, 2 Dateien)
 - v1.7: 44-04 in ca. 110 min inkl. ca. 35 min Docker- und pytest-Läufe (2 Tasks, 20 Dateien)
 - v1.7: 45-01 in ca. 20 min ab Task 2 (3 Tasks, 8 Dateien)
+- v1.7: 45-02 in ca. 20 min laut Systemzeit inkl. PHPUnit, Psalm 33/34/35 und pytest (2 Tasks, 6 Dateien)
 
 ## Accumulated Context
 
@@ -120,6 +121,7 @@ Last activity: 2026-11-22, 45-01 abgeschlossen: PRs #57 und #56 auf die geprüft
 - 44-08 (21.11.2026, c6142abb): Strukturgate bindet Ausnahmen an E-ID, Datei und Regel (E-13 nur SC2016 in php.yml) und verbietet @psalm-suppress/@psalm-taint-escape in den analysierten PHP-Dateien; python.yml startet nach E-06 auf .github/workflows/** und .github/dependabot.yml. Volle Suite 7234 passed, 303 skipped.
 - Phase 44 abgeschlossen (21.11.2026): 44-09 b4089a55 (Push, Repo-Secrets APPSTORE_TOKEN/APP_PRIVATE_KEY/BACKEND_PRIVATE_KEY gelöscht, nur NTFY_TOPIC nach E-12), 44-10 4cdde0d8 (Rot-Beweis: zizmor+actionlint 44902366560, psalm-taint drei Beine 44902366566, php-cs 44909755992 nach E-15 mit Reiz if(true){echo 1;}; Schlussprüfung PHPUnit 1222, pytest 7235 passed), 44-SECURITY.md 4f4cf979 (39/39 closed, 4 accept, R-44-05 NTFY_TOPIC, R-44-06 probe-92d ohne CI-Lauf).
 - 45-01 (22.11.2026, f6eff1a1): PR #57 und #56 per --merge --match-head-commit gemergt (Owner "Go" 01:04 UTC, 45-FREIGABEN.md), foolfitz bleibt Autor; docs/l10n-chinese.md bleibt englisch; locale() schreibt auch root.lang mit replace(/_/g) um; zh_TW trägt alle 366 Schlüssel, 3b entfiel. Lokale Commits ebd924cf und f6eff1a1 noch nicht gepusht (45-06).
+- 45-02 (22.11.2026, fa288361 RED, 5445be3c GREEN): appconfig excluded_external_mounts (Opt-out, positive int, sortiert, max 1000; null/fehlend in save() = unverändert, [] = leeren); StorageService::ADMIN_MOUNT_TYPE = 1 (DBConfigService.php :34 in stable33/34/35); excludedStorageIds() mit drei gebänderten Fragen, ein Storage fällt nur heraus, wenn alle seine oc_mounts-Zeilen von ausgeschlossenen Admin-Mounts stammen; getMounts() filtert hinter dem einen getDistinctMounts-Aufruf, deselected() meldet sie ohne Gnadenfrist. Baumhash PHP 133/a7d7a5c7. EXCL-04 bleibt Pending bis Route (45-03) und UI (45-05). Lokal, nicht gepusht.
 
 ### Decisions (Roadmap v1.6)
 
