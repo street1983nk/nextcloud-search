@@ -1323,8 +1323,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gave a7d7a5c7; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # a7d7a5c7 as well; the recipe over git archive of a65ba841, the last commit before the plan, gave
 # 033cb708 with 133 files (positive control).
-PHP_FILES_TODAY = 133
-PHP_TREE_HASH_TODAY = "a7d7a5c72af919f3061672526086088261c2dbd131c4753d53a28203bb4f442a"
+# Moved on 2026-11-22 by plan 45-03 task 1 (EXCL-04, the list of admin mounts for the admin page):
+# two files came, lib/Service/ExternalMountService.php and tests/Unit/ExternalMountServiceTest.php,
+# and no other file changed its bytes, so PHP_FILES_TODAY moves to 135. The recipe gave 4d13bae1;
+# the independent pipeline of find, sort, sed and sha256sum over the same tree gave 4d13bae1 as
+# well; the recipe over git archive of b60ee646, the last commit before the plan, gave a7d7a5c7
+# with 133 files (positive control).
+PHP_FILES_TODAY = 135
+PHP_TREE_HASH_TODAY = "4d13bae18edddd33cb5bf304ad4766c132c77fe466cad386348d3011c86d9080"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
