@@ -27,7 +27,7 @@
 ### Store-Texte (STORE, Owner-Regel 20.11.2026)
 
 - [ ] **STORE-03**: Die Store-Beschreibungen beider Apps (findling, findling_backend) sind in DE, EN und FR kurz: Kern bleibt (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die Doku auf GitHub); der Entwurf ist vor dem Einbau vom Owner freigegeben
-- [ ] **STORE-04**: Die aus dem Store-Text verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku in allen drei Sprachen; die bisherigen Gates prüfen sie dort
+- [x] **STORE-04**: Die aus dem Store-Text verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku in allen drei Sprachen; die bisherigen Gates prüfen sie dort
 
 ### Release (REL)
 
@@ -56,7 +56,7 @@
 | EXCL-05 | Phase 45 | Complete |
 | EXCL-06 | Phase 45 | Complete |
 | STORE-03 | Phase 45 | Pending |
-| STORE-04 | Phase 45 | Pending |
+| STORE-04 | Phase 45 | Complete |
 | REL-07 | Phase 45 | Pending |
 
 **Coverage:** 11/11 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt.

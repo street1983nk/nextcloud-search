@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-06-PLAN.md (M-45-01 in der Strecke, Push edc08233..612b7c9e mit Owner-Freigabe, Kopf grün)"
-last_updated: "2026-11-22T04:20:00.000Z"
-last_activity: "2026-11-22, 45-06 abgeschlossen: Zyklen M-45-01 (Ausschluss per Mount-ID und Rückkehr) in der Integrationsstrecke, Push 45-01 bis 45-06 nach Owner-Freigabe, alle neun Workflows auf 612b7c9e grün"
+stopped_at: "Completed 45-07-PLAN.md (READMEs DE/EN/FR mit den verlagerten Store-Inhalten, Gates auf die READMEs umgezogen, STORE-04)"
+last_updated: "2026-11-22T04:45:00.000Z"
+last_activity: "2026-11-22, 45-07 abgeschlossen: READMEs tragen Grenzen, Suchsprachen und Neuerungen 1.7.0, Faktenprüfung ohne Befund, info.xml-Gates der verlagerten Inhalte auf README-Gates umgezogen (lokal, nicht gepusht)"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 26
-  completed_plans: 16
-  percent: 62
+  completed_plans: 17
+  percent: 65
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-06 von 16 abgeschlossen, nächster 45-07
+Plan: 45-07 von 16 abgeschlossen, nächster 45-08
 Status: Executing
-Last activity: 2026-11-22, 45-06 abgeschlossen: Strecke M-45-01 belegt Ausschluss und Rückkehr eines Admin-Speichers (Integration 44982244176), Push edc08233..612b7c9e mit Owner-Freigabe, Kopf grün
+Last activity: 2026-11-22, 45-07 abgeschlossen: READMEs DE/EN/FR mit den verlagerten Store-Inhalten und Fakten 1.7.0, Gates auf READMEs (fdfe1b70, 907baa2f, lokal)
 
 ## Performance Metrics
 
@@ -104,6 +104,7 @@ Last activity: 2026-11-22, 45-06 abgeschlossen: Strecke M-45-01 belegt Ausschlus
 - v1.7: 45-04 in ca. 35 min laut Systemzeit inkl. ca. 15 min Docker (3 Tasks, ein Commit, 31 Dateien)
 - v1.7: 45-05 in ca. 35 min laut Systemzeit inkl. ca. 15 min Docker (3 Tasks, ein Commit, 29 Dateien)
 - v1.7: 45-06 ab Task 2 in ca. 35 min laut Systemzeit inkl. ca. 30 min CI (3 Tasks, 2 Dateien)
+- v1.7: 45-07 in ca. 50 min laut Systemzeit (2 Tasks, 9 Dateien)
 
 ## Accumulated Context
 
@@ -130,6 +131,7 @@ Last activity: 2026-11-22, 45-06 abgeschlossen: Strecke M-45-01 belegt Ausschlus
 - 45-04 (22.11.2026, 08eaa058, ein Commit für drei Tasks): ExclusionService::ERROR_WILDCARD nur für Einträge, die nicht in prefixes() stehen (gespeicherte *-Einträge geduldet und auf der Seite markiert, auch nach applyRules über die Zeilenvorlage); Zähler aus data-max-entries mit drei Schlüsseln (kein n()), Satz im Script per t(), bei Grenze 0 verborgen; Beispiel Backup* statt Archiv* (Vokabular-Gate in docs/); patternErrorSentences gegen validatePatterns+normalisePattern geprüft; Schlüsselzahl de.json 371; Baumhash PHP 136/47251647. EXCL-05 und EXCL-06 Complete (Playwright und impeccable in 45-10). Lokal, nicht gepusht.
 - 45-05 (22.11.2026, ae57d083, ein Commit für drei Tasks): fieldset#findling-rules-mounts unter dem Hauptschalter (disabled bei aus, Hilfe/Aus-Satz getauscht ohne Neuladen), Leersatz, eigener Satz ohne files_external, "ID %s" bei duplicate; Bestätigungszeile ohne Zahl, nur bei Hauptschalter an, "Keep files indexed"/Escape setzen die neu geleerten Haken zurück; excludedExternalMounts letzter Schlüssel, ohne gerenderte Liste inForceMounts aus dem Bootstrap (T-45-21); ID nur aus data-mount-id, Einhängepunkt nur per textContent (Gate mit Fehl-Samples). Typnamen unübersetzt (Fachbegriffe). Hilfesatz-Schlüssel ohne "box" (POL-03): "Clear the tick of a storage ...". Schlüsselzahl de.json 380; Baumhash PHP 136/ee8088b3. EXCL-04 Complete (Playwright/impeccable und Markup-Probe in 45-10). Lokal, nicht gepusht.
 - 45-06 (22.11.2026, f95fdf86, 612b7c9e): Zyklen M-45-01 vor "M-32-02: cycle 3" (E1 per Mount-ID ausgeschlossen: 0 Zeilen ohne Stempel, E3 und keep36 unverändert; nach config:app:delete im nächsten regulären Abgleich wieder 1 Zeile). Owner-Freigabe Push "Ja" 03:47 UTC; Push edc08233..612b7c9e, alle neun Workflows grün (Integration 44982244176), kein Rerun. Commits 45-01 bis 45-05 damit gepusht.
+- 45-07 (22.11.2026, fdfe1b70, 907baa2f): READMEs DE/EN/FR mit Suchsprachen, Abschnitt Bekannte Grenzen direkt nach der Sprachzeile und den drei Neuerungen 1.7.0 ("ab 1.7.0"); Faktenprüfung 45-README-PRUEFUNG.md ohne Befund. Gates nach D-45-14: Messzahl genau einmal je README, info.xml nur noch höchstens eine; Grenzen, Sprachzeile, Doku-Vergleich, Share-Satz, Similar documents je README; Formatliste-gegen-Entwurf nur noch, wo eine Beschreibung die Liste trägt; Kern-Gates (Datenschutz, Connector, Umstiegs-Link) unverändert auf info.xml. docs/l10n-chinese.md: Schlüsselzahl 380, kein wörtliches U+2014. STORE-04 Complete, REL-07 README-Teil erledigt. Lokal, nicht gepusht.
 
 ### Decisions (Roadmap v1.6)
 
@@ -310,13 +312,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-22T04:20:00.000Z
-Stopped at: Completed 45-06-PLAN.md
+Last session: 2026-11-22T04:45:00.000Z
+Stopped at: Completed 45-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:execute-phase 45: weiter mit 45-07 (45-01 bis 45-06 fertig und gepusht bis 612b7c9e; Docs-Commit von 45-06 lokal, reist mit dem nächsten freigegebenen Push)
+- /gsd:execute-phase 45: weiter mit 45-08 (45-01 bis 45-06 gepusht bis 612b7c9e; feeef88b und die drei Commits von 45-07 lokal, reisen mit dem nächsten freigegebenen Push)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
