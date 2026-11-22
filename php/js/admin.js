@@ -138,11 +138,28 @@
    * Read off the root element rather than through the helpers of OC that ask
    * for the same thing: those two are deprecated, and this attribute is where
    * the layout puts the value they would have returned.
+   *
+   * Every underscore becomes a dash, not only the first: 42 of the 750 locales
+   * of Nextcloud 34 have three parts (zh_Hant_TW, sr_Latn_RS), and zh-Hant_TW
+   * is no language tag. Each candidate is still checked before it is handed
+   * on, because a tag Intl refuses makes the two constructors below throw, and
+   * a throw there ends this whole script: no button, no form and no poll of
+   * the page would work.
    */
   function locale () {
     const root = document.documentElement
-    const own = (root.dataset.locale || '').replace('_', '-')
-    return own || root.lang || 'en'
+    const candidates = [(root.dataset.locale || '').replace(/_/g, '-'), root.lang]
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue
+      }
+      try {
+        return Intl.getCanonicalLocales(candidate)[0]
+      } catch (error) {
+        // Not a language tag: the next candidate, and English after the last.
+      }
+    }
+    return 'en'
   }
 
   const numbers = new Intl.NumberFormat(locale())
