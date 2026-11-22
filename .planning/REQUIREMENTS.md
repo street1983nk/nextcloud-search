@@ -21,8 +21,8 @@
 ### Ausschlüsse (EXCL, Issue #45)
 
 - [ ] **EXCL-04**: Admin kann einzelne externe Speicher vom Index ausschließen, neben dem Schalter für externe Speicher; bereits indexierte Inhalte eines ausgeschlossenen Speichers werden entfernt, ein wieder zugelassener Speicher wird nachindexiert
-- [ ] **EXCL-05**: Admin sieht auf der Admin-Seite, wie viele Ausschluss-Plätze für Ordner und für Muster noch frei sind
-- [ ] **EXCL-06**: Gibt der Admin im Ordnerfeld ein Platzhalterzeichen ein, sagt die Fehlermeldung, was er stattdessen eingeben kann (Musterfeld), in allen 16 Katalogen
+- [x] **EXCL-05**: Admin sieht auf der Admin-Seite, wie viele Ausschluss-Plätze für Ordner und für Muster noch frei sind
+- [x] **EXCL-06**: Gibt der Admin im Ordnerfeld ein Platzhalterzeichen ein, sagt die Fehlermeldung, was er stattdessen eingeben kann (Musterfeld), in allen 16 Katalogen
 
 ### Store-Texte (STORE, Owner-Regel 20.11.2026)
 
@@ -53,8 +53,8 @@
 | KAT-03 | Phase 45 | Complete |
 | KAT-04 | Phase 45 | Complete |
 | EXCL-04 | Phase 45 | Pending |
-| EXCL-05 | Phase 45 | Pending |
-| EXCL-06 | Phase 45 | Pending |
+| EXCL-05 | Phase 45 | Complete |
+| EXCL-06 | Phase 45 | Complete |
 | STORE-03 | Phase 45 | Pending |
 | STORE-04 | Phase 45 | Pending |
 | REL-07 | Phase 45 | Pending |

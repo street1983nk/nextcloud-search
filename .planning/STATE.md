@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "Completed 45-03-PLAN.md (Route und Lesepfad der Speicherauswahl, 873c3e9d und 42d3985b, lokal, Push in 45-06)"
-last_updated: "2026-11-22T02:20:00.000Z"
-last_activity: "2026-11-22, 45-03 abgeschlossen: ExternalMountService, POST /admin/rules mit excludedExternalMounts, rules() mit IDs, Template-Parameter externalMounts (42d3985b)"
+stopped_at: "Completed 45-04-PLAN.md (freie Plätze und wildcard im Ordnerfeld, 08eaa058, lokal, Push in 45-06)"
+last_updated: "2026-11-22T02:55:00.000Z"
+last_activity: "2026-11-22, 45-04 abgeschlossen: Code wildcard mit Duldung gespeicherter Einträge, Zähler freier Plätze, Markierung, neuer no_wildcard-Satz in 18 Katalogen und 6 Tabellen (08eaa058)"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 26
-  completed_plans: 13
-  percent: 50
+  completed_plans: 14
+  percent: 54
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-03 von 16 abgeschlossen, nächster 45-04
+Plan: 45-04 von 16 abgeschlossen, nächster 45-05
 Status: Executing
-Last activity: 2026-11-22, 45-03 abgeschlossen: Schreib- und Lesepfad der Speicherauswahl (ExternalMountService, Route, rules(), Template-Parameter), lokal, Push gebündelt in 45-06
+Last activity: 2026-11-22, 45-04 abgeschlossen: freie Plätze unter beiden Listen, wildcard im Ordnerfeld, Markierung alter *-Einträge, neuer no_wildcard-Satz, alle Kataloge und Tabellen, lokal, Push gebündelt in 45-06
 
 ## Performance Metrics
 
@@ -101,6 +101,7 @@ Last activity: 2026-11-22, 45-03 abgeschlossen: Schreib- und Lesepfad der Speich
 - v1.7: 45-01 in ca. 20 min ab Task 2 (3 Tasks, 8 Dateien)
 - v1.7: 45-02 in ca. 20 min laut Systemzeit inkl. PHPUnit, Psalm 33/34/35 und pytest (2 Tasks, 6 Dateien)
 - v1.7: 45-03 in ca. 70 min laut Systemzeit inkl. zweimal PHPUnit, Psalm 33/34/35 und PHP-lesende pytest-Dateien (2 Tasks, 9 Dateien)
+- v1.7: 45-04 in ca. 35 min laut Systemzeit inkl. ca. 15 min Docker (3 Tasks, ein Commit, 31 Dateien)
 
 ## Accumulated Context
 
@@ -124,6 +125,7 @@ Last activity: 2026-11-22, 45-03 abgeschlossen: Schreib- und Lesepfad der Speich
 - 45-01 (22.11.2026, f6eff1a1): PR #57 und #56 per --merge --match-head-commit gemergt (Owner "Go" 01:04 UTC, 45-FREIGABEN.md), foolfitz bleibt Autor; docs/l10n-chinese.md bleibt englisch; locale() schreibt auch root.lang mit replace(/_/g) um; zh_TW trägt alle 366 Schlüssel, 3b entfiel. Lokale Commits ebd924cf und f6eff1a1 noch nicht gepusht (45-06).
 - 45-02 (22.11.2026, fa288361 RED, 5445be3c GREEN): appconfig excluded_external_mounts (Opt-out, positive int, sortiert, max 1000; null/fehlend in save() = unverändert, [] = leeren); StorageService::ADMIN_MOUNT_TYPE = 1 (DBConfigService.php :34 in stable33/34/35); excludedStorageIds() mit drei gebänderten Fragen, ein Storage fällt nur heraus, wenn alle seine oc_mounts-Zeilen von ausgeschlossenen Admin-Mounts stammen; getMounts() filtert hinter dem einen getDistinctMounts-Aufruf, deselected() meldet sie ohne Gnadenfrist. Baumhash PHP 133/a7d7a5c7. EXCL-04 bleibt Pending bis Route (45-03) und UI (45-05). Lokal, nicht gepusht.
 - 45-03 (22.11.2026, 873c3e9d, 42d3985b): ExternalMountService (isEnabledForAnyone files_external, nur type = ADMIN_MOUNT_TYPE, Collator-Sortierung, duplicate bei gleichem Einhängepunkt und Typ, BACKEND_NAMES = setText() von stable33, keine files_external-Klasse); saveRules(..., mixed $excludedExternalMounts = null) alles oder nichts, Nicht-Liste = fields.excludedExternalMounts out_of_range, null = unverändert; rules() nur IDs, ruleSet() zählt die Auswahl; Admin::getForm() gibt externalMounts nur als Template-Parameter (nicht Initial State, nicht Poll). Vorschau-Route unverändert (Begründung im Docblock). Baumhash PHP 136/c0a27412. EXCL-04 bleibt Pending bis UI (45-05). Lokal, nicht gepusht.
+- 45-04 (22.11.2026, 08eaa058, ein Commit für drei Tasks): ExclusionService::ERROR_WILDCARD nur für Einträge, die nicht in prefixes() stehen (gespeicherte *-Einträge geduldet und auf der Seite markiert, auch nach applyRules über die Zeilenvorlage); Zähler aus data-max-entries mit drei Schlüsseln (kein n()), Satz im Script per t(), bei Grenze 0 verborgen; Beispiel Backup* statt Archiv* (Vokabular-Gate in docs/); patternErrorSentences gegen validatePatterns+normalisePattern geprüft; Schlüsselzahl de.json 371; Baumhash PHP 136/47251647. EXCL-05 und EXCL-06 Complete (Playwright und impeccable in 45-10). Lokal, nicht gepusht.
 
 ### Decisions (Roadmap v1.6)
 
@@ -304,13 +306,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-22T02:20:00.000Z
-Stopped at: Completed 45-03-PLAN.md
+Last session: 2026-11-22T02:55:00.000Z
+Stopped at: Completed 45-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:execute-phase 45: weiter mit 45-04 (45-01 bis 45-03 fertig, Push der lokalen Commits erst in 45-06 mit eigener Freigabe)
+- /gsd:execute-phase 45: weiter mit 45-05 (45-01 bis 45-04 fertig, Push der lokalen Commits erst in 45-06 mit eigener Freigabe)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen
