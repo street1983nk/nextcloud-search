@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
-status: ready_to_plan
-stopped_at: "Phase 44 abgeschlossen (44-10 4cdde0d8, SECURITY 4f4cf979 39/39 closed), nächste Phase 45 (nicht geplant)"
-last_updated: "2026-11-21T15:00:00.000Z"
-last_activity: 2026-11-21, Phase 44 abgeschlossen, Rot-Beweis aller vier Gates, secure-phase 39/39 closed
+status: executing
+stopped_at: "Completed 45-01-PLAN.md (PRs #57 und #56 gemergt, Nachträge lokal f6eff1a1, Push in 45-06)"
+last_updated: "2026-11-22T01:08:02.438Z"
+last_activity: "2026-11-22, 45-01 abgeschlossen: PR #57 (8cd9a0b4) und #56 (edc08233) gemergt, root.lang-Nachtrag ebd924cf, PRODUCT und CHANGELOG f6eff1a1"
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_plans: 26
+  completed_plans: 11
+  percent: 42
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: noch keiner (Phase 45 nicht geplant)
-Status: Ready to plan
-Last activity: 2026-11-21, Phase 44 abgeschlossen: 44-09 Push und Secrets nur in Environments, 44-10 Rot-Beweis aller vier Gates (Läufe 44902366560, 44902366566, 44909755992; E-15), Schlussprüfung grün, 44-SECURITY.md 39/39 closed
+Plan: 45-01 von 16 abgeschlossen, nächster 45-02
+Status: Executing
+Last activity: 2026-11-22, 45-01 abgeschlossen: PRs #57 und #56 auf die geprüften Köpfe gemergt, root.lang-Nachtrag, PRODUCT.md und drei CHANGELOGs (lokal, Push gebündelt in 45-06)
 
 ## Performance Metrics
 
@@ -98,6 +98,7 @@ Last activity: 2026-11-21, Phase 44 abgeschlossen: 44-09 Push und Secrets nur in
 - v1.7: 44-02 in ca. 85 min inkl. ca. 6 min Psalm-Läufe (3 Tasks, 11 Dateien)
 - v1.7: 44-03 in ca. 45 min inkl. ca. 25 min Docker-Läufe (2 Tasks, 2 Dateien)
 - v1.7: 44-04 in ca. 110 min inkl. ca. 35 min Docker- und pytest-Läufe (2 Tasks, 20 Dateien)
+- v1.7: 45-01 in ca. 20 min ab Task 2 (3 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Last activity: 2026-11-21, Phase 44 abgeschlossen: 44-09 Push und Secrets nur in
 - 44-07 (21.11.2026, 8e4ae166): zizmor-Nachtrag zu 44-06 per uvx zizmor==1.32.0 Exit 0 (f0937c5e). workflow-lint.yml ruft die Werkzeuge per docker run (Digest, ohne Netz, read-only) statt als Job-Container, weil das actionlint-Image kein bash hat und als guest läuft; Gate-Skript POSIX sh. Gegenprobe: SHELLCHECK_OPTS=--severity=warning blendet SC2086 in actionlint aus, erst das unset im Skript hält den Befund rot.
 - 44-08 (21.11.2026, c6142abb): Strukturgate bindet Ausnahmen an E-ID, Datei und Regel (E-13 nur SC2016 in php.yml) und verbietet @psalm-suppress/@psalm-taint-escape in den analysierten PHP-Dateien; python.yml startet nach E-06 auf .github/workflows/** und .github/dependabot.yml. Volle Suite 7234 passed, 303 skipped.
 - Phase 44 abgeschlossen (21.11.2026): 44-09 b4089a55 (Push, Repo-Secrets APPSTORE_TOKEN/APP_PRIVATE_KEY/BACKEND_PRIVATE_KEY gelöscht, nur NTFY_TOPIC nach E-12), 44-10 4cdde0d8 (Rot-Beweis: zizmor+actionlint 44902366560, psalm-taint drei Beine 44902366566, php-cs 44909755992 nach E-15 mit Reiz if(true){echo 1;}; Schlussprüfung PHPUnit 1222, pytest 7235 passed), 44-SECURITY.md 4f4cf979 (39/39 closed, 4 accept, R-44-05 NTFY_TOPIC, R-44-06 probe-92d ohne CI-Lauf).
+- 45-01 (22.11.2026, f6eff1a1): PR #57 und #56 per --merge --match-head-commit gemergt (Owner "Go" 01:04 UTC, 45-FREIGABEN.md), foolfitz bleibt Autor; docs/l10n-chinese.md bleibt englisch; locale() schreibt auch root.lang mit replace(/_/g) um; zh_TW trägt alle 366 Schlüssel, 3b entfiel. Lokale Commits ebd924cf und f6eff1a1 noch nicht gepusht (45-06).
 
 ### Decisions (Roadmap v1.6)
 
@@ -298,13 +300,13 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-21T15:00:00.000Z
-Stopped at: Phase 44 abgeschlossen, nächster Schritt /gsd:plan-phase 45
+Last session: 2026-11-22T01:08:02.419Z
+Stopped at: Completed 45-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- /gsd:plan-phase 45: Findling 1.7.0 (#45, PRs #56/#57, kurze Store-Texte); Roadmap v1.7 vom 21.11.2026
+- /gsd:execute-phase 45: weiter mit 45-02 (45-01 fertig, Push der lokalen Commits erst in 45-06 mit eigener Freigabe)
 - body_zh (#53) wartet auf foolfitz' eigenen PR
 - v1.7-Merkliste aus deferred-items.md der Phase 40 (Satz D bei Häufung, Endverdikt gateway_error, Kaltstart-Satz G1, Tombstones in indexed) beim new-milestone sichten
 - #25 beobachten (Antwort zu 1.6.3 gepostet 12.11.2026); nach Bestätigung durch mbozem Owner fragen, ob schließen

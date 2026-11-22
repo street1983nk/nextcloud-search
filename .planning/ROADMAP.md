@@ -187,7 +187,7 @@ Plans:
 **Plans**: 16 plans
 
 Plans:
-- [ ] 45-01-PLAN.md: PRs #56 und #57 prüfen, je nach Owner-Freigabe mergen, root.lang-Nit, PRODUCT.md, CHANGELOG (KAT-03, KAT-04)
+- [x] 45-01-PLAN.md: PRs #56 und #57 prüfen, je nach Owner-Freigabe mergen, root.lang-Nit, PRODUCT.md, CHANGELOG (KAT-03, KAT-04)
 - [ ] 45-02-PLAN.md: Ausschluss je Admin-Speicher in SettingsService und StorageService, sofort ohne Gnadenfrist (EXCL-04)
 - [ ] 45-03-PLAN.md: ExternalMountService, POST /admin/rules mit excludedExternalMounts, rules() und Template-Parameter (EXCL-04)
 - [ ] 45-04-PLAN.md: Zähler freier Plätze, Code wildcard mit Duldung alter Einträge, neuer no_wildcard-Satz, alle Kataloge (EXCL-05, EXCL-06)
@@ -217,7 +217,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 0/TBD | Not started | - |
+| 45. Findling 1.7.0 | v1.7 | 1/16 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 

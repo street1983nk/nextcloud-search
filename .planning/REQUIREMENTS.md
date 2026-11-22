@@ -15,8 +15,8 @@
 
 ### Oberflächen-Sprachen (KAT, PRs von foolfitz)
 
-- [ ] **KAT-03**: Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW-Katalog aus PR #56); PRODUCT.md und CHANGELOG nennen die Sprache
-- [ ] **KAT-04**: Die Admin-Seite funktioniert unter einer dreiteiligen Locale wie zh_Hant_TW (PR #57), auch im Rückfall auf root.lang (Unterstrich wird zu Bindestrich)
+- [x] **KAT-03**: Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW-Katalog aus PR #56); PRODUCT.md und CHANGELOG nennen die Sprache
+- [x] **KAT-04**: Die Admin-Seite funktioniert unter einer dreiteiligen Locale wie zh_Hant_TW (PR #57), auch im Rückfall auf root.lang (Unterstrich wird zu Bindestrich)
 
 ### Ausschlüsse (EXCL, Issue #45)
 
@@ -50,8 +50,8 @@
 | PRUEF-02 | Phase 44 | Pending |
 | PRUEF-03 | Phase 44 | Pending |
 | PRUEF-04 | Phase 44 | Pending |
-| KAT-03 | Phase 45 | Pending |
-| KAT-04 | Phase 45 | Pending |
+| KAT-03 | Phase 45 | Complete |
+| KAT-04 | Phase 45 | Complete |
 | EXCL-04 | Phase 45 | Pending |
 | EXCL-05 | Phase 45 | Pending |
 | EXCL-06 | Phase 45 | Pending |
