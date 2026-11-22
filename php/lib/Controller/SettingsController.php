@@ -372,8 +372,8 @@ final class SettingsController extends Controller {
 	 * (EXCL-04, plan 45-03). They are judged with the cap by
 	 * SettingsService::validate() before anything is written and travel in the
 	 * same SettingsService::save() call, so all or nothing still holds. A value
-	 * that is not a list is refused under the field name with out_of_range, the
-	 * code validate() gives a bad entry. A missing field (null) leaves the
+	 * that is not a list, an object included (L-45-09-02), is refused under the
+	 * field name with out_of_range, the code validate() gives a bad entry. A missing field (null) leaves the
 	 * stored list as it is: an admin.js of 1.6.5 in the cache of a browser does
 	 * not know the field and must not clear the exclusions with its next save.
 	 * The log counts the ids, it never names one.
@@ -613,17 +613,27 @@ final class SettingsController extends Controller {
 	 * list had the same form since 1.4.2). The page never sends anything but a
 	 * list, so a value that is not one comes from a built request, and it is
 	 * refused like an entry that is not text: with the code empty, which the
-	 * page already turns into a sentence, and never with the value. An object
-	 * stays what it was before, its values in order.
+	 * page already turns into a sentence, and never with the value.
+	 *
+	 * Since audit 45-09 (L-45-09-02, owner decision of 22.11.2026) an object
+	 * and an array with a hole in its keys are no list either and are refused
+	 * the same way, in all three lists; before, an object was taken as its
+	 * values in order, which turned a built request into a list nobody typed.
+	 * The list of excluded mounts turns the code into out_of_range, the code of
+	 * its field, in saveRules(). Only the write is strict: a list stored as an
+	 * object by occ or an older version still reads as its values
+	 * (ExclusionService::prefixes(), patterns(),
+	 * SettingsService::excludedExternalMounts()), so an upgrade locks nobody
+	 * out, and the next save of the page writes it back as a list.
 	 *
 	 * @return array{0: list<mixed>, 1: list<string>} the list, and the codes of a value that is not one
 	 */
 	private static function listOf(mixed $value): array {
-		if (!is_array($value)) {
+		if (!is_array($value) || !array_is_list($value)) {
 			return [[], [ExclusionService::ERROR_EMPTY]];
 		}
 
-		return [array_values($value), []];
+		return [$value, []];
 	}
 
 	/**

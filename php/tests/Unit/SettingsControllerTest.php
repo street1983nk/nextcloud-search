@@ -322,6 +322,10 @@ final class SettingsControllerTest extends TestCase {
 		yield 'a null entry' => [[null]];
 		yield 'one more than the ceiling' => [range(1, SettingsService::MAX_EXCLUDED_EXTERNAL_MOUNTS + 1)];
 		yield 'an object of objects' => [['a' => ['b' => 4]]];
+		// L-45-09-02 of audit 45-09: an object is no list, even with usable
+		// values, and a list with a hole is no list either.
+		yield 'an object of ids' => [['a' => 4]];
+		yield 'a list with a hole' => [[0 => 4, 2 => 5]];
 	}
 
 	#[DataProvider('unusableMountSelections')]
@@ -461,6 +465,8 @@ final class SettingsControllerTest extends TestCase {
 	 * argument, the prefix list and the pattern value included (H-33-01). Both
 	 * lists are taken as they come now and a value that is not a list is refused
 	 * with the code a value that is not text already earns, in both routes.
+	 * Since audit 45-09 (L-45-09-02) an object and a list with a hole are no
+	 * list either: they were taken as their values before.
 	 *
 	 * @return iterable<string, array{mixed}>
 	 */
@@ -470,6 +476,8 @@ final class SettingsControllerTest extends TestCase {
 		yield 'a number' => [7];
 		yield 'null' => [null];
 		yield 'true' => [true];
+		yield 'an object' => [['x' => '*.q33je']];
+		yield 'a list with a hole' => [[0 => '*.q33jf', 2 => '*.q33jg']];
 	}
 
 	#[DataProvider('notAList')]
@@ -518,13 +526,56 @@ final class SettingsControllerTest extends TestCase {
 		$this->assertTheLogOnlyCounts();
 	}
 
-	/** An object instead of a list stays what it was: its values, in order. */
-	public function testAnObjectInsteadOfAListIsReadAsItsValues(): void {
-		$response = $this->controller()->saveRules(['a' => 'Archiv'], self::CAP, true, false, ['x' => '*.key']);
+	/**
+	 * An object instead of a list is refused in all three lists and writes
+	 * nothing (L-45-09-02 of audit 45-09). Before 1.7.0 it was taken as its
+	 * values, which turned a built request into a list nobody typed.
+	 */
+	public function testAnObjectInsteadOfAListIsRefusedInEveryListAndWritesNothing(): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Alt'];
+		$this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS] = [7];
+
+		$response = $this->controller()->saveRules(['a' => 'Archiv'], self::CAP, true, true, ['x' => '*.key'], ['m' => 4]);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertFalse($body['saved']);
+		self::assertSame([ExclusionService::ERROR_EMPTY], $body['exclusions']);
+		self::assertSame([ExclusionService::ERROR_EMPTY], $body[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame(
+			[SettingsService::FIELD_EXCLUDED_EXTERNAL_MOUNTS => SettingsService::ERROR_OUT_OF_RANGE],
+			$body['fields'],
+		);
+		self::assertSame([], $this->writes, 'a refused form wrote a key');
+		self::assertSame(['Alt'], $this->values[SettingsService::KEY_EXCLUSIONS]);
+		self::assertSame([7], $this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS]);
+		self::assertArrayNotHasKey(SettingsService::KEY_EXCLUSION_PATTERNS, $this->values);
+		self::assertSame([], $this->jobs);
+		$this->assertTheLogOnlyCounts();
+	}
+
+	/**
+	 * The read stays tolerant: lists stored as objects by an older version or
+	 * by occ still read as their values, and the page saves them back as a
+	 * list, so an upgrade locks nobody out (L-45-09-02).
+	 */
+	public function testStoredObjectFormsAreStillReadAndSaveBackAsLists(): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['a' => 'Archiv'];
+		$this->values[SettingsService::KEY_EXCLUSION_PATTERNS] = ['x' => '*.key'];
+		$this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS] = ['m' => 7];
+
+		$rules = self::body($this->controller()->overview())['rules'];
+		self::assertIsArray($rules);
+		self::assertSame(['Archiv'], $rules['exclusions']);
+		self::assertSame(['*.key'], $rules['exclusionPatterns']);
+		self::assertSame([7], $rules['excludedExternalMounts']);
+
+		$response = $this->controller()->saveRules($rules['exclusions'], self::CAP, true, true, $rules['exclusionPatterns'], $rules['excludedExternalMounts']);
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(['Archiv'], $this->values[SettingsService::KEY_EXCLUSIONS]);
 		self::assertSame(['*.key'], $this->values[SettingsService::KEY_EXCLUSION_PATTERNS]);
+		self::assertSame([7], $this->values[SettingsService::KEY_EXCLUDED_EXTERNAL_MOUNTS]);
 	}
 
 	public function testEveryCodeOfAPatternTravelsWithoutItsEntry(): void {

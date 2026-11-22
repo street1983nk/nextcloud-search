@@ -1374,8 +1374,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # independent pipeline of find, sort, sed and sha256sum over the same tree gave 77b20880 as well; the
 # recipe over git archive of fcfa50b2, the last commit before this change, gave f20a3153 with 136
 # files (positive control).
+# Moved on 2026-11-22 a fourth time by plan 45-09 (finding L-45-09-02, owner decision "beheben"):
+# lib/Controller/SettingsController.php refuses an object or a list with a hole in all three lists of
+# the rule routes (code empty, out_of_range for the excluded mounts) instead of taking its values;
+# tests/Unit/SettingsControllerTest.php holds the cases and the tolerant read of a stored object. No
+# file came or went, so PHP_FILES_TODAY stays at 136. The recipe gave a2b061ac; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave a2b061ac as well; the recipe over
+# git archive of 2b623a3f, the last commit before this change, gave 77b20880 with 136 files (positive
+# control).
 PHP_FILES_TODAY = 136
-PHP_TREE_HASH_TODAY = "77b208804c069e0d046248b7bc6ae1d391ba59d22e8bc64e09c333354baff204"
+PHP_TREE_HASH_TODAY = "a2b061ac28ed165a7bf683fa3ee678f8aa4bfe03a83e206f2b86f39551cef3d5"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

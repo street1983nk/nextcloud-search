@@ -927,6 +927,16 @@ nur den Code und höchstens die Grenzzahl.
 | `no_literal` | nur Muster | Nur `*`, `?` und `/`, etwa `*`, `*/*` oder `?*`; so ein Muster schlösse alles aus. |
 | `no_wildcard` | nur Muster | Weder `*` noch `?`. So ein Eintrag gehört unter "Ausgeschlossene Ordner". Satz an der Liste seit 1.7.0: "Dieser Eintrag hat kein * oder ?. Ganze Ordner unter "Ausgeschlossene Ordner" eintragen, oder ein Muster wie Name* verwenden." |
 
+Kommt eine der drei Listen (Ordner, Muster, externe Speicher) nicht als Liste
+an, also als Text, Zahl, JSON-Objekt oder als Liste mit einer Lücke in den
+Schlüsseln, lehnt der Server das ganze Formular ab und schreibt nichts: die
+Ordner- und die Musterliste mit dem Code `empty`, die Liste der externen
+Speicher mit `out_of_range`. Das geht nur über eine gebaute Anfrage, die Seite
+sendet immer eine Liste. Bis 1.6.5 galt ein JSON-Objekt als Liste seiner Werte;
+ab 1.7.0 wird es abgelehnt. Beim Lesen bleibt es bei der Duldung: eine Liste,
+die `occ config:app:set` als Objekt gespeichert hat, gilt weiter mit ihren
+Werten, und das nächste Speichern der Seite schreibt sie als Liste zurück.
+
 Die sechs reinen Muster-Codes kann die Ordnerliste nicht auslösen. Ihre
 Prüfung ist bis auf `wildcard` (ab 1.7.0, nur für neue Einträge) die von 1.4.2. Steht in `appconfig` eine Liste, die nicht über die
 Seite kam (`occ config:app:set findling exclusion_patterns`), gilt dieselbe

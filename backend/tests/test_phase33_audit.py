@@ -1252,8 +1252,12 @@ def refusal_cases() -> list[Refusal]:
             {"exclusions": ["Archiv"], "exclusionPatterns": "*.q33jd"},
             code("empty"),
         ),
+        # L-45-09-02 of audit 45-09: an object was taken as its values until
+        # 1.6.5; since 1.7.0 it earns the code of a value that is not a list.
         Refusal(
-            "shape: object instead of a list", {"exclusions": ["Archiv"], "exclusionPatterns": {"x": "*.q33je"}}, OK
+            "shape: object instead of a list",
+            {"exclusions": ["Archiv"], "exclusionPatterns": {"x": "*.q33je"}},
+            code("empty"),
         ),
         Refusal(
             "shape: number instead of a list",
@@ -1733,10 +1737,20 @@ TYPE_ERROR = "saveRules(): Argument #"
 @instance
 @pytest.mark.parametrize(
     ("field_name", "value"),
-    [("exclusionPatterns", "*.q33xa"), ("exclusionPatterns", 33), ("exclusions", "q33xb"), ("exclusions", 33)],
+    [
+        ("exclusionPatterns", "*.q33xa"),
+        ("exclusionPatterns", 33),
+        ("exclusionPatterns", {"x": "*.q33xc"}),
+        ("exclusions", "q33xb"),
+        ("exclusions", 33),
+        ("exclusions", {"x": "q33xd"}),
+    ],
 )
 def test_a_wrong_list_shape_leaves_neither_a_500_nor_a_value_in_the_log(field_name: str, value: object) -> None:
-    """H-33-01 and its twin on the prefix list of 1.4.2, after the fix of 33-11 Task 4."""
+    """H-33-01 and its twin on the prefix list of 1.4.2, after the fix of 33-11 Task 4.
+
+    Since audit 45-09 (L-45-09-02) an object is a wrong shape as well.
+    """
     log_start = len(nextcloud_log())
     before = rules_snapshot()
     session, token = client("admin", ADMIN_PASS)
