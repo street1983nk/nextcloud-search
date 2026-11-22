@@ -31,6 +31,7 @@ file with a known vulnerable package.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -270,3 +271,152 @@ def test_dependabot_without_the_phpunit_major_rule_is_reported() -> None:
     findings = scan_dependabot(source)
     assert len(findings) == 1
     assert "phpunit/phpunit" in findings[0]
+
+
+# The lint images of CI and of the local recipe (plan 45-09, hint of
+# 44-SECURITY.md). workflow-lint.yml pulls zizmor and actionlint by digest, and
+# scripts/dev/php_gates_docker.sh pulls the same two tools for the local run of
+# the gates. Both carry the full reference written out, so a digest moved in one
+# file and not in the other would leave the local run green with another tool
+# than the one CI judges with. This gate reads the two references out of each
+# file on its own way (the workflow as YAML, the recipe line by line) and holds
+# them equal, character for character, digest included.
+
+WORKFLOW_LINT = REPO_ROOT / ".github" / "workflows" / "workflow-lint.yml"
+LOCAL_RECIPE = REPO_ROOT / "scripts" / "dev" / "php_gates_docker.sh"
+LINT_IMAGE_VARIABLES = ("ZIZMOR_IMAGE", "ACTIONLINT_IMAGE")
+DIGEST_SUFFIX = re.compile(r"@sha256:[0-9a-f]{64}\Z")
+
+
+def _workflow_env_values(text: str, name: str) -> list[str]:
+    """Every value of ``name`` in an env mapping of the workflow, its top, a job or a step."""
+    loaded: Any = yaml.safe_load(text)
+    workflow = _mapping(loaded)
+    holders: list[dict[str, Any]] = [workflow]
+    for job in _mapping(workflow.get("jobs")).values():
+        holders.append(_mapping(job))
+        steps = _mapping(job).get("steps")
+        if isinstance(steps, list):
+            holders.extend(_mapping(step) for step in steps)
+    values: list[str] = []
+    for holder in holders:
+        env = _mapping(holder.get("env"))
+        if name in env:
+            values.append(str(env[name]))
+    return values
+
+
+def _recipe_values(text: str, name: str) -> list[str]:
+    """Every top level assignment ``NAME="value"`` of the shell recipe."""
+    pattern = re.compile(rf'^{re.escape(name)}="([^"]*)"\s*$')
+    return [found.group(1) for line in text.splitlines() if (found := pattern.match(line))]
+
+
+def scan_lint_image_pins(workflow_text: str, recipe_text: str) -> list[str]:
+    """Findings where the lint images of workflow-lint.yml and of the local recipe part ways."""
+    findings: list[str] = []
+    for name in LINT_IMAGE_VARIABLES:
+        in_workflow = _workflow_env_values(workflow_text, name)
+        in_recipe = _recipe_values(recipe_text, name)
+        if len(in_workflow) != 1:
+            findings.append(f"{name} is set {len(in_workflow)} times in workflow-lint.yml, expected once")
+        if len(in_recipe) != 1:
+            findings.append(f"{name} is set {len(in_recipe)} times in the local recipe, expected once")
+        if len(in_workflow) != 1 or len(in_recipe) != 1:
+            continue
+        if in_workflow[0] != in_recipe[0]:
+            findings.append(f"{name} differs between workflow-lint.yml and the local recipe")
+            continue
+        if not DIGEST_SUFFIX.search(in_workflow[0]):
+            findings.append(f"{name} is not pinned by a sha256 digest")
+    return findings
+
+
+def test_the_lint_images_carry_the_same_digest_in_ci_and_in_the_local_recipe() -> None:
+    workflow = WORKFLOW_LINT.read_text(encoding="utf-8")
+    recipe = LOCAL_RECIPE.read_text(encoding="utf-8")
+    assert scan_lint_image_pins(workflow, recipe) == []
+
+
+_ZIZMOR = "ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d"
+_ACTIONLINT = "rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667"
+_OTHER_DIGEST = "sha256:" + "0" * 64
+
+_CLEAN_LINT_WORKFLOW = f"""
+name: Workflow security lint
+on:
+  push:
+jobs:
+  zizmor:
+    steps:
+      - name: zizmor
+        env:
+          ZIZMOR_IMAGE: {_ZIZMOR}
+        run: docker run "${{ZIZMOR_IMAGE}}"
+  actionlint:
+    steps:
+      - name: actionlint
+        env:
+          ACTIONLINT_IMAGE: {_ACTIONLINT}
+        run: docker run "${{ACTIONLINT_IMAGE}}"
+"""
+
+_CLEAN_RECIPE = f"""#!/usr/bin/env bash
+COMPOSER_IMAGE="composer:2@{_OTHER_DIGEST}"
+ZIZMOR_IMAGE="{_ZIZMOR}"
+ACTIONLINT_IMAGE="{_ACTIONLINT}"
+"""
+
+
+def test_the_same_lint_images_in_both_files_are_clean() -> None:
+    assert scan_lint_image_pins(_CLEAN_LINT_WORKFLOW, _CLEAN_RECIPE) == []
+
+
+def test_another_zizmor_digest_in_the_recipe_is_reported() -> None:
+    recipe = _CLEAN_RECIPE.replace(_ZIZMOR, _ZIZMOR.split("@")[0] + "@" + _OTHER_DIGEST)
+    findings = scan_lint_image_pins(_CLEAN_LINT_WORKFLOW, recipe)
+    assert len(findings) == 1
+    assert "ZIZMOR_IMAGE" in findings[0]
+
+
+def test_another_actionlint_digest_in_the_workflow_is_reported() -> None:
+    workflow = _CLEAN_LINT_WORKFLOW.replace(_ACTIONLINT, _ACTIONLINT.split("@")[0] + "@" + _OTHER_DIGEST)
+    findings = scan_lint_image_pins(workflow, _CLEAN_RECIPE)
+    assert len(findings) == 1
+    assert "ACTIONLINT_IMAGE" in findings[0]
+
+
+def test_another_tag_with_the_same_digest_is_reported() -> None:
+    recipe = _CLEAN_RECIPE.replace("zizmor:1.32.0@", "zizmor:1.33.0@")
+    findings = scan_lint_image_pins(_CLEAN_LINT_WORKFLOW, recipe)
+    assert len(findings) == 1
+    assert "ZIZMOR_IMAGE" in findings[0]
+
+
+def test_a_lint_image_without_a_digest_is_reported_even_when_both_files_agree() -> None:
+    bare = _ACTIONLINT.split("@")[0]
+    workflow = _CLEAN_LINT_WORKFLOW.replace(_ACTIONLINT, bare)
+    recipe = _CLEAN_RECIPE.replace(_ACTIONLINT, bare)
+    findings = scan_lint_image_pins(workflow, recipe)
+    assert findings == ["ACTIONLINT_IMAGE is not pinned by a sha256 digest"]
+
+
+def test_a_lint_image_missing_in_the_recipe_is_reported() -> None:
+    recipe = _CLEAN_RECIPE.replace(f'ZIZMOR_IMAGE="{_ZIZMOR}"\n', "")
+    findings = scan_lint_image_pins(_CLEAN_LINT_WORKFLOW, recipe)
+    assert findings == ["ZIZMOR_IMAGE is set 0 times in the local recipe, expected once"]
+
+
+def test_a_lint_image_missing_in_the_workflow_is_reported() -> None:
+    workflow = _CLEAN_LINT_WORKFLOW.replace(f"          ACTIONLINT_IMAGE: {_ACTIONLINT}\n", "")
+    findings = scan_lint_image_pins(workflow, _CLEAN_RECIPE)
+    assert findings == ["ACTIONLINT_IMAGE is set 0 times in workflow-lint.yml, expected once"]
+
+
+def test_a_lint_image_set_twice_in_the_workflow_is_reported() -> None:
+    workflow = _CLEAN_LINT_WORKFLOW.replace(
+        f"          ZIZMOR_IMAGE: {_ZIZMOR}\n",
+        f"          ZIZMOR_IMAGE: {_ZIZMOR}\n          ACTIONLINT_IMAGE: {_ACTIONLINT}\n",
+    )
+    findings = scan_lint_image_pins(workflow, _CLEAN_RECIPE)
+    assert findings == ["ACTIONLINT_IMAGE is set 2 times in workflow-lint.yml, expected once"]
