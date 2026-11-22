@@ -114,11 +114,18 @@ uv run python ../docs/measurements/2026-11-zh-kette/skripte/zh_rank.py ../docs/m
 
 | Chain | `body_zh` weight | `en` against `en,zh` | `de,en` against `de,en,zh` |
 |---|---:|---|---|
-| Han and Latin (shipped) | 0.6 (shipped) | overlap 0.685, first hit kept 9 of 20 | overlap 0.900, first hit kept 17 of 20 |
-| Han and Latin | 0.3 | 0.715, 10 of 20 | 0.925, 19 of 20 |
+| Han and Latin | 0.6 | overlap 0.685, first hit kept 9 of 20 | overlap 0.900, first hit kept 17 of 20 |
+| Han and Latin (shipped) | 0.3 (shipped) | 0.715, 10 of 20 | 0.925, 19 of 20 |
 | Han and Latin | 0.15 | 0.775, 13 of 20 | 0.965, 20 of 20 |
 | Han and Latin | 0.05 | 0.860, 17 of 20 | 0.995, 20 of 20 |
-| Han only | 0.6 | 1.000, 20 of 20, every list identical | 1.000, 20 of 20, every list identical |
+| Han only | 0.3 | 1.000, 20 of 20, every list identical | 1.000, 20 of 20, every list identical |
+
+The code carried the weight 0.6 when this was measured first, on 2026-11-15; the
+review of pull request #60 moved it to 0.3. The script was run again on
+2026-11-22, with 0.3 in the code and over the same files (every digest of
+`rohdaten/englisch-sha256.txt` still matches): every figure is the same, and only
+the label of the two Han only lines moved from 0.6 to 0.3, because the script
+reads that weight out of `BODY_BOOST`.
 
 **What this says and what it does not.** It measures how much the order moves,
 not whether it gets better or worse: there are no relevance judgements behind
@@ -142,4 +149,4 @@ queries.
 | `rohdaten/rangfolge.txt` | output of `zh_rank.py` |
 
 Every script ran as it is checked in, and the files above are its output of
-2026-11-15.
+2026-11-15, `rangfolge.txt` that of 2026-11-22.

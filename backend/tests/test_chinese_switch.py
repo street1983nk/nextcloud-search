@@ -282,7 +282,7 @@ def test_switching_zh_on_builds_fifteen_fields_and_finds_the_chinese_word(
     assert marks[SCHEMA_MARK] == "4"
     assert marks[LANGUAGES_MARK] == "de,en,zh"
     assert FIELD_BODY_ZH in plan.fields
-    assert plan.boosts[FIELD_BODY_ZH] == 0.6
+    assert plan.boosts[FIELD_BODY_ZH] == 0.3
     assert index.searcher().num_docs == 2
     assert _found(index, "天氣", plan) == {1}
     assert _found(index, "開會", plan) == {1}

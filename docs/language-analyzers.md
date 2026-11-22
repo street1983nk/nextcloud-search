@@ -577,17 +577,19 @@ and nothing else. The choice is the one line `ZH_PATTERN` in
 |---|---|---|
 | `2026年` as a search term | the phrase 2026 followed by 年 | 年 alone, which matches every document with that character |
 | English words in a `zh` only installation | searchable | not searchable |
-| English queries, `en` against `en,zh`, 530 English documents, 20 queries | mean overlap of the top ten 0.685, same first hit in 9 of 20 | top ten identical in 20 of 20 |
-| the same, `de,en` against `de,en,zh` | mean overlap 0.900, same first hit in 17 of 20 | top ten identical in 20 of 20 |
+| English queries, `en` against `en,zh`, 530 English documents, 20 queries | mean overlap of the top ten 0.715, same first hit in 10 of 20 | top ten identical in 20 of 20 |
+| the same, `de,en` against `de,en,zh` | mean overlap 0.925, same first hit in 19 of 20 | top ten identical in 20 of 20 |
 
 The ranking cost of the shipped variant is the summing of field scores this
 page describes for words that pass several chains unchanged: an English word
 also scores on `body_zh`, unstemmed, which favours documents with the exact
-form. A lower weight for `body_zh` reduces it (at 0.15 the first hit of
-`de,en,zh` stays in 20 of 20 queries, of `en,zh` in 13 of 20), and a
-disjunction max over the body fields would be the other lever; both are open
-and belong to the full measurement report of issue #53. Method, corpus and raw
-data of these figures: `docs/measurements/2026-11-zh-kette/`, section 2.
+form. A lower weight for `body_zh` reduces it, which is why `body_zh` weighs 0.3
+and not 0.6 like the other languages that joined later. At 0.6 the figures are
+0.685 and 9 of 20 for `en,zh`, 0.900 and 17 of 20 for `de,en,zh`; at 0.15 they
+are 0.775 and 13 of 20, 0.965 and 20 of 20. The final weight, and a disjunction
+max over the body fields as the other lever, belong to the full measurement
+report of issue #53. Method, corpus and raw data of these figures:
+`docs/measurements/2026-11-zh-kette/`, section 2.
 
 **臺 and 台.** Taiwanese text writes 臺灣 and 台灣, 臺北 and 台北 for the same
 names. The index keeps the shape the document carries; the query side adds the

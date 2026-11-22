@@ -330,6 +330,14 @@ def test_czech_weighs_like_the_other_build_out_languages() -> None:
     assert BODY_BOOST["cs"] < BODY_BOOST["en"]
 
 
+def test_chinese_weighs_less_than_the_other_build_out_languages() -> None:
+    # The owner's answer in pull request #60: the Chinese chain keeps Latin words,
+    # so body_zh also scores on English ones, and 0.3 moves the order of English
+    # hits less than 0.6 does (docs/measurements/2026-11-zh-kette, section 2).
+    others = [code for code in BUILD_OUT if code != "zh"]
+    assert all(BODY_BOOST["zh"] < BODY_BOOST[code] for code in others)
+
+
 def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_index: Index) -> None:
     # The same promise over every plan a directory can ask for, and not only over
     # the one set that happens to be in the table. A weight that is right in the

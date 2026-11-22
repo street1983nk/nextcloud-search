@@ -167,7 +167,7 @@ def test_the_plan_names_body_zh_with_its_boost_when_zh_is_switched_on(index: Ind
     plan = field_plan_for({SCHEMA_MARK: "4", LANGUAGES_MARK: "de,en,zh"}, index)
 
     assert plan.fields[:3] == (FIELD_BODY_DE, FIELD_BODY_EN, FIELD_BODY_ZH)
-    assert plan.boosts[FIELD_BODY_ZH] == 0.6
+    assert plan.boosts[FIELD_BODY_ZH] == 0.3
 
 
 def test_the_plan_leaves_body_zh_out_while_zh_is_off(index: Index) -> None:

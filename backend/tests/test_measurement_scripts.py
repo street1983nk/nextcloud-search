@@ -3201,8 +3201,16 @@ PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda
 # Recomputed independently with find, sort, sed and sha256sum over the CRLF
 # normalised tree: c024c9a4... both ways, and the same pipeline over the tree
 # of the step before gave 2169b783... (positive control).
+#
+# Moved on 2026-11-22 by the weight of zh (issue #53, the owner's answer in pull
+# request #60): query/rewrite.py lowers BODY_BOOST zh from 0.6 to 0.3 and says
+# why beside it. No file came or went, so PACKAGE_FILES_TODAY stays at 83. The
+# PHP pair does not move. Recomputed independently with find, sort, sed and
+# sha256sum over the CRLF normalised tree: 62a6d85c... both ways, and the same
+# pipeline over git archive HEAD before the step gave c024c9a4... (positive
+# control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "c024c9a43431430f2db922f7750b91d064a89e62ff5a23a0154c6e50e29afad3"
+PACKAGE_TREE_HASH_TODAY = "62a6d85c67ef20d53776f1832981a88a4ede6e0139622bdb82be8a13fd337f8d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
