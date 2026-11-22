@@ -3111,6 +3111,50 @@ jobs:
           expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents"
           expect_rows "${E1_STORAGE}" E1 "${E1_BEFORE}" "the storage that stays mounted lost documents"
 
+      # M-45-01 (plan 45-06, D-45-01, D-45-02, D-45-05): one external storage an
+      # admin set up is kept out of the index by its configuration id, while the
+      # Findling switch for external storage stays on. The id is the one
+      # files_external:create named above (E1_MOUNT in m3202.env), and the list
+      # is written the way the admin page writes it, as an array in appconfig.
+      # An excluded storage is a choice of the admin like the switch, so its
+      # documents go in the next cycle without a grace stamp (D-45-02). The
+      # controls are the state after cycle 2: keep36 still holds its document,
+      # and E3 is the external storage that still holds its document under its
+      # stamp; neither may change. Then the exclusion is taken back, and the
+      # next regular cycle indexes E1 again (D-45-05): the product has no
+      # instant trigger, the file list walk of the cycle finds the file without
+      # a living row and hands it to the queue, and the run only waits for that.
+      # Cycle 3 below runs unchanged after this and still proves 1.6.5.
+      - name: "M-45-01: the switch is on and E1 is excluded by its mount, E1 goes at once"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          ./occ config:app:set findling excluded_external_mounts --value="[${E1_MOUNT}]" --type=array
+          ./occ config:app:get findling excluded_external_mounts
+          cycle m4501-cycle-a.txt
+          drain
+          table
+          expect_rows "${E1_STORAGE}" E1 0 "the excluded external storage kept its documents"
+          expect_unstamped "${E1_STORAGE}" E1 "the excluded external storage got a grace stamp instead of going at once"
+          expect_rows "${E3_STORAGE}" E3 "${E3_BEFORE}" "E3 is not excluded and lost documents"
+          expect_stamped "${E3_STORAGE}" E3 "E3 is not excluded and lost its stamp"
+          expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents through the exclusion of E1"
+          expect_unstamped "${KEEP_STORAGE}" keep36 "the home of keep36 got a stamp through the exclusion of E1"
+
+      - name: "M-45-01: E1 is included again and comes back on the next regular comparison run"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          ./occ config:app:delete findling excluded_external_mounts
+          cycle m4501-cycle-b.txt
+          drain
+          table
+          expect_rows "${E1_STORAGE}" E1 "${E1_BEFORE}" "the storage included again was not indexed again"
+          expect_unstamped "${E1_STORAGE}" E1 "the storage included again got a stamp"
+          expect_rows "${E3_STORAGE}" E3 "${E3_BEFORE}" "E3 lost documents inside its grace period"
+          expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents"
+          echo "one external storage left the index by its mount and came back, the controls stayed"
+
       - name: "M-32-02: cycle 3, the switch for external storage goes off, E1 goes at once"
         run: |
           . ./m3202-lib.sh
@@ -3145,6 +3189,8 @@ jobs:
           cat reconcile.txt || true
           echo "--- the storage sweep (M-32-02) ---"
           cat m3202.env m3202-cycle1.txt m3202-cycle2.txt m3202-cycle3.txt m3202-keep.json 2>/dev/null || true
+          echo "--- the exclusion of one external storage (M-45-01) ---"
+          cat m4501-cycle-a.txt m4501-cycle-b.txt 2>/dev/null || true
           echo "--- the last search answers ---"
           for answer in swiss-ss.json swiss-sharp.json austrian.json before-changed.json \
                         before-removed-owner.json before-removed-colleague.json \
