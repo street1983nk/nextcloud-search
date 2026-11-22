@@ -2,8 +2,8 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: offen, wird in Task 3 nach dem freigegebenen Push und grünem Kopf gesetzt
-status_45_09: lokal gehärtet, Push und CI-Belege offen
+audited_head: af0e5e13e17aeb8d915dd5caacffcb056eb49e69
+status_45_09: passed
 
 ## Umfang
 
@@ -90,8 +90,47 @@ Wirksame Laufzeit-Änderungen: PHP-Companion (php/lib: SettingsService, StorageS
 - Neuer appconfig-Schlüssel `excluded_external_mounts` ohne Migration: fehlender Schlüssel liest als leere Liste (`testAMissingKeyIsAnEmptyListOfExcludedMounts`), alle Admin-Mounts bleiben nach dem Upgrade drin.
 - Altes admin.js aus dem Browser-Cache (1.6.5) sendet das Feld nicht: Liste bleibt (`testWithoutTheFieldTheStoredSelectionStaysAsItWas`, `testAFormWithoutTheFieldLeavesTheExcludedMountsAlone`, T-45-14).
 - Gespeicherte Ordnereinträge mit * bleiben speicherbar (Probe 11, T-45-15).
-- Update in einem Prozess aus v1.6.2, v1.6.3, v1.6.4, v1.6.5: `scripts/ci/update_in_process_proof.sh` Z. 47 `FROM_TAGS="${FROM_TAGS:-v1.6.2 v1.6.3 v1.6.4 v1.6.5}"`, Job "Store update in one process (issue 51)" in php.yml. CI-Beleg für den Kandidaten 1.7.0: offen bis zum freigegebenen Push (Task 3).
-- HaRP deploy: `UPGRADE_FROM_TAG: v1.5.0` (deploy-harp.yml Z. 201) und die frische Installation ("Store install"-Schritte). CI-Beleg für den Kandidaten 1.7.0: offen bis zum freigegebenen Push (Task 3).
+- Update in einem Prozess aus v1.6.2, v1.6.3, v1.6.4, v1.6.5: `scripts/ci/update_in_process_proof.sh` Z. 47 `FROM_TAGS="${FROM_TAGS:-v1.6.2 v1.6.3 v1.6.4 v1.6.5}"`, Job "Store update in one process (issue 51)" in php.yml. CI-Beleg für den Kandidaten 1.7.0: siehe "CI-Belege am Kopf cb2038b9".
+- HaRP deploy: `UPGRADE_FROM_TAG: v1.5.0` (deploy-harp.yml Z. 201) und die frische Installation ("Store install"-Schritte). CI-Beleg für den Kandidaten 1.7.0: siehe "CI-Belege am Kopf cb2038b9".
+
+### CI-Belege am Kopf cb2038b9
+
+Push nach "Freigabe Push 45-09" am 2026-11-22: `612b7c9e..cb2038b9  main -> main` (ohne Tag). Ein CI-Warter, `scripts/ci/head_green.sh cb2038b9862794c4d90074b7b8f22cbb693d5043 "Python gates" "PHP and store metadata gates" "HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans"`, Exit 0, kein Rerun nötig:
+
+```
+44993702781 Multi-arch image success
+44993702734 Security scans success
+44993702767 HaRP deploy success
+44993702806 Workflow security lint success
+44993702761 Python gates success
+44993702809 Resilience success
+44993702739 OpenSSF Scorecard success
+44993702772 Integration success
+44993702837 PHP and store metadata gates success
+```
+
+Update in einem Prozess, Lauf 44993702837, Job "Store update in one process (issue 51)" (wörtlich):
+
+```
+2026-11-22T06:28:14.7840946Z UPDATE-PROOF ok findling 1.6.4 -> 1.7.0, migrations applied in this run: none
+2026-11-22T06:28:22.3100351Z findling 1.6.5 enabled
+2026-11-22T06:28:22.5592315Z UPDATE-PROOF installed findling 1.6.5, 69 classes of it loaded, 0 not loadable, 14 migrations applied
+2026-11-22T06:28:22.5593180Z UPDATE-PROOF ok findling 1.6.5 -> 1.7.0, migrations applied in this run: none
+2026-11-22T06:28:25.3174071Z update proof: control reproduced, every candidate run passed
+```
+
+(dazu v1.6.2 -> 1.7.0 und v1.6.3 -> 1.7.0 ok, Kontrolle v1.6.2 -> v1.6.3 reproduziert "Undefined constant").
+
+HaRP deploy, Lauf 44993702767, Job `deploy-harp (stable34, 8.2, false, ubuntu-24.04)`:
+
+```
+Store upgrade 4:  2026-11-22T06:50:46.0875699Z installed_version went from 1.5.0 to 1.7.0
+Store install 7:  2026-11-22T06:39:25.1996654Z the installation is complete after 9 occ calls, and nothing below may add one
+Store install 7:  2026-11-22T06:40:27.7138519Z content hit after 7 cron rounds, with nothing configured
+Store install 7:  2026-11-22T06:40:27.7152925Z none, which is what zero config means
+```
+
+T-45-29 und T-45-33 damit belegt (mitigated). audited_head = `git log -1 --format=%H -- . ':!.planning'` = af0e5e13 (letzter Code-Commit, auf origin/main).
 
 ## Threat-Register 45
 
@@ -125,12 +164,12 @@ Wirksame Laufzeit-Änderungen: PHP-Companion (php/lib: SettingsService, StorageS
 | T-45-26 | mitigate | Tabelle alt -> neu in 45-07-SUMMARY, jeder umgezogene Gate mit Fehl-Sample | mitigated |
 | T-45-27 | mitigate | 45-README-PRUEFUNG.md (24 Aussagen mit Quelle), Datenschutz-Kern-Gate auf info.xml | mitigated |
 | T-45-28 | mitigate | STOPP-Prüfung oben | mitigated |
-| T-45-29 | mitigate | FROM_TAGS mit v1.6.4 und v1.6.5; CI-Beleg nach Push (Task 3) | mitigated im Code, Beleg offen bis Task 3 |
+| T-45-29 | mitigate | FROM_TAGS mit v1.6.4 und v1.6.5; Lauf 44993702837 "UPDATE-PROOF ok findling 1.6.5 -> 1.7.0" | mitigated |
 | T-45-30 | mitigate | test_lockstep_versions.py grün (45-08), beide info.xml 1.7.0 | mitigated |
 | T-45-31 | mitigate | Prüfpunkt 31 (Digest-Gate) | mitigated |
 | T-45-32 | mitigate | Probe 1 | mitigated |
-| T-45-33 | mitigate | Update-Probe v1.6.4/v1.6.5 und HaRP-Upgrade; CI-Beleg nach Push (Task 3) | offen bis Task 3 |
-| T-45-34 | mitigate | jede Zeile dieses Berichts mit Probe; audited_head in Task 3 | offen bis Task 3 |
+| T-45-33 | mitigate | Update-Probe v1.6.4/v1.6.5 (Lauf 44993702837) und HaRP-Upgrade 1.5.0 -> 1.7.0 (Lauf 44993702767) | mitigated |
+| T-45-34 | mitigate | jede Zeile dieses Berichts mit Probe; audited_head af0e5e13 | mitigated |
 
 ## Befunde
 
