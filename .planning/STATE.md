@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "45-10 pausiert (Owner: Fix #59 kommt vorher in 1.7.0)"
-last_updated: "2026-11-22T09:40:00.000Z"
-last_activity: "2026-11-22, 45-10 pausiert: Freigaben 5d9cc54e, CHANGELOG-Zeile c3885795, Fix V-45-10-01 10d9707e (lokal, nicht gepusht); Volltest teilweise, muss nach #59 neu laufen"
+stopped_at: "45-17 Task 2 (Owner-Checkpoint: Texte, allGroups G1/G2, Gate c1/c2, Wartezeit d1/d2)"
+last_updated: "2026-11-22T11:50:00.000Z"
+last_activity: "2026-11-22, 45-17 Task 1 fertig: Freigaben 15fef4aa, Nachbau #59 in M1 bis M5 auf v1.6.5 838c7c30 (lokal, nicht gepusht); findling-59 gestoppt, Volume und Worktree wt-165 bleiben"
 progress:
   total_phases: 2
   completed_phases: 1
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-09 von 22 fertig, 45-10 pausiert (Owner-Entscheid: Fix für #59 noch in 1.7.0, Volltest danach komplett neu)
-Status: Paused
-Last activity: 2026-11-22, 45-09 fertig: Fixes L-45-09-03 fcfa50b2, L-45-09-01 2b623a3f, L-45-09-02 af0e5e13, Freigaben cb2038b9; Push 612b7c9e..cb2038b9, neun Workflows grün; audited_head af0e5e13
+Plan: 45-09 von 22 fertig, 45-10 pausiert; 45-17 Task 1 fertig, wartet am Owner-Checkpoint Task 2 (Task 3 per TDD danach durch frischen Executor)
+Status: Paused at checkpoint
+Last activity: 2026-11-22, 45-17 Task 1: Freigaben 15fef4aa, Nachbau #59 auf NC 35.0.3 mit richdocuments 12.0.2 in fünf Wasserzeichen-Modi 838c7c30, Befunde I-45-17-01 bis -05 (INFO) in 45-AUDIT.md
 
 ## Performance Metrics
 
