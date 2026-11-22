@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "45-17 Task 2 (Owner-Checkpoint: Texte, allGroups G1/G2, Gate c1/c2, Wartezeit d1/d2)"
-last_updated: "2026-11-22T11:50:00.000Z"
-last_activity: "2026-11-22, 45-17 Task 1 fertig: Freigaben 15fef4aa, Nachbau #59 in M1 bis M5 auf v1.6.5 838c7c30 (lokal, nicht gepusht); findling-59 gestoppt, Volume und Worktree wt-165 bleiben"
+stopped_at: "Completed 45-17-PLAN.md; nächster Plan 45-18"
+last_updated: "2026-11-22T15:10:00.000Z"
+last_activity: "2026-11-22, 45-17 fertig: Owner-Entscheide 89cc8ddf, Refactor 92a662c7, Fix #59 4ede2575 (lokal, nicht gepusht); findling-59 gestoppt, Volume und Worktree wt-165 bleiben"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 32
-  completed_plans: 19
-  percent: 59
+  completed_plans: 20
+  percent: 62
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-09 von 22 fertig, 45-10 pausiert; 45-17 Task 1 fertig, wartet am Owner-Checkpoint Task 2 (Task 3 per TDD danach durch frischen Executor)
-Status: Paused at checkpoint
-Last activity: 2026-11-22, 45-17 Task 1: Freigaben 15fef4aa, Nachbau #59 auf NC 35.0.3 mit richdocuments 12.0.2 in fünf Wasserzeichen-Modi 838c7c30, Befunde I-45-17-01 bis -05 (INFO) in 45-AUDIT.md
+Plan: 45-01 bis 45-09 und 45-17 von 22 fertig, 45-10 pausiert; als Nächstes 45-18, dann 45-19, 45-22, 45-20, 45-21, 45-10 komplett neu
+Status: Ready to execute
+Last activity: 2026-11-22, 45-17 fertig: Owner "Go  und für foolfitz auch" (11:52 UTC, Texte wie Entwurf, Form i, G1, c1, d1, Korrektur 59) 89cc8ddf; ReaderCandidates-Refactor 92a662c7; Fix #59 (Besitzer zuerst, zweites Öffnen in actAs nur nach Secure-View-Ablehnung, 403 X-Findling-Refusal policy) 4ede2575; Befunde I-45-17-06/07 (INFO); kein Push
 
 ## Performance Metrics
 
@@ -107,6 +107,7 @@ Last activity: 2026-11-22, 45-17 Task 1: Freigaben 15fef4aa, Nachbau #59 auf NC 
 - v1.7: 45-07 in ca. 50 min laut Systemzeit (2 Tasks, 9 Dateien)
 - v1.7: 45-08 in ca. 45 min ohne Wartezeit auf die Freigaben (3 Tasks, 8 Dateien)
 - v1.7: 45-09 ab Task 2 in ca. 150 min laut Systemzeit inkl. Instanz-Nachstellung, dreimal PHPUnit und PHP-Gates und ca. 35 min CI (3 Tasks, 12 Dateien)
+- v1.7: 45-17 ab Task 2 in ca. 190 min laut Systemzeit inkl. ca. 90 min Docker (PHPUnit, PHP-Gates, fünf Mutationen) (3 Tasks, 14 Dateien)
 
 ## Accumulated Context
 
