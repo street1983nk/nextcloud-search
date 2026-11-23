@@ -101,3 +101,6 @@ Freigabe Platzhalter 45-25: "Ok" (2026-11-23 02:08, Claude-Code-Chat) Entscheid:
 - Platzhalter DE: Sicherungen
 - Platzhalter FR: Sauvegardes
 Hinweis: Zeit in UTC, wie vom Koordinator übergeben; dasselbe "Ok" wie bei `Freigabe Text 5 45-25`. Der Koordinator hat es im Chat als Freigabe von Text 5 und der drei Platzhalter des Ordnerfelds der Regeln benannt (I-45-19-01), und der Owner hat nicht widersprochen. Das Musterfeld behält `*.photoslibrary` in jeder Sprache; es, it, nl, pt_BR, pt_PT und zh_TW sind maschinelle Entwürfe nach den Sprachdokus und nicht Teil der Freigabe. Kein Push, kein Tag, kein Kommentar.
+
+Entscheid I-45-23-07 45-26: "Wie empfohlen" (2026-11-23 06:08, Claude-Code-Chat) Entscheid: m1
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben. "Wie empfohlen" ist als m1 gelesen, die Empfehlung der Frage. Die vorgelegte Frage enthielt den Inhalt von W6 der Planprüfung von 3d18b701; der Koordinator hat im Chat erklärt, dass m1 die Migration von 1.5 ändert, die wegen I-45-26-01 voraussichtlich ohnehin angepasst wird. Kein Push, kein Tag, kein Kommentar.
