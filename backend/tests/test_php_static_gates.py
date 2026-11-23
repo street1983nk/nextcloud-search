@@ -44,6 +44,11 @@ holds the shape:
    ``# zizmor: ignore`` line under .github names an exception the owner
    granted: an E-ID listed in OWNER_EXCEPTIONS, for the file and the rule it
    was granted for. Today that is exactly one line, E-13 in php.yml.
+8. SearchService asks the container for text excerpts in exactly one
+   ``->snippets(`` call, and the file ids of that call are a variable that is
+   written once in the file, by ``$this->snippetPolicy->allowed(``, in front of
+   the call (plan 45-22, owner decision E3: a hit under the watermark of
+   Nextcloud Office shows no excerpt to that user).
 
 **The limit.** This gate reads text and structure, not the result of a run.
 Whether Psalm, php-cs-fixer, zizmor and actionlint really turn red is proven by
@@ -861,3 +866,119 @@ def test_a_granted_e_id_for_another_rule_is_reported() -> None:
     )
     findings = scan_lint_exceptions({".github/workflows/php.yml": source}, zizmor_config_exists=False)
     assert len(findings) == 1
+
+
+# -- rule 8: the excerpts of a search pass the snippet policy (plan 45-22, E3) --
+#
+# A hit of a file the searching user may only see under the watermark of
+# Nextcloud Office shows no text excerpt to that user. SearchService asks the
+# container for excerpts in exactly one call, and the file ids of that call are
+# the answer of SnippetPolicy::allowed() and nothing else: the variable handed
+# to ->snippets( is assigned once in the whole file, by that call, in front of
+# it. A direct call with the ids of every survivor is the one mistake this rule
+# exists for, and its fail sample below is red.
+
+SEARCH_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "SearchService.php"
+
+_PHP_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_PHP_LINE_COMMENT = re.compile(r"//[^\n]*")
+_PHP_DOUBLE_QUOTED = re.compile(r'"(?:\\.|[^"\\])*"', re.DOTALL)
+_PHP_SINGLE_QUOTED = re.compile(r"'(?:\\.|[^'\\])*'", re.DOTALL)
+_SNIPPETS_CALL = re.compile(r"->\s*snippets\s*\(\s*([^,()]+),\s*([^,()]+),\s*([^,()]+),")
+_POLICY_CALL = r"\s*=\s*\$this\s*->\s*snippetPolicy\s*->\s*allowed\s*\("
+
+
+def _php_code(source: str) -> str:
+    """A PHP source without comments and string literals, as in test_php_acl_boundary."""
+    without_comments = _PHP_LINE_COMMENT.sub("", _PHP_BLOCK_COMMENT.sub("", source))
+    return _PHP_SINGLE_QUOTED.sub("''", _PHP_DOUBLE_QUOTED.sub('""', without_comments))
+
+
+def scan_snippet_calls(source: str) -> list[str]:
+    """Findings about the one snippet call of SearchService and where its ids come from."""
+    code = _php_code(source)
+    calls = list(_SNIPPETS_CALL.finditer(code))
+    if len(calls) != 1:
+        return [f"SearchService calls ->snippets( {len(calls)} time(s), expected exactly once"]
+
+    call = calls[0]
+    ids = call.group(3).strip()
+    if re.fullmatch(r"\$\w+", ids) is None:
+        return [f"the file ids of ->snippets( are '{ids}', not a variable assigned by the snippet policy"]
+
+    variable = re.escape(ids)
+    writes = list(re.finditer(variable + r"\s*(?:\[[^\]]*\])?\s*(?:[.+\-*/?]{0,2})=(?!=)", code))
+    by_policy = [write for write in writes if re.match(variable + _POLICY_CALL, code[write.start() :])]
+    findings: list[str] = []
+    if len(writes) != 1 or len(by_policy) != 1:
+        findings.append(
+            f"{ids} is written {len(writes)} time(s) and {len(by_policy)} time(s) by"
+            " $this->snippetPolicy->allowed(, expected once and only by it"
+        )
+    elif by_policy[0].start() > call.start():
+        findings.append(f"{ids} is assigned by the snippet policy behind the ->snippets( call")
+    return findings
+
+
+def test_the_excerpts_of_a_search_pass_the_snippet_policy() -> None:
+    assert scan_snippet_calls(SEARCH_SERVICE.read_text(encoding="utf-8")) == []
+
+
+_CLEAN_SNIPPET_BLOCK = """<?php
+class SearchService {
+	public function run(): void {
+		$fileIds = [];
+		foreach ($approved as $hit) {
+			$fileIds[] = $hit->fileId;
+		}
+		// ->snippets($uid, $term, $fileIds, in a comment, is no call
+		$allowed = $this->snippetPolicy->allowed($user, $userFolder, $fileIds);
+		$excerpts = $allowed !== []
+			? $this->exApp->snippets(
+				$uid,
+				$term,
+				$allowed,
+				$titleOnly,
+			)
+			: [];
+	}
+}
+"""
+
+
+def test_a_clean_snippet_block_is_clean() -> None:
+    assert scan_snippet_calls(_CLEAN_SNIPPET_BLOCK) == []
+
+
+def test_a_snippet_call_with_every_survivor_is_reported() -> None:
+    source = _CLEAN_SNIPPET_BLOCK.replace("\t\t\t\t$allowed,\n", "\t\t\t\t$fileIds,\n")
+    findings = scan_snippet_calls(source)
+    assert len(findings) == 1
+    assert "$fileIds is written" in findings[0]
+
+
+def test_a_policy_answer_that_is_widened_again_is_reported() -> None:
+    source = _CLEAN_SNIPPET_BLOCK.replace(
+        "\t\t$excerpts = $allowed", "\t\t$allowed[] = $secret;\n\t\t$excerpts = $allowed"
+    )
+    assert len(scan_snippet_calls(source)) == 1
+
+
+def test_a_policy_answer_that_is_overwritten_is_reported() -> None:
+    source = _CLEAN_SNIPPET_BLOCK.replace(
+        "\t\t$excerpts = $allowed", "\t\t$allowed = $fileIds;\n\t\t$excerpts = $allowed"
+    )
+    assert len(scan_snippet_calls(source)) == 1
+
+
+def test_a_second_snippet_call_is_reported() -> None:
+    source = _CLEAN_SNIPPET_BLOCK.replace(
+        "\t\t\t: [];", "\t\t\t: $this->exApp->snippets($uid, $term, $fileIds, $titleOnly);"
+    )
+    findings = scan_snippet_calls(source)
+    assert findings == ["SearchService calls ->snippets( 2 time(s), expected exactly once"]
+
+
+def test_an_expression_as_the_ids_of_the_snippet_call_is_reported() -> None:
+    source = _CLEAN_SNIPPET_BLOCK.replace("\t\t\t\t$allowed,\n", "\t\t\t\tarray_merge($allowed, $fileIds),\n")
+    assert len(scan_snippet_calls(source)) >= 1

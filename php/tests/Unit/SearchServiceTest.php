@@ -11,6 +11,7 @@ use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
 use OCA\Findling\Service\SimilarOutcome;
+use OCA\Findling\Service\SnippetPolicy;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountInfo;
@@ -21,8 +22,12 @@ use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\NotPermittedException;
 use OCP\Files\StorageNotAvailableException;
+use OCP\IAppConfig;
+use OCP\IGroupManager;
 use OCP\IUser;
+use OCP\SystemTag\ISystemTagObjectMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -110,7 +115,30 @@ final class SearchServiceTest extends TestCase {
 			$this->mountCache,
 			$this->fileAccess,
 			$this->logger,
+			$this->snippetsWithoutWatermark(),
 			$clock,
+		);
+	}
+
+	/**
+	 * The snippet policy of every case that says nothing about the watermark
+	 * (E3, plan 45-22): the switch of richdocuments is off, so every survivor
+	 * is asked for its excerpt, as before. Its mocks are its own, so it cannot
+	 * answer for the mount cache or the file access of the run.
+	 */
+	private function snippetsWithoutWatermark(): SnippetPolicy {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueString')->willReturnCallback(
+			static fn (string $app, string $key, string $default = ''): string => $default,
+		);
+
+		return new SnippetPolicy(
+			$appConfig,
+			$this->createMock(IFileAccess::class),
+			$this->createMock(IUserMountCache::class),
+			$this->createMock(ISystemTagObjectMapper::class),
+			$this->createMock(IGroupManager::class),
+			$this->createMock(LoggerInterface::class),
 		);
 	}
 
@@ -398,6 +426,7 @@ final class SearchServiceTest extends TestCase {
 			$this->mountCache,
 			$this->fileAccess,
 			$this->logger,
+			$this->snippetsWithoutWatermark(),
 			null,
 		);
 
@@ -1723,7 +1752,7 @@ final class SearchServiceTest extends TestCase {
 		$exApp->expects(self::never())->method('similarCandidates');
 		$this->rootFolder->expects(self::never())->method('getUserFolder');
 
-		$service = new SearchService($exApp, $this->rootFolder, $this->mountCache, $this->fileAccess, $this->logger, null);
+		$service = new SearchService($exApp, $this->rootFolder, $this->mountCache, $this->fileAccess, $this->logger, $this->snippetsWithoutWatermark(), null);
 		$outcome = $service->similar($this->user(), self::SOURCE_ID, $this->caps());
 
 		self::assertNull($outcome->source);
@@ -1910,5 +1939,199 @@ final class SearchServiceTest extends TestCase {
 		$this->expectException(StorageNotAvailableException::class);
 
 		SearchService::readableNode($this->fileOnABrokenMount());
+	}
+
+	// -- E3 of plan 45-22: no excerpt under the watermark -------------------
+
+	/**
+	 * A run whose snippet policy reads a world of its own: alice has her home
+	 * on storage 1, bob on storage 2; file 11 is bob's and reaches alice as a
+	 * share, file 12 is alice's own. The policy gets mocks of its own, so the
+	 * cheap reduction of the run (which reads $this->mountCache and
+	 * $this->fileAccess) and the policy cannot answer for each other.
+	 *
+	 * @param array<string,string> $config the app config of richdocuments in
+	 *                                     the namespace files
+	 */
+	private function serviceUnder(array $config): SearchService {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueString')->willReturnCallback(
+			static fn (string $app, string $key, string $default = ''): string => $config[$key] ?? $default,
+		);
+		$appConfig->method('getKeys')->willReturn(array_keys($config));
+		$appConfig->method('isLazy')->willReturn(false);
+
+		$fileAccess = $this->createMock(IFileAccess::class);
+		$fileAccess->method('getByFileIds')->willReturnCallback(
+			function (array $fileIds): array {
+				$entries = [];
+				foreach ($fileIds as $fileId) {
+					$entries[$fileId] = $this->cacheEntry($fileId === 12 ? 1 : 2, 'files/x');
+				}
+
+				return $entries;
+			},
+		);
+
+		$mountCache = $this->createMock(IUserMountCache::class);
+		$mountCache->method('getMountsForUser')->willReturnCallback(
+			fn (IUser $user): array => [$this->homeMount($user->getUID(), $user->getUID() === 'alice' ? 1 : 2)],
+		);
+
+		$policy = new SnippetPolicy(
+			$appConfig,
+			$fileAccess,
+			$mountCache,
+			$this->createMock(ISystemTagObjectMapper::class),
+			$this->createMock(IGroupManager::class),
+			$this->logger,
+		);
+
+		return new SearchService($this->exApp, $this->rootFolder, $this->mountCache, $this->fileAccess, $this->logger, $policy, null);
+	}
+
+	private function homeMount(string $uid, int $storageId): ICachedMountInfo&MockObject {
+		$mount = $this->createMock(ICachedMountInfo::class);
+		$mount->method('getMountPoint')->willReturn('/' . $uid . '/');
+		$mount->method('getMountProvider')->willReturn('OC\Files\Mount\LocalHomeMountProvider');
+		$mount->method('getStorageId')->willReturn($storageId);
+
+		return $mount;
+	}
+
+	/**
+	 * The user folder of the E3 cases: 11 is Bericht.pdf in the share, 12 is
+	 * Notiz.odt in alice's own folder.
+	 */
+	private function watermarkWorld(): void {
+		$shared = $this->readableFile('Bericht.pdf', 'application/pdf', 'Shared');
+		$shared->method('isUpdateable')->willReturn(false);
+		$own = $this->readableFile('Notiz.odt', 'application/vnd.oasis.opendocument.text', 'Eigenes');
+		$own->method('isUpdateable')->willReturn(true);
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnMap([
+			[11, $shared],
+			[12, $own],
+		]);
+		$userFolder->method('getRelativePath')->willReturnCallback(
+			static fn (string $path): string => substr($path, strlen('/testuser/files')),
+		);
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+	}
+
+	/**
+	 * @param list<int> $asked filled with the file ids of every snippet call
+	 */
+	private function recordSnippets(array &$asked): void {
+		$this->exApp->method('snippets')->willReturnCallback(
+			static function (string $uid, string $term, array $fileIds) use (&$asked): array {
+				array_push($asked, ...$fileIds);
+				$excerpts = [];
+				foreach ($fileIds as $fileId) {
+					$excerpts[$fileId] = ['text' => 'excerpt of ' . $fileId, 'highlights' => []];
+				}
+
+				return $excerpts;
+			},
+		);
+	}
+
+	public function testAHitUnderTheWatermarkKeepsItsNameAndPathAndGetsNoExcerpt(): void {
+		$this->watermarkWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11], ['fileId' => 12]]));
+		$asked = [];
+		$this->recordSnippets($asked);
+
+		$outcome = $this->serviceUnder(['watermark_enabled' => 'yes', 'watermark_shareDisabledDownload' => 'yes'])
+			->run($this->user('alice'), 'bericht', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([12], $asked, 'only the own file of alice may be asked for an excerpt');
+		self::assertSame([11, 12], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertSame('Bericht.pdf', $outcome->hits[0]->title);
+		self::assertSame('Shared/Bericht.pdf', $outcome->hits[0]->path);
+		self::assertArrayNotHasKey(11, $outcome->excerpts);
+		self::assertArrayHasKey(12, $outcome->excerpts);
+	}
+
+	public function testTheOwnerOfTheSameFileKeepsItsExcerpt(): void {
+		$this->watermarkWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11]]));
+		$asked = [];
+		$this->recordSnippets($asked);
+
+		$outcome = $this->serviceUnder(['watermark_enabled' => 'yes', 'watermark_shareDisabledDownload' => 'yes'])
+			->run($this->user('bob'), 'bericht', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([11], $asked);
+		self::assertArrayHasKey(11, $outcome->excerpts);
+	}
+
+	public function testWithoutTheWatermarkEverySurvivorIsAskedForItsExcerpt(): void {
+		$this->watermarkWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11], ['fileId' => 12]]));
+		$asked = [];
+		$this->recordSnippets($asked);
+
+		$this->serviceUnder(['watermark_enabled' => 'no', 'watermark_shareAll' => 'yes'])
+			->run($this->user('alice'), 'bericht', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([11, 12], $asked);
+	}
+
+	public function testWhenNoHitMayShowAnExcerptTheContainerIsNotAskedAtAll(): void {
+		$this->watermarkWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11]]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->serviceUnder(['watermark_enabled' => 'yes', 'watermark_shareAll' => 'yes'])
+			->run($this->user('alice'), 'bericht', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([11], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertSame([], $outcome->excerpts);
+	}
+
+	/**
+	 * @return array<string,array{string}>
+	 */
+	public static function verdictsThatKeepOldContentInTheIndex(): array {
+		return [
+			'failed(gateway_error)' => ['failed(gateway_error)'],
+			'failed(policy_blocked)' => ['failed(policy_blocked)'],
+		];
+	}
+
+	/**
+	 * I-45-17-02: content that was indexed before the watermark was switched
+	 * on stays in the index after the verdict failed(gateway_error) or
+	 * failed(policy_blocked) and is still found. The decision about the excerpt
+	 * knows nothing about the verdict or the time of indexing, it hears only
+	 * the file ids of the survivors; so the old content shows no excerpt to
+	 * alice either, and under A1 (`Entscheid Altbestand 45-22`) the hit stays
+	 * with its name and path.
+	 */
+	#[DataProvider('verdictsThatKeepOldContentInTheIndex')]
+	public function testContentIndexedBeforeTheWatermarkShowsNoExcerptEither(string $verdict): void {
+		$this->watermarkWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([
+			// What a container could say about such a row. Nothing of it may
+			// matter here: the candidate is a proposal and the policy never
+			// sees it.
+			['fileId' => 11, 'verdict' => $verdict, 'indexedAt' => 1763700000],
+		]));
+		$asked = [];
+		$this->recordSnippets($asked);
+
+		$outcome = $this->serviceUnder(['watermark_enabled' => 'yes', 'watermark_shareDisabledDownload' => 'yes'])
+			->run($this->user('alice'), 'bericht', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertNotContains(11, $asked);
+		self::assertSame([], $outcome->excerpts);
+		self::assertCount(1, $outcome->hits);
+		self::assertSame(11, $outcome->hits[0]->fileId);
+		self::assertSame('Bericht.pdf', $outcome->hits[0]->title);
+		self::assertSame('Shared/Bericht.pdf', $outcome->hits[0]->path);
 	}
 }

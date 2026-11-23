@@ -356,3 +356,42 @@ def test_an_owner_without_a_finally_is_reported() -> None:
     findings = switch_findings([*others, (SWITCH_OWNER, _OWNER_WITHOUT_FINALLY)])
 
     assert findings == [f"{SWITCH_OWNER} has no finally block to restore the previous user"]
+
+
+# -- the snippet policy of E3 (plan 45-22) ----------------------------------
+#
+# SnippetPolicy decides whether a hit may show a text excerpt, and under the
+# watermark mode shareRead it reads the node of an own file. It gets that node
+# from SearchService::readableFile(), the one resolution of the register, and
+# never resolves a file id of its own; the register above stays as it is.
+
+SNIPPET_POLICY = "Service/SnippetPolicy.php"
+
+
+def test_the_snippet_policy_resolves_nothing_of_its_own() -> None:
+    sources = dict(php_sources())
+
+    assert SNIPPET_POLICY in sources, f"{SNIPPET_POLICY} is missing"
+    assert calls(sources[SNIPPET_POLICY], RESOLUTION) == 0
+    assert calls(sources[SNIPPET_POLICY], READABILITY) == 0
+    assert "SearchService::readableFile(" in code_of(sources[SNIPPET_POLICY])
+
+
+_POLICY_WITH_ITS_OWN_RESOLUTION = """<?php
+
+final class SnippetPolicy {
+	public function allowed(IUser $user, Folder $userFolder, array $fileIds): array {
+		$node = $userFolder->getFirstNodeById($fileIds[0]);
+
+		return $node !== null && $node->isUpdateable() ? $fileIds : [];
+	}
+}
+"""
+
+
+def test_a_snippet_policy_that_resolves_a_file_id_itself_is_reported() -> None:
+    others = [(name, source) for name, source in php_sources() if name != SNIPPET_POLICY]
+    findings = resolution_findings([*others, (SNIPPET_POLICY, _POLICY_WITH_ITS_OWN_RESOLUTION)])
+
+    assert len(findings) == 1
+    assert SNIPPET_POLICY in findings[0]

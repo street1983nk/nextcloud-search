@@ -1431,8 +1431,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # sort, sed and sha256sum over the same tree gave a6c5f8d1 as well; the recipe and the pipeline
 # over git archive of c33103fe, the last commit before this change, gave 233c6ab1 with 141 files
 # (positive control).
-PHP_FILES_TODAY = 141
-PHP_TREE_HASH_TODAY = "a6c5f8d134451598cecec555cbdba323731307653c4141f930f8f4c56f5e581e"
+# Moved on 2026-11-23 by plan 45-22, task 3 (owner decision E3): two files came,
+# lib/Service/SnippetPolicy.php (which hits of a page may show a text excerpt under the watermark
+# of Nextcloud Office) and tests/Unit/SnippetPolicyTest.php; lib/Service/SearchService.php takes
+# the policy in its constructor and asks the container for the excerpts of its answer only, and
+# tests/Unit/SearchServiceTest.php follows. No file went, so PHP_FILES_TODAY moves to 143. The
+# recipe gave ff141406; the independent pipeline of find, sort, sed and sha256sum over the same
+# tree gave ff141406 as well; the recipe and the pipeline over git archive of d57bd962, the last
+# commit before this change, gave a6c5f8d1 with 141 files (positive control).
+PHP_FILES_TODAY = 143
+PHP_TREE_HASH_TODAY = "ff141406828d9fa92f6d6309709bb1b62473a1ea4daa6184403667e9ea1a9960"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

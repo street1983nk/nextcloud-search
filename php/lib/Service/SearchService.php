@@ -160,12 +160,22 @@ class SearchService {
 	 */
 	private \Closure $clock;
 
+	/**
+	 * @param SnippetPolicy $snippetPolicy decides which survivors of a run may
+	 *                                     show a text excerpt (E3, plan 45-22):
+	 *                                     a hit under the watermark of Nextcloud
+	 *                                     Office keeps its name and path, and its
+	 *                                     id never reaches the snippet call. It
+	 *                                     brings its own dependencies; none of
+	 *                                     this class is handed through.
+	 */
 	public function __construct(
 		private ExAppService $exApp,
 		private IRootFolder $rootFolder,
 		private IUserMountCache $mountCache,
 		private IFileAccess $fileAccess,
 		private LoggerInterface $logger,
+		private SnippetPolicy $snippetPolicy,
 		?\Closure $clock = null,
 	) {
 		$this->clock = $clock ?? static fn (): float => (float)hrtime(true);
@@ -521,11 +531,18 @@ class SearchService {
 			}
 		}
 
-		$excerpts = $fileIds !== []
+		// E3 (plan 45-22): a file this user may only see under the watermark
+		// of Nextcloud Office keeps its hit, with name and path, and gets no
+		// excerpt, so its id is not even asked for. Only the answer of the
+		// policy travels; backend/tests/test_php_static_gates.py (rule 8) holds
+		// that this variable is written once, here, and nowhere else.
+		$allowed = $this->snippetPolicy->allowed($user, $userFolder, $fileIds);
+
+		$excerpts = $allowed !== []
 			? $this->exApp->snippets(
 				$uid,
 				$term,
-				$fileIds,
+				$allowed,
 				$titleOnly,
 				// The same object as at the candidate call above, so that both
 				// halves of one run speak about the same set of files.
