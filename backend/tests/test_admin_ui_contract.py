@@ -4506,8 +4506,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # example path of the lookup); one of plan 45-24 (the note of the held
     # comparison run, issue #25, F2); one of plan 45-25, task 1 (the banner of
     # file locking that cannot keep the background jobs apart, I-45-23-03 and
-    # I-45-23-04, Text 5)
-    assert len(keys_of["de.json"]) == 385
+    # I-45-23-04, Text 5); one of plan 45-25, task 2 (the example folder of the
+    # rules, I-45-19-01)
+    assert len(keys_of["de.json"]) == 386
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -5723,6 +5724,94 @@ def test_the_example_path_of_the_lookup_comes_from_the_catalogue() -> None:
     assert scan_lookup_placeholder(fixed) == [
         "lookup: a placeholder is fixed text and not a wording of the catalogue",
         "lookup: the example path is not printed once with p() out of the catalogue",
+    ]
+
+
+# The examples in the two fields of the rules (finding I-45-19-01 of plan
+# 45-19, the same class as V-45-10-03): the folder field carried the fixed
+# English word "Backups" under every language. Since plan 45-25, task 2 it is a
+# key of the catalogue, with the wordings the owner approved on 2026-11-23
+# ("Ok", `Freigabe Platzhalter 45-25` in 45-FREIGABEN.md) for de, de_DE and fr;
+# the six other languages are drafts after their documents. The pattern field
+# keeps *.photoslibrary in every language: a file pattern holds the same in
+# every language, and it is the example of the help sentence of the patterns
+# and of docs/admin-page.md.
+RULES_FOLDER_PLACEHOLDER_KEY = "Backups"
+RULES_FOLDER_PLACEHOLDER = f"placeholder=\"<?php p($l->t('{RULES_FOLDER_PLACEHOLDER_KEY}')); ?>\""
+RULES_FOLDER_PLACEHOLDER_WORDINGS = {
+    "de": "Sicherungen",
+    "de_DE": "Sicherungen",
+    "fr": "Sauvegardes",
+    "es": "Copias de seguridad",
+    "it": "Backup",
+    "nl": "Back-ups",
+    "pt_BR": "Backup",
+    "pt_PT": "Cópias de segurança",
+    "zh_TW": "備份",
+}
+RULES_PATTERN_PLACEHOLDER = 'placeholder="*.photoslibrary"'
+
+
+def scan_rules_placeholders(template: str) -> list[str]:
+    """Findings of the examples in the two fields of the rules (I-45-19-01)."""
+    findings: list[str] = []
+    # Each field from its id to the button that follows it, as for the lookup.
+    start = template.find('<input type="text" id="findling-rules-new"')
+    end = template.find('<button type="button" id="findling-rules-add">', start)
+    pattern_start = template.find('id="findling-rules-patterns-new"')
+    pattern_end = template.find('id="findling-rules-patterns-add"', pattern_start)
+    if -1 in (start, end, pattern_start, pattern_end):
+        return ["rules: a field of the rules is not found"]
+    folder = template[start:end]
+    if re.search(r'placeholder="(?!<\?php p\(\$l->t\()', folder) is not None:
+        findings.append("rules: the placeholder of the folder field is fixed text and not a wording of the catalogue")
+    if template.count(RULES_FOLDER_PLACEHOLDER) != 1 or RULES_FOLDER_PLACEHOLDER not in folder:
+        findings.append("rules: the example folder is not printed once with p() out of the catalogue")
+    pattern = template[pattern_start:pattern_end]
+    if "$l->t(" in pattern:
+        findings.append("rules: the example pattern goes through the catalogue, but a file pattern is not translated")
+    # The fixed example of the field, the same as the first example of the
+    # help sentence of the patterns ($exampleMarkers, "\u{E001}").
+    values = re.findall(r'placeholder="([^"<]*)"', pattern)
+    if values != ["*.photoslibrary"] or f"$exampleMarkers = [\"\\u{{E001}}\" => '{values[0]}'," not in template:
+        findings.append("rules: the example pattern is not the one of the help sentence, *.photoslibrary")
+    return findings
+
+
+def test_the_example_folder_of_the_rules_comes_from_the_catalogue() -> None:
+    """I-45-19-01: the example folder follows the language of the page, the example pattern stays."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert scan_rules_placeholders(template) == []
+    assert "stays untranslated" in template
+
+    wordings = {path.name: catalogue_of(path).get(RULES_FOLDER_PLACEHOLDER_KEY) for path in L10N_CATALOGUES}
+    assert wordings == {
+        f"{language}{suffix}": wording
+        for language, wording in RULES_FOLDER_PLACEHOLDER_WORDINGS.items()
+        for suffix in (".json", ".js")
+    }
+    for document, _ in LANGUAGE_TABLES:
+        assert RULES_FOLDER_PLACEHOLDER_KEY in language_table(document), document.name
+
+    # Fail samples (B8), built by hand. The fixed word of 1.6.5 back in the
+    # folder field: two findings.
+    fixed = template.replace(RULES_FOLDER_PLACEHOLDER, 'placeholder="Backups"', 1)
+    assert scan_rules_placeholders(fixed) == [
+        "rules: the placeholder of the folder field is fixed text and not a wording of the catalogue",
+        "rules: the example folder is not printed once with p() out of the catalogue",
+    ]
+    # The pattern field through the catalogue: two findings, it is no fixed
+    # example any more either.
+    translated = template.replace(RULES_PATTERN_PLACEHOLDER, "placeholder=\"<?php p($l->t('*.photoslibrary')); ?>\"", 1)
+    assert scan_rules_placeholders(translated) == [
+        "rules: the example pattern goes through the catalogue, but a file pattern is not translated",
+        "rules: the example pattern is not the one of the help sentence, *.photoslibrary",
+    ]
+    # Another example than the one of the help sentence: one finding.
+    other = template.replace(RULES_PATTERN_PLACEHOLDER, 'placeholder="*.tmp"', 1)
+    assert scan_rules_placeholders(other) == [
+        "rules: the example pattern is not the one of the help sentence, *.photoslibrary",
     ]
 
 

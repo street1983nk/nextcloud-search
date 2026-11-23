@@ -187,6 +187,7 @@
         "Excluded folders": "Cartelle escluse",
         "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Confronto per prefisso sul percorso, così come lo mostrano gli elenchi di questa pagina, senza caratteri jolly. Per i caratteri jolly usare \"Modelli esclusi\". Esempio: Backups",
         "Add exclusion": "Aggiungi esclusione",
+        "Backups": "Backup",
         "Remove exclusion %s": "Rimuovi l'esclusione %s",
         "No folder is excluded.": "Nessuna cartella è esclusa.",
         "Excluded patterns": "Modelli esclusi",

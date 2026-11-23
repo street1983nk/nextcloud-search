@@ -188,6 +188,7 @@ OC.L10N.register(
     "Excluded folders": "Pastas excluídas",
     "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparação por prefixo sobre o caminho tal como as listas desta página o mostram, sem caracteres universais. Para caracteres universais, usar \"Padrões excluídos\". Exemplo: Backups",
     "Add exclusion": "Adicionar exclusão",
+    "Backups": "Cópias de segurança",
     "Remove exclusion %s": "Retirar a exclusão %s",
     "No folder is excluded.": "Não há nenhuma pasta excluída.",
     "Excluded patterns": "Padrões excluídos",

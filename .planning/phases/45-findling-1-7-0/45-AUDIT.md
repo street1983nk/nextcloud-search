@@ -1301,3 +1301,26 @@ Je einzeln, danach LockingCheckService.php byte-gleich zurück (`restored_identi
 (M26) ArrayCache nicht erkannt (UNSHARED_CLASSES nur noch APCu) -> rot: `testArrayCacheAsTheLockingCacheIsUnshared` (`Failures: 1`)
 
 Gates Task 1 (verify-Zeile wörtlich aus `<scratchpad>/v25_t1.sh`, mit der Zeile im Plan byte-gleich verglichen, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1416 tests, 8870 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs-fixer ohne Verstoß; zizmor und actionlint grün, Probe gesehen), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest `tests/test_admin_ui_contract.py tests/test_store_metadata.py tests/test_measurement_scripts.py tests/test_admin_locale.py` `970 passed`.
+
+#### Platzhalter Regelfelder
+
+Nach `Freigabe Platzhalter 45-25` ("Ok", 2026-11-23 02:08 UTC; EN Backups, DE Sicherungen, FR Sauvegardes). Kopf vor dem Task 39b2b436.
+
+I-45-19-01 (INFO, behoben in 45-25 Task 2): Stellen php/templates/admin.php Ordnerfeld `findling-rules-new` (fest `placeholder="Backups"`, am Stand von 39b2b436 Z. 1587) und Musterfeld `findling-rules-patterns-new` (fest `placeholder="*.photoslibrary"`, Z. 1631); Fix: das Ordnerfeld trägt `placeholder="<?php p($l->t('Backups')); ?>"`, der Schlüssel `Backups` steht in allen 18 Katalogdateien direkt hinter "Add exclusion" (de, de_DE Sicherungen, fr Sauvegardes nach der Freigabe; es Copias de seguridad, it Backup, nl Back-ups, pt_BR Backup, pt_PT Cópias de segurança, zh_TW 備份 als maschinelle Entwürfe nach den Sprachdokus), Zeile in den sechs Sprachtabellen, Schlüsselzahl 385 -> 386; das Musterfeld behält `*.photoslibrary`, ein Kommentar im PHP-Block davor sagt `stays untranslated` mit Grund; Prüfung des Musters: es enthält `*` (keine Meldung no_wildcard), hat 15 Zeichen (unter MAX_PATTERN_LENGTH 60), ist dasselbe Beispiel wie `"\u{E001}"` in `$exampleMarkers` (Hilfesatz der Muster) und wie docs/admin-page.md Z. 836 und Z. 892, und es trifft, was die Doku verspricht (ExclusionServiceTest Z. 112-114 Treffer im Bundle, Z. 139 kein Treffer auf `Notizen.photoslibrary.txt`); Test `test_the_example_folder_of_the_rules_comes_from_the_catalogue` mit dem Prüfer `scan_rules_placeholders` und drei Fehl-Samples; Mutationen M27 und M28.
+
+Die beiden Stellen in docs/admin-page.md, die `Backups` nennen (Z. 791 und Z. 839, Mustertabelle `Backups/*`), meinen einen Ordnernamen einer Regel, nicht den Platzhalter des Feldes, und bleiben; die Doku nennt den Platzhalter des Ordnerfelds nirgends und ist nicht geändert. VALUES_THAT_MAY_EQUAL_THEIR_KEY ist nicht nötig: keine Sprache führt den Schlüssel unverändert (it und pt_BR führen "Backup" ohne s). Umlaut-Audit der neuen deutschen Werte und Prosa: Sicherungen ohne Umlaut, die Nachträge in den fünf deutschsprachigen Sprachdokus mit echten Umlauten (übersetzt, Entwürfe), kein Gedankenstrich.
+
+RED (nicht committet): `PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_admin_ui_contract.py -k example_folder_of_the_rules` -> `1 failed, 229 deselected`, wörtlich: `FAILED tests/test_admin_ui_contract.py::test_the_example_folder_of_the_rules_comes_from_the_catalogue` mit `Left contains 2 more items, first extra item: 'rules: the placeholder of the folder field is fixed text and not a wording of the catalogue'`.
+
+GREEN: pytest `tests/test_admin_ui_contract.py tests/test_admin_locale.py tests/test_store_metadata.py` -> `399 passed`.
+
+Baumhash php/ nach Task 2: Rezept und unabhängige Pipeline `d75974c9...` mit 145 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 39b2b436` -> `8eae94a1...` mit 145 (gleich dem Wert nach Task 1).
+
+#### Platzhalter Mutationen
+
+Je einzeln, danach die Datei byte-gleich zurück (`restored_identical=yes`); Skripte `<scratchpad>/mutate25.py` und `<scratchpad>/mut25_t2.sh`, je gefiltertes pytest `-k example_folder_of_the_rules`.
+
+(M27) Ordnerfeld wieder mit festem `placeholder="Backups"` -> rot: `test_the_example_folder_of_the_rules_comes_from_the_catalogue` (`1 failed`)
+(M28) Schlüssel `Backups` aus php/l10n/zh_TW.json entfernt -> rot: `test_the_example_folder_of_the_rules_comes_from_the_catalogue` (`1 failed`)
+
+Gates Task 2 (verify-Zeile wörtlich aus `<scratchpad>/v25_t2.sh`, mit der Zeile im Plan byte-gleich verglichen, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1416 tests, 8870 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest der vier Dateien `971 passed`. Der erste Lauf fiel an ruff format (zwei Umbrüche im neuen Test); formatiert, dazu ein Kommentar zum Fehl-Sample berichtigt (zwei Befunde, nicht einer), danach der ganze Lauf ein zweites Mal grün.

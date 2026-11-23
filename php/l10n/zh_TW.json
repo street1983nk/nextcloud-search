@@ -187,6 +187,7 @@
         "Excluded folders": "排除的資料夾",
         "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：Backups",
         "Add exclusion": "新增排除項目",
+        "Backups": "備份",
         "Remove exclusion %s": "移除排除項目 %s",
         "No folder is excluded.": "沒有排除任何資料夾。",
         "Excluded patterns": "排除的樣式",

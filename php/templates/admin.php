@@ -1584,7 +1584,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<div class="findling-rules__add">
 		<input type="text" id="findling-rules-new" name="exclusion" autocomplete="off"
 			data-max-entries="<?php p((string)$maxPrefixes); ?>" data-max-length="<?php p((string)$maxPrefixLength); ?>"
-			aria-describedby="findling-rules-exclusions-help findling-rules-slots findling-rules-new-error" placeholder="Backups">
+			aria-describedby="findling-rules-exclusions-help findling-rules-slots findling-rules-new-error" placeholder="<?php p($l->t('Backups')); ?>">
 		<button type="button" id="findling-rules-add"><?php p($l->t('Add exclusion')); ?></button>
 	</div>
 	<p class="settings-hint findling-rules__slots<?php if ($folderSlotsLow) { ?> findling-rules__slots--low<?php } ?>" id="findling-rules-slots"<?php if ($maxPrefixes === 0) { ?> hidden<?php } ?>><?php p($folderSlots); ?></p>
@@ -1624,6 +1624,15 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 		<?php } ?>
 	</ul>
 
+	<?php
+	/*
+	 * The example in the pattern field, *.photoslibrary, stays untranslated
+	 * (I-45-19-01, plan 45-25): a file pattern holds the same in every
+	 * language, and it is the same example as the first one of the help
+	 * sentence above ($exampleMarkers) and of docs/admin-page.md. The example
+	 * of the folder field is a folder name and comes out of the catalogue.
+	 */
+?>
 	<div class="findling-rules__add">
 		<input type="text" id="findling-rules-patterns-new" name="exclusionPattern" autocomplete="off"
 			maxlength="<?php p((string)$maxPatternLength); ?>"

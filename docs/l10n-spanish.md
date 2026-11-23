@@ -313,6 +313,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Excluded folders` | Ausgeschlossene Ordner | Carpetas excluidas |
 | `Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups` | Präfix-Vergleich auf dem Pfad, wie ihn die Listen dieser Seite zeigen, ohne Platzhalter. Für Platzhalter "Ausgeschlossene Muster" verwenden. Beispiel: Backups | Comparación por prefijo sobre la ruta tal como la muestran las listas de esta página, sin comodines. Para comodines, use "Patrones excluidos". Ejemplo: Backups |
 | `Add exclusion` | Ausschluss hinzufügen | Añadir exclusión |
+| `Backups` | Sicherungen | Copias de seguridad |
 | `Remove exclusion %s` | Ausschluss %s entfernen | Quitar la exclusión %s |
 | `No folder is excluded.` | Kein Ordner ist ausgeschlossen. | No hay ninguna carpeta excluida. |
 | `Excluded patterns` | Ausgeschlossene Muster | Patrones excluidos |
@@ -535,6 +536,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 **Nachtrag 23.11.2026 (Phase 45, Plan 45-24).** Eine Zeile ist ergänzt, direkt hinter dem Satz zum Content-Gateway, das nicht geantwortet hat: der Hinweis, dass eine lange Warteschlange den Abgleichlauf schon länger als sein Intervall aufhält (Issue #25, F2). Die Seite zeigt ihn, sobald der Container reconcileHeldSince sendet, also ab einem Intervall Wartezeit; nach zwei Intervallen läuft der Abgleich trotzdem, nie während eines Crawls. Der deutsche und der französische Wortlaut sind Text 3 aus Plan 45-23, die der Owner am 22.11.2026 freigegeben hat. Die spanische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments.
 
 **Nachtrag 23.11.2026 (Phase 45, Plan 45-25, Task 1).** Eine Zeile ist ergänzt, direkt hinter dem Hinweis auf das parallel laufende fulltextsearch: der Hinweis, dass die Dateisperren des Servers die Hintergrundjobs nicht auseinanderhalten, weil sie in einem Cache liegen, den nur ein PHP-Prozess sieht (APCu oder ArrayCache als memcache.locking, I-45-23-03 und I-45-23-04). Die Seite zeigt ihn, solange die Konfiguration des Servers so steht. Der deutsche und der französische Wortlaut sind Text 5 aus Plan 45-23, die der Owner am 23.11.2026 freigegeben hat. Die spanische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments.
+
+**Nachtrag 23.11.2026 (Phase 45, Plan 45-25, Task 2).** Eine Zeile ist ergänzt, direkt hinter "Add exclusion": das Beispiel im Feld der ausgeschlossenen Ordner, bisher fest das englische Wort "Backups" in jeder Sprache (Befund I-45-19-01). Es ist ein Ordnername und wird übersetzt; das Beispiel im Feld der Muster, `*.photoslibrary`, bleibt in jeder Sprache gleich, weil ein Dateimuster nicht übersetzt wird. Der deutsche und der französische Wortlaut sind die, die der Owner am 23.11.2026 freigegeben hat. Die spanische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 

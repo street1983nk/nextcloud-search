@@ -187,6 +187,7 @@
         "Excluded folders": "Pastas excluídas",
         "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparação por prefixo do caminho como as listas desta tela o mostram, sem curingas. Para curingas, usar \"Padrões excluídos\". Exemplo: Backups",
         "Add exclusion": "Adicionar exclusão",
+        "Backups": "Backup",
         "Remove exclusion %s": "Remover a exclusão %s",
         "No folder is excluded.": "Nenhuma pasta está excluída.",
         "Excluded patterns": "Padrões excluídos",

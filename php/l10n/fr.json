@@ -187,6 +187,7 @@
         "Excluded folders": "Dossiers exclus",
         "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparaison par préfixe sur le chemin tel que les listes de cette page l'affichent, sans caractères génériques. Pour les caractères génériques, utiliser \"Motifs exclus\". Exemple : Backups",
         "Add exclusion": "Ajouter une exclusion",
+        "Backups": "Sauvegardes",
         "Remove exclusion %s": "Supprimer l'exclusion %s",
         "No folder is excluded.": "Aucun dossier n'est exclu.",
         "Excluded patterns": "Motifs exclus",

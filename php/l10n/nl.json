@@ -187,6 +187,7 @@
         "Excluded folders": "Uitgesloten mappen",
         "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Prefixvergelijking op het pad zoals de lijsten op deze pagina het tonen, zonder jokertekens. Voor jokertekens \"Uitgesloten patronen\" gebruiken. Voorbeeld: Backups",
         "Add exclusion": "Uitsluiting toevoegen",
+        "Backups": "Back-ups",
         "Remove exclusion %s": "Uitsluiting %s verwijderen",
         "No folder is excluded.": "Geen enkele map is uitgesloten.",
         "Excluded patterns": "Uitgesloten patronen",

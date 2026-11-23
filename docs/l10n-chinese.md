@@ -31,17 +31,19 @@ unreadable that names the owner first) and after plan 45-19 (one key added: the 
 and again on 23.11.2026 after plan 45-24 (one key added: the note that a long queue holds the comparison run
 back, issue #25, F2; the Chinese wording is a machine draft under the reservation of this document) and
 after plan 45-25, task 1 (one key added: the note that file locking cannot keep the background jobs apart,
-I-45-23-03 and I-45-23-04; the Chinese wording is a machine draft under the reservation of this document):
+I-45-23-03 and I-45-23-04; the Chinese wording is a machine draft under the reservation of this document)
+and after plan 45-25, task 2 (one key added: the example folder of the rules, I-45-19-01; the Chinese
+wording is a machine draft under the reservation of this document):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **385** |
-| Keys in `zh_TW.json`, in the same order | **385** |
+| Keys in `de.json` | **386** |
+| Keys in `zh_TW.json`, in the same order | **386** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **385** |
+| rows in the table below | **386** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -380,6 +382,7 @@ this table cannot break on a wording.
 | `Excluded folders` | Ausgeschlossene Ordner | 排除的資料夾 |
 | `Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups` | Präfix-Vergleich auf dem Pfad, wie ihn die Listen dieser Seite zeigen, ohne Platzhalter. Für Platzhalter "Ausgeschlossene Muster" verwenden. Beispiel: Backups | 以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：Backups |
 | `Add exclusion` | Ausschluss hinzufügen | 新增排除項目 |
+| `Backups` | Sicherungen | 備份 |
 | `Remove exclusion %s` | Ausschluss %s entfernen | 移除排除項目 %s |
 | `No folder is excluded.` | Kein Ordner ist ausgeschlossen. | 沒有排除任何資料夾。 |
 | `Excluded patterns` | Ausgeschlossene Muster | 排除的樣式 |
