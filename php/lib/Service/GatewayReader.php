@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Service;
 
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\File;
 use OCP\Files\ForbiddenException;
 use OCP\Files\IRootFolder;
+use OCP\Log\Audit\CriticalActionPerformedEvent;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -77,11 +79,25 @@ final class GatewayReader {
 	public const SECURE_VIEW_WRAPPER = 'OCA\Richdocuments\Storage\SecureViewWrapper';
 	public const SECURE_VIEW_FUNCTION = 'checkFileAccess';
 
+	/**
+	 * The line admin_audit writes for a read inside actAs (plan 45-20, a4).
+	 *
+	 * admin_audit names the session user of a request (LogDetails takes
+	 * OC_User::getUser(), the session value user_id), and actAs only sets the
+	 * volatile active user, so its own line of such a read says "--". The
+	 * public audit event CriticalActionPerformedEvent (OCP since 22) is written
+	 * by admin_audit with its parameters in this order: file id, path, the uid
+	 * of the reading user. Never a byte of the content. Without admin_audit
+	 * nobody listens and the dispatch does nothing.
+	 */
+	public const AUDIT_MESSAGE = 'Findling read the file with id "%s" at "%s" as the user "%s" after the secure view of Nextcloud Office refused it without a user';
+
 	public function __construct(
 		private IRootFolder $rootFolder,
 		private ReaderContext $readerContext,
 		private ReaderCandidates $readerCandidates,
 		private LoggerInterface $logger,
+		private IEventDispatcher $eventDispatcher,
 	) {
 	}
 
@@ -181,10 +197,19 @@ final class GatewayReader {
 			}
 
 			try {
-				return $this->opened($file, $reader, $asked);
+				$opened = $this->opened($file, $reader, $asked);
 			} catch (ForbiddenException $e) {
 				return self::isSecureViewRefusal($e) ? null : ['outcome' => self::OUTCOME_POLICY, 'asked' => $asked];
 			}
+
+			// Only a read that happened, and only here, inside actAs: a plain
+			// read outside it keeps the line admin_audit writes itself (a4).
+			$this->eventDispatcher->dispatchTyped(new CriticalActionPerformedEvent(
+				self::AUDIT_MESSAGE,
+				['id' => $fileId, 'path' => $file->getPath(), 'reader' => $reader],
+			));
+
+			return $opened;
 		});
 	}
 

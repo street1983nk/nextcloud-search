@@ -120,8 +120,10 @@ final class GatewayController extends OCSController {
 				return $this->blockedByARule($fileId, $opened['asked']);
 			}
 			if ($opened['asked'] > 0) {
-				// The file id and how many readers were asked, never who.
-				$this->logger->info('Findling: read a file as a reader of it after secure view refused the first open', ['fileId' => $fileId, 'asked' => $opened['asked']]);
+				// The file id, how many readers were asked and who read it (plan
+				// 45-20, a1): the uid an admin needs to follow the read; the
+				// request line beside it already names the claimed reader.
+				$this->logger->info('Findling: read a file as a reader of it after secure view refused the first open', ['fileId' => $fileId, 'asked' => $opened['asked'], 'reader' => $opened['reader'] ?? '']);
 			}
 
 			// The size is the one of the file cache and only tells an empty file
