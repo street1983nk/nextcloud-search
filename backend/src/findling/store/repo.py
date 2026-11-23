@@ -212,6 +212,20 @@ CATCHUP_DONE: Final = "done"
 # backup pause leaves it alone and the next due round sweeps again.
 SWEEP_MARK: Final = "storage_sweep_at"
 
+# The moment a due walk of the reconcile was first held back by the quiet mark,
+# whole seconds as a string; missing or the empty string means it is not held
+# (issue #25, F2, plan 45-24). The quiet mark counts the scheduled rows of every
+# kind, so a long OCR backlog held the walk back for days on a large instance.
+# Once this moment lies twice the minimum interval back, the walk runs anyway,
+# never beside a crawl (worker/reconcile.py, BACKSTOP_FACTOR). Written only when
+# a due walk stands down because of the quiet mark, at the start of a round or
+# before a slice, and only while none stands; a crawl writes nothing. Cleared
+# (the empty string, there is no delete of a meta key) only after a round
+# walked every mount to its end, so a short dip below the mark keeps it. A meta
+# key of its own for the reasons of SWEEP_MARK above: a restart in the middle
+# of the wait must not start it again.
+QUIET_HELD_MARK: Final = "reconcile_quiet_held_since"
+
 # Whether the refusal streaks 1.6.2 left behind have been renewed once (plan
 # 43-20, D-43-16, run 42482017221). 1.6.2 knew no skipped(unreadable): every
 # refusal of the gateway was failed(gateway_error) and lengthened the streak in

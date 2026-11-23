@@ -24,6 +24,7 @@ the next round has to start exactly there.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from collections.abc import Iterator
 from dataclasses import replace
@@ -1301,6 +1302,305 @@ async def test_an_ordinary_cycle_never_writes_the_catch_up_mark(store: Store) ->
     await _reconcile(store, _FakeFiles(SliceResult(final=True)), _FakeQueue()).run_once()
 
     assert repo.CATCHUP_MARK not in store.read_meta()
+
+
+# -- the backstop against the quiet mark (issue #25, F2, plan 45-24) ----------
+#
+# The quiet mark counts every scheduled row of every kind, so a long OCR or
+# embedding backlog held the comparison back for days on a large instance, and
+# what only this round finds (new external storages, changes on SMB without an
+# event, the catch-up cycle of 1.5) stayed out of the index. Once a due cycle
+# has waited twice its minimum interval behind the mark, it walks anyway, but
+# never beside a crawl (run 8 of 28-07) and never on an unreadable queue. The
+# moment the wait began stands in the state database, so a restart does not
+# start it again, and only a whole cycle clears it.
+
+BACKSTOP_WAIT = 2 * 24 * HOUR
+RECONCILE_LOGGER = "findling.worker.reconcile"
+BACKSTOP_LINE = (
+    "reconcile walks although the quiet mark holds, held for 48 hours, 150 rows are scheduled and the quiet mark is 100"
+)
+QUIET_LINE = "reconcile stands down, 150 rows are scheduled and the quiet mark is 100"
+
+
+def _held_since(store: Store) -> str | None:
+    return store.read_meta().get(repo.QUIET_HELD_MARK)
+
+
+def _hold_since(store: Store, moment: float | str) -> None:
+    store.write_meta(repo.QUIET_HELD_MARK, moment if isinstance(moment, str) else str(int(moment)))
+
+
+class _ScriptedQueue(_FakeQueue):
+    """A queue whose counter answers from a list, one entry per call of stats.
+
+    Call one is the gate at the start of the round, call two the gate before
+    the first slice, call three the gate before the second one. The last entry
+    holds for every later call.
+    """
+
+    def __init__(self, *answers: QueueStats) -> None:
+        super().__init__()
+        self._answers = list(answers)
+
+    async def stats(self) -> QueueStats:
+        self.stats_calls += 1
+        return self._answers[min(self.stats_calls, len(self._answers)) - 1]
+
+
+def _two_slices() -> _FakeFiles:
+    return _FakeFiles(
+        SliceResult(files=(a_row(10, etag="aaa"),)), SliceResult(files=(a_row(11, etag="bbb"),), final=True)
+    )
+
+
+def _warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+
+
+def _messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records]
+
+
+async def test_a_due_walk_held_by_the_quiet_mark_stamps_since_when_once(store: Store) -> None:
+    queue = _FakeQueue(scheduled=150)
+
+    first = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue).run_once()
+    assert first.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(NOW))
+
+    second = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue, now=NOW + 300).run_once()
+    assert second.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(NOW)), "one write per wait, not one per tick"
+
+
+async def test_a_walk_that_is_not_due_sets_no_stamp(store: Store, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger=RECONCILE_LOGGER)
+    _walked_an_hour_ago(store)
+    files = _FakeFiles(SliceResult(final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150)).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) is None
+    # The info line of the quiet mark stands in a tick that is not due, as before.
+    assert QUIET_LINE in _messages(caplog)
+
+
+async def test_a_crawl_alone_never_sets_the_stamp(store: Store) -> None:
+    queue = _FakeQueue(scheduled=150, crawling=True)
+
+    result = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue).run_once()
+    assert result.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) is None
+
+    _hold_since(store, NOW - 5 * HOUR)
+    again = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue, now=NOW + 300).run_once()
+    assert again.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(NOW - 5 * HOUR))
+
+
+async def test_the_quiet_mark_gives_way_after_twice_the_interval(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=RECONCILE_LOGGER)
+    _hold_since(store, NOW - BACKSTOP_WAIT)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150)).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert files.asked != []
+    assert _warnings(caplog) == [BACKSTOP_LINE]
+
+
+async def test_the_backstop_does_not_open_before_twice_the_interval(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=RECONCILE_LOGGER)
+    _hold_since(store, NOW - BACKSTOP_WAIT + 1)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150)).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert files.asked == []
+    assert _warnings(caplog) == []
+
+
+async def test_the_backstop_never_walks_while_the_crawl_is_unfinished(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=RECONCILE_LOGGER)
+    _hold_since(store, NOW - 100 * HOUR)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150, crawling=True)).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert files.asked == []
+    assert _warnings(caplog) == []
+
+
+async def test_the_backstop_holds_through_every_slice_of_the_cycle(store: Store, tmp_path: Path) -> None:
+    _hold_since(store, NOW - BACKSTOP_WAIT)
+    files = _two_slices()
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150), slice_size=1).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert len(files.asked) == 2
+
+    # The other way round: a crawl that begins before the second slice ends the
+    # round there, backstop or not.
+    other = open_store(tmp_path / "other.db")
+    try:
+        _hold_since(other, NOW - BACKSTOP_WAIT)
+        busy = QueueStats(scheduled=150)
+        crawl = QueueStats(scheduled=150, crawling=True)
+        files = _two_slices()
+        ended = await _reconcile(other, files, _ScriptedQueue(busy, busy, crawl), slice_size=1).run_once()
+    finally:
+        other.close()
+
+    assert ended.state == ROUND_QUEUE_BUSY
+    assert len(files.asked) == 1
+
+
+async def test_an_unreadable_queue_holds_the_backstop_too(store: Store) -> None:
+    _hold_since(store, NOW - 100 * HOUR)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150, ok=False)).run_once()
+
+    assert result.state == ROUND_QUEUE_UNAVAILABLE
+    assert files.asked == []
+
+
+async def test_a_finished_cycle_clears_the_stamp(store: Store) -> None:
+    _hold_since(store, NOW - 10 * HOUR)
+
+    walked = await _reconcile(store, _FakeFiles(SliceResult(final=True)), _FakeQueue()).run_once()
+    assert walked.state == ROUND_WALKED
+    assert _held_since(store) == ""
+
+    later = NOW + 25 * HOUR
+    held = await _reconcile(store, _FakeFiles(SliceResult(final=True)), _FakeQueue(scheduled=150), now=later).run_once()
+    assert held.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(later))
+
+
+async def test_a_short_dip_below_the_quiet_mark_keeps_the_stamp(store: Store) -> None:
+    since = NOW - 10 * HOUR
+    _hold_since(store, since)
+    files = _two_slices()
+    calm = QueueStats(scheduled=10)
+    busy = QueueStats(scheduled=150)
+
+    result = await _reconcile(store, files, _ScriptedQueue(calm, calm, busy), slice_size=1).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert len(files.asked) == 1
+    assert _held_since(store) == str(int(since))
+
+
+async def test_a_walk_held_mid_cycle_stamps_too(store: Store) -> None:
+    files = _two_slices()
+    calm = QueueStats(scheduled=10)
+    busy = QueueStats(scheduled=150)
+
+    result = await _reconcile(store, files, _ScriptedQueue(calm, calm, busy), slice_size=1).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(NOW))
+
+
+async def test_the_stamp_survives_a_new_reconcile_object(store: Store) -> None:
+    # The first object holds the due cycle two days ago and stamps that moment;
+    # a fresh object on the same state database, as after a restart, reads it.
+    queue = _FakeQueue(scheduled=150)
+    earlier = NOW - BACKSTOP_WAIT
+    held = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue, now=earlier).run_once()
+    assert held.state == ROUND_QUEUE_BUSY
+    assert _held_since(store) == str(int(earlier))
+
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert files.asked != []
+
+
+@pytest.mark.parametrize("stamp", ["abc", str(int(NOW + HOUR))])
+async def test_an_unreadable_or_future_stamp_starts_the_wait_again(store: Store, stamp: str) -> None:
+    _hold_since(store, stamp)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150)).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert files.asked == []
+    assert _held_since(store) == str(int(NOW))
+
+
+@pytest.mark.parametrize("enabled", ["true", "false"])
+async def test_the_catch_up_walks_under_the_backstop(
+    store: Store, monkeypatch: pytest.MonkeyPatch, enabled: str
+) -> None:
+    # The catch-up cycle of 1.5 stands behind the same quiet mark (worker/
+    # catchup.py), so it gets the same backstop. With the reconcile switched
+    # off main.py runs it through run(once=True) on the same object; both
+    # ways end the same.
+    monkeypatch.setenv("FINDLING_RECONCILE_ENABLED", enabled)
+    settings.cache_clear()
+    try:
+        _catchup(store)
+        _hold_since(store, NOW - BACKSTOP_WAIT)
+        files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+        queue = _FakeQueue(scheduled=150)
+        round_under_test = _CountingReconcile(store, files, queue, [NOW])
+        if enabled == "true":
+            result = await round_under_test.run_once()
+            assert result.state == ROUND_WALKED
+        else:
+            round_under_test.arm()
+            await asyncio.wait_for(round_under_test.run(asyncio.Event(), once=True), timeout=5)
+            assert round_under_test.rounds == 1
+    finally:
+        settings.cache_clear()
+
+    assert files.asked != []
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+    assert _held_since(store) == ""
+
+
+async def test_a_backstop_round_logs_no_stand_down_line(
+    store: Store, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    caplog.set_level(logging.INFO, logger=RECONCILE_LOGGER)
+    _hold_since(store, NOW - BACKSTOP_WAIT)
+    files = _two_slices()
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=150), slice_size=1).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert len(files.asked) == 2
+    assert [line for line in _messages(caplog) if line.startswith("reconcile stands down")] == []
+    assert _warnings(caplog) == [BACKSTOP_LINE]
+
+    # The other way round: with the backstop shut the info line stands as before.
+    caplog.clear()
+    other = open_store(tmp_path / "other.db")
+    try:
+        _hold_since(other, NOW - HOUR)
+        shut = await _reconcile(other, _two_slices(), _FakeQueue(scheduled=150), slice_size=1).run_once()
+    finally:
+        other.close()
+
+    assert shut.state == ROUND_QUEUE_BUSY
+    assert QUIET_LINE in _messages(caplog)
+    assert _warnings(caplog) == []
 
 
 # -- the properties a grep has to keep --------------------------------------

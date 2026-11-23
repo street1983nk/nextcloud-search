@@ -65,8 +65,16 @@ from findling.config import settings
 from findling.nc import client as nc_client
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileList, FileRow, Mount
-from findling.nc.queue import KIND_CONTENT, KIND_DELETE, SKIPPED_FALLBACK_WITHOUT_SIGNAL, DocumentQueue
-from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, SWEEP_MARK, Store, open_store
+from findling.nc.queue import KIND_CONTENT, KIND_DELETE, SKIPPED_FALLBACK_WITHOUT_SIGNAL, DocumentQueue, QueueStats
+from findling.store.repo import (
+    CATCHUP_DONE,
+    CATCHUP_MARK,
+    CATCHUP_RECONCILE,
+    QUIET_HELD_MARK,
+    SWEEP_MARK,
+    Store,
+    open_store,
+)
 
 LOGGER = logging.getLogger("findling.worker.reconcile")
 
@@ -188,6 +196,29 @@ RECONCILE_STOP_SECONDS: Final = 30.0
 # cadence is decided against the stamps in the reconcile table. This is only how
 # finely the container notices that the configured hour has arrived.
 RECONCILE_TICK_SECONDS: Final = 300.0
+
+# How many minimum intervals a due walk waits behind the quiet mark before it
+# runs anyway (issue #25, F2, plan 45-24). The quiet mark counts the scheduled
+# rows of every kind, OCR and embedding included, so on a large instance a long
+# backlog held the walk back for days, and what only the walk finds stayed out
+# of the index: new external storages, changes on SMB without an event, the
+# catch-up cycle of 1.5. At the reporter the count of office documents in the
+# index went from 5,700 to 61,328 once he had raised the mark to 2000. A higher
+# mark only moves the starvation (too small for a large instance, too large for
+# a 4 GB box), so the bound is in time: twice the interval, 48 hours by
+# default. No switch of its own (zero config); whoever shortens the interval
+# with FINDLING_RECONCILE_MIN_INTERVAL_HOURS shortens this wait with it. The
+# backstop never opens beside a crawl (run 8 of 28-07) and never on an
+# unreadable queue, and such a cycle walks slice by slice with the same pause
+# as every other one, at most one per two intervals.
+BACKSTOP_FACTOR: Final = 2
+
+# Why the gate in front of a round or a slice holds, as _gate tells it without
+# writing a line. Private: only _quiet turns them into a round state and a log.
+_GATE_OPEN: Final = "open"
+_GATE_CRAWL: Final = "crawl"
+_GATE_QUIET: Final = "quiet"
+_GATE_UNREADABLE: Final = "unreadable"
 
 # Breather between two slices of the same mount. It is what makes the round
 # bearable at midday, which is the point of pitfall 5: a reconcile that is only
@@ -367,6 +398,10 @@ class Reconcile:
         # Whether a round is running right now; the pause coordinator waits for
         # it to drop before it checkpoints the state database.
         self._in_flight = False
+        # Whether the backstop opened the round that runs now (issue #25, F2).
+        # Lowered at the start of every round; while it is up, the gate before
+        # a slice holds for a crawl and an unreadable queue only.
+        self._backstop = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -500,6 +535,7 @@ class Reconcile:
 
     async def run_once(self) -> RoundResult:
         """One round: the two gates, then mount by mount, slice by slice."""
+        self._backstop = False
         opened = self._open()
         if opened is None:
             # No state database, so this container knows no file. There is
@@ -514,8 +550,28 @@ class Reconcile:
         #    queue holds the walk only: the storage sweep below keeps its own
         #    cadence behind it (D-43-01, issue #25). An unreadable queue holds
         #    both, because "we do not know" is no licence to delete (D-43-02);
-        #    _quiet has already backed off.
-        gate = await self._quiet(queue)
+        #    _gate has already backed off.
+        #
+        #    The backstop (issue #25, F2): a walk that is due and held only by
+        #    the quiet mark stamps the moment it was first held (QUIET_HELD_MARK)
+        #    and walks anyway once that moment lies BACKSTOP_FACTOR intervals
+        #    back. A crawl and an unreadable queue hold it like before, and a
+        #    walk that is not due writes no stamp; the info line of the quiet
+        #    mark stands in every tick it holds, due or not.
+        reason, stats = await self._gate(queue)
+        if reason == _GATE_QUIET and await asyncio.to_thread(self._is_due, store):
+            since = await asyncio.to_thread(self._held_since, store)
+            held = self._clock() - since
+            if held >= BACKSTOP_FACTOR * self._min_interval * 3600.0:
+                self._backstop = True
+                reason = _GATE_OPEN
+                LOGGER.warning(
+                    "reconcile walks although the quiet mark holds, held for %d hours, %d rows are scheduled and the quiet mark is %d",  # noqa: E501 - one line, quoted whole by docs/reconcile.md and plan 45-20
+                    int(held // 3600.0),
+                    stats.scheduled,
+                    self._quiet_max,
+                )
+        gate = self._quiet(reason, stats)
         if gate == ROUND_QUEUE_UNAVAILABLE:
             return RoundResult(gate)
 
@@ -538,6 +594,9 @@ class Reconcile:
         #    has to be finished rather than waited out for another day. The
         #    sweep has a stamp of its own (SWEEP_MARK) under the same rule, so a
         #    busy queue reads the mount list once per cycle and not every tick.
+        #    A round the backstop opened (step 1) reaches this point like a
+        #    quiet one, so the walk is due and runs; the bound of the quiet
+        #    mark is therefore twice the interval and not open ended (#25).
         walk_due = gate is None and await asyncio.to_thread(self._is_due, store)
         sweep_due = await asyncio.to_thread(self._sweep_due, store)
         if not walk_due and not sweep_due:
@@ -585,6 +644,10 @@ class Reconcile:
         # A sweep that a refused band ended keeps its back-off through the walk.
         if swept is not False:
             self._reset_cooldown()
+        # A whole cycle is through, so the wait behind the quiet mark is over
+        # (issue #25, F2). Only here: a round the mark ended halfway keeps the
+        # moment, or an instance that hovers around the mark would never finish.
+        await asyncio.to_thread(_clear_held_since, store)
         if catchup:
             # Every mount walked to its end, all of it under the catch-up rules:
             # the catch-up is over and never comes back (FMT-06).
@@ -623,8 +686,17 @@ class Reconcile:
             # The quiet gate again, before every single slice. A round that
             # started on a calm instance and ran into the working day stops here,
             # and it may stop here because everything before this point is either
-            # durable or repeatable.
-            gate = await self._quiet(queue)
+            # durable or repeatable. A round the backstop opened (issue #25, F2)
+            # stops here for a crawl or an unreadable queue only, and writes no
+            # line of the quiet mark; any other round the mark holds stamps the
+            # moment of the wait, if none stands yet.
+            reason, stats = await self._gate(queue)
+            if reason == _GATE_QUIET:
+                if self._backstop:
+                    reason = _GATE_OPEN
+                else:
+                    await asyncio.to_thread(self._held_since, store)
+            gate = self._quiet(reason, stats)
             if gate is not None:
                 return gate
 
@@ -1038,7 +1110,26 @@ class Reconcile:
 
     # -- the two gates ---------------------------------------------------
 
-    async def _quiet(self, queue: DocumentQueue) -> str | None:
+    async def _gate(self, queue: DocumentQueue) -> tuple[str, QueueStats]:
+        """Why the queue holds the round or the slice, without writing a line.
+
+        One of _GATE_OPEN, _GATE_CRAWL, _GATE_QUIET and _GATE_UNREADABLE. An
+        unreadable counter outranks a crawl, and a crawl outranks the quiet
+        mark; an unreadable counter backs off here already. The reason and not
+        the state, because run_once and _walk decide about the backstop (issue
+        #25, F2) before _quiet turns it into a state and a log line.
+        """
+        stats = await queue.stats()
+        if not stats.ok:
+            self._back_off()
+            return _GATE_UNREADABLE, stats
+        if stats.crawling:
+            return _GATE_CRAWL, stats
+        if stats.scheduled >= self._quiet_max:
+            return _GATE_QUIET, stats
+        return _GATE_OPEN, stats
+
+    def _quiet(self, reason: str, stats: QueueStats) -> str | None:
         """None while the queue is calm enough, otherwise the state to report.
 
         An unreadable counter is not a quiet queue. Walking anyway would be the
@@ -1049,16 +1140,24 @@ class Reconcile:
         while the first index still runs, and a walk then reads every file the
         crawl has not reached as unknown and requeues it, only for the crawl to
         queue the same files again when it gets there (run 8 of 28-07: the
-        whole partial corpus twice, 5000 passes ending as "unchanged").
+        whole partial corpus twice, 5000 passes ending as "unchanged"). That is
+        why the backstop of issue #25 never opens beside a crawl.
+
+        The quiet mark itself (D-03) is no longer without end. It counts the
+        scheduled rows of every kind, and a long OCR backlog held the walk back
+        for days on a large instance (issue #25, F2; at the reporter the office
+        documents in the index went from 5,700 to 61,328 once he had raised the
+        mark). A due walk that has waited BACKSTOP_FACTOR intervals behind it
+        reaches this method as _GATE_OPEN (run_once and _walk decide that), so
+        its round writes neither of the two info lines below. They are quoted
+        by plan 45-20 and stay as they are.
         """
-        stats = await queue.stats()
-        if not stats.ok:
-            self._back_off()
+        if reason == _GATE_UNREADABLE:
             return ROUND_QUEUE_UNAVAILABLE
-        if stats.crawling:
+        if reason == _GATE_CRAWL:
             LOGGER.info("reconcile stands down, the crawl is unfinished")
             return ROUND_QUEUE_BUSY
-        if stats.scheduled >= self._quiet_max:
+        if reason == _GATE_QUIET:
             LOGGER.info(
                 "reconcile stands down, %d rows are scheduled and the quiet mark is %d",
                 stats.scheduled,
@@ -1067,6 +1166,24 @@ class Reconcile:
             return ROUND_QUEUE_BUSY
         return None
 
+    def _held_since(self, store: Store) -> float:
+        """The moment the quiet mark first held a due walk, stamped now if none stands.
+
+        One write per wait and not one per tick (issue #25, F2). A stamp that is
+        no number or lies in the future (a clock set back) reads as now and is
+        written again, so the backstop opens neither at once nor never.
+        """
+        now = float(int(self._clock()))
+        raw = store.read_meta().get(QUIET_HELD_MARK)
+        try:
+            since = float(int(raw)) if raw else None
+        except ValueError:
+            since = None
+        if since is None or since > now:
+            store.write_meta(QUIET_HELD_MARK, str(int(now)))
+            return now
+        return since
+
     def _is_due(self, store: Store) -> bool:
         """Whether a cycle may start now, against our own clock and the stamps.
 
@@ -1074,7 +1191,11 @@ class Reconcile:
         (CATCHUP_MARK on CATCHUP_RECONCILE, worker/catchup.py) is due at once,
         whatever the hour and the pause say: the files it finds are documents
         the instance has and nobody can find yet. The quiet gate still stands
-        before it. An interrupted walk is always due, because a
+        before it, with its backstop: a due cycle the quiet mark holds for
+        BACKSTOP_FACTOR intervals runs anyway, never beside a crawl (issue #25,
+        F2). That is why run_once asks this method while the quiet mark holds,
+        and why only a due cycle stamps the wait. An interrupted walk is always
+        due, because a
         half-finished comparison is worth less than none at all. A container that
         never ran a cycle is due at once, and the quiet gate above is what keeps
         that from colliding with an initial index. Everything else waits out the
@@ -1166,6 +1287,16 @@ class Reconcile:
     def _reset_cooldown(self) -> None:
         """A round that got through has no reason to wait longer than the tick."""
         self._cooldown = 0.0
+
+
+def _clear_held_since(store: Store) -> None:
+    """End the wait behind the quiet mark after a whole cycle (issue #25, F2).
+
+    The empty string, because the store has no delete of a meta key; written
+    only when a moment stands, so an ordinary cycle costs no write.
+    """
+    if store.read_meta().get(QUIET_HELD_MARK):
+        store.write_meta(QUIET_HELD_MARK, "")
 
 
 def default_reconcile() -> Reconcile:

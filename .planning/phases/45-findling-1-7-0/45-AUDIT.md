@@ -1173,3 +1173,53 @@ I-45-23-07 (INFO, neu, kein Fix in 45-23): Die Migration Version001500Date202610
 Baumhash php/ nach Task 3: Rezept und unabhängige Pipeline `976184c1...` mit 143 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 104bf781` -> `41a8dc1f...` mit 143 (gleich dem Wert nach Task 2).
 
 Gates Task 3 (verify-Zeile wörtlich aus `<scratchpad>/v23_t3.sh`, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: `STATIC_OK` (Mindestabstand aus der Entscheidzeile 6, r1, Text 1 EN/DE/FR wörtlich unter Fixed/Behoben/Corrigé, keine Gedankenstriche), PHPUnit voll `OK (1403 tests, 8810 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest `tests/test_changelog_translations.py tests/test_store_metadata.py tests/test_php_static_gates.py tests/test_measurement_scripts.py` `808 passed`.
+
+### RED und GREEN 45-24
+
+Plan 45-24, 2026-11-23, nach `Entscheid Rückhalt-Weg 45-23` (z1) und `Freigabe Texte #25 45-23` (Texte 2 bis 4 wörtlich wie im Plan 45-23, keine Wortlautzeile). Kopf vor dem Plan 3d18b701.
+
+#### F2 Rückhalt
+
+Umsetzung: repo.py `QUIET_HELD_MARK: Final = "reconcile_quiet_held_since"` (ganze Sekunden als Text, fehlend oder leer = nicht zurückgehalten). reconcile.py `BACKSTOP_FACTOR: Final = 2`; das Gate ist geteilt in `_gate(queue)` (liefert den Grund offen, Crawl, Ruhemarke, unlesbar samt QueueStats, ohne Log; unlesbar mit Back-off wie bisher) und `_quiet(reason, stats)` (Rundenzustand und die beiden info-Zeilen, byte-gleich). run_once setzt zu Beginn das Rundenflag `_backstop` zurück; hält nur die Ruhemarke und ist `_is_due` wahr, liest `_held_since(store)` den Zeitpunkt (fehlend, keine Zahl oder Zukunft -> jetzt geschrieben); liegt er mindestens `BACKSTOP_FACTOR * min_interval * 3600` zurück, gilt die Runde als offen, das Flag steht, und genau eine warning-Zeile `reconcile walks although the quiet mark holds, held for %d hours, %d rows are scheduled and the quiet mark is %d` (Stunden abgerundet). `_walk` vor jeder Scheibe: Ruhemarke mit Flag -> offen ohne Zeile; ohne Flag -> Zeitpunkt setzen, falls keiner steht, dann wie bisher info-Zeile und Ende. Nach ROUND_WALKED löscht `_clear_held_since` den Zeitpunkt (leerer Text, nur wenn einer steht). Crawl setzt und löscht nichts. Docstrings `_quiet`, `_gate`, `_held_since`, `_is_due`, run_once Schritt 1 und 2 nachgezogen; catchup.py Modul-Docstring nennt den Rückhalt (#25, backstop, nie neben einem Crawl), Code byte-gleich.
+
+Tests (tests/test_reconcile.py, Abschnitt "the backstop against the quiet mark"): `test_a_due_walk_held_by_the_quiet_mark_stamps_since_when_once`, `test_a_walk_that_is_not_due_sets_no_stamp`, `test_a_crawl_alone_never_sets_the_stamp`, `test_the_quiet_mark_gives_way_after_twice_the_interval`, `test_the_backstop_does_not_open_before_twice_the_interval`, `test_the_backstop_never_walks_while_the_crawl_is_unfinished`, `test_the_backstop_holds_through_every_slice_of_the_cycle` (mit Gegenfall Crawl ab der zweiten Scheibe), `test_an_unreadable_queue_holds_the_backstop_too`, `test_a_finished_cycle_clears_the_stamp`, `test_a_short_dip_below_the_quiet_mark_keeps_the_stamp`, `test_a_walk_held_mid_cycle_stamps_too`, `test_the_stamp_survives_a_new_reconcile_object` (erstes Objekt stempelt zwei Tage vorher, frisches Objekt auf demselben Store öffnet), `test_an_unreadable_or_future_stamp_starts_the_wait_again` ("abc" und NOW + 3600), `test_the_catch_up_walks_under_the_backstop` (FINDLING_RECONCILE_ENABLED true über run_once, false über `run(once=True)` wie main.py; beide Male CATCHUP_DONE und Zeitpunkt leer), `test_a_backstop_round_logs_no_stand_down_line` (mit Gegenfall Rückhalt zu). Bestehende Fälle unverändert.
+
+Randfälle I5: Abgleich in der Wartephase ausgeschaltet -> Zeitpunkt bleibt im Store, ein frisches Objekt zählt die alte Wartezeit weiter (`test_the_stamp_survives_a_new_reconcile_object`); Nachholweg bei ausgeschaltetem Abgleich -> Rückhalt gilt genauso (`test_the_catch_up_walks_under_the_backstop[false]`); das Statusfeld bei ausgeschaltetem Abgleich folgt in Task 2.
+
+RED (nicht committet), erster Lauf vor jeder Änderung an src: `PYTHONUTF8=1 uv run --no-sync python -m pytest -q tests/test_reconcile.py` -> `17 failed, 104 passed`; alle 17 neuen Fälle rot mit `AttributeError: module 'findling.store.repo' has no attribute 'QUIET_HELD_MARK'`. Zweiter RED-Lauf mit nur der Konstante in repo.py (reconcile.py unverändert), derselbe Aufruf -> `11 failed, 110 passed`, wörtlich:
+
+```
+FAILED tests/test_reconcile.py::test_a_due_walk_held_by_the_quiet_mark_stamps_since_when_once
+FAILED tests/test_reconcile.py::test_the_quiet_mark_gives_way_after_twice_the_interval
+FAILED tests/test_reconcile.py::test_the_backstop_holds_through_every_slice_of_the_cycle
+FAILED tests/test_reconcile.py::test_a_finished_cycle_clears_the_stamp - Asse...
+FAILED tests/test_reconcile.py::test_a_walk_held_mid_cycle_stamps_too - Asser...
+FAILED tests/test_reconcile.py::test_the_stamp_survives_a_new_reconcile_object
+FAILED tests/test_reconcile.py::test_an_unreadable_or_future_stamp_starts_the_wait_again[abc]
+FAILED tests/test_reconcile.py::test_an_unreadable_or_future_stamp_starts_the_wait_again[1800003600]
+FAILED tests/test_reconcile.py::test_the_catch_up_walks_under_the_backstop[true]
+FAILED tests/test_reconcile.py::test_the_catch_up_walks_under_the_backstop[false]
+FAILED tests/test_reconcile.py::test_a_backstop_round_logs_no_stand_down_line
+11 failed, 110 passed in 7.77s
+```
+
+Vor dem Fix schon grün und deshalb keine RED-Zeugen, sondern Wächter des bestehenden Verhaltens: `test_a_walk_that_is_not_due_sets_no_stamp`, `test_a_crawl_alone_never_sets_the_stamp`, `test_the_backstop_does_not_open_before_twice_the_interval`, `test_the_backstop_never_walks_while_the_crawl_is_unfinished`, `test_an_unreadable_queue_holds_the_backstop_too`, `test_a_short_dip_below_the_quiet_mark_keeps_the_stamp` (bisher schrieb nichts den Zeitpunkt). Ihre Zweige belegen M10, M11 und M12.
+
+GREEN gefiltert: derselbe Aufruf -> `121 passed`.
+
+Weitere Tests: tests/test_backup_pause.py tests/test_catchup.py tests/test_doc_keys.py tests/test_guest_parity.py tests/test_lifecycle.py tests/test_main_lifespan.py tests/test_measurement_scripts.py tests/test_phase31_audit.py tests/test_phase36_audit.py tests/test_phase41_audit.py tests/test_phase43_audit.py tests/test_phase43_audit_roots.py tests/test_poller.py tests/test_reconcile.py tests/test_reconcile_vanished.py tests/test_upgrade_seed_steps.py tests/test_v13_wechsel.py
+
+Baumhash backend/src/findling nach Task 1: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `6de76760...` mit 83 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 3d18b701` -> `9fa6c443...` mit 83 (gleich dem bisherigen PACKAGE_TREE_HASH_TODAY). php/ unverändert `976184c1...`/143.
+
+#### F2 Mutationen
+
+Je einzeln, danach reconcile.py byte-gleich zurück (`restored_identical=yes`, SHA-256 vor und nach gleich); Skripte `<scratchpad>/mutate24.py` und `<scratchpad>/mut24.sh`, je gefiltertes pytest `tests/test_reconcile.py`.
+
+(M10) Rückhalt prüft crawling nicht (Crawl zählt in run_once wie die Ruhemarke) -> rot: `test_the_backstop_never_walks_while_the_crawl_is_unfinished`, dazu `test_a_crawl_alone_never_sets_the_stamp` (`2 failed`)
+(M11) Faktor 1 statt 2 -> rot: `test_the_backstop_does_not_open_before_twice_the_interval` (`1 failed`)
+(M12) Zeitpunkt bei jeder offenen Runde gelöscht statt nach ROUND_WALKED -> rot: `test_a_short_dip_below_the_quiet_mark_keeps_the_stamp` (`1 failed`)
+(M13) Rundenflag in `_walk` nicht beachtet -> rot: `test_the_backstop_holds_through_every_slice_of_the_cycle`, dazu `test_the_quiet_mark_gives_way_after_twice_the_interval`, `test_the_stamp_survives_a_new_reconcile_object`, `test_the_catch_up_walks_under_the_backstop` [true] und [false], `test_a_backstop_round_logs_no_stand_down_line` (`6 failed`)
+(M14) Zeitpunkt bei jedem Tick neu geschrieben -> rot: `test_a_due_walk_held_by_the_quiet_mark_stamps_since_when_once`, dazu sieben weitere (`8 failed`)
+(M15) Zukunftswert nicht ersetzt -> rot: `test_an_unreadable_or_future_stamp_starts_the_wait_again` [1800003600] (`1 failed`)
+
+Gates Task 1 (verify-Zeile wörtlich aus `<scratchpad>/v24_t1.sh`, seriell, ohne Docker) -> `VERIFY_EXIT=0`: ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest über test_reconcile, test_store_repo, test_catchup, test_main_lifespan, test_measurement_scripts und die Liste `Weitere Tests` `1749 passed, 1 skipped`. Der erste Lauf fiel an ruff E501 im neuen catchup.py-Docstring (Zeile zu lang); umbrochen, Baumhash danach neu gerechnet (oben der Wert nach dem Umbruch).

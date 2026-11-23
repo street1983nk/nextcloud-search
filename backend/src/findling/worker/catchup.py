@@ -49,10 +49,12 @@ hands it over instead. The same cycle re-judges the files of the mixed window
 "companion first" (31-02, docs/formats.md "Upgrade order"): this container holds
 system_file, legacy_format or unsupported_variant, the Nextcloud row the 1.3
 substitute out of SKIPPED_FALLBACK_WITHOUT_SIGNAL. Only then, and never as a
-blanket rule. The quiet gate of the reconcile stays, so the cycle waits for an
-empty queue, and the cycle runs once even where the admin switched the
-reconcile off (main.py). After the first cycle that ran to its end under the
-mark, the mark says CATCHUP_DONE and nothing of this ever runs again.
+blanket rule. The quiet gate of the reconcile stays, so the cycle waits behind
+the quiet mark for a calm queue, but since the backstop of issue #25 for at most
+BACKSTOP_FACTOR intervals (worker/reconcile.py), and never beside a crawl. The
+cycle runs once even where the admin switched the reconcile off (main.py).
+After the first cycle that ran to its end under the mark, the mark says
+CATCHUP_DONE and nothing of this ever runs again.
 
 The poller starts part A only on generation 3 of the companion and only after
 the re-check of 1.4 (RECHECK_MARK) is done: a 1.3.x stock gets that one first,

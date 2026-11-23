@@ -2941,8 +2941,19 @@ PHP_TREE_HASH_TODAY = "976184c1dabb6d4fdbcd86aad5d42198a6a875c3e9a4e35d0e7c03706
 # normalised tree: 9fa6c443... both ways, and the recipe and the same pipeline
 # over git archive of 7198db12 before the step gave 7249fe45... (positive
 # control).
+#
+# Moved on 2026-11-23 by plan 45-24, task 1 (issue #25): worker/reconcile.py
+# lets a due walk run once the quiet mark has held it twice its minimum
+# interval (BACKSTOP_FACTOR), never beside a crawl, store/repo.py names the
+# meta key reconcile_quiet_held_since (QUIET_HELD_MARK) that keeps the moment
+# of the wait, and worker/catchup.py says so in its docstring. No file came or
+# went, so PACKAGE_FILES_TODAY stays at 83; the PHP pair does not move with
+# this step. Recomputed independently with find, sort, sed and sha256sum over
+# the CRLF normalised tree: 6de76760... both ways, and the recipe and the same
+# pipeline over git archive of 3d18b701 before the step gave 9fa6c443...
+# (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "9fa6c443774e29e618878694b3b2542a76851bd7e845696f93ea47a467c12320"
+PACKAGE_TREE_HASH_TODAY = "6de7676051bd3371786acdea763944ebaba369c7f2250eef6a13badea24b714a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
