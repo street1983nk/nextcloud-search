@@ -442,6 +442,13 @@ $banners = [
 // language code picks the page, German for de and its regions, French for fr,
 // English for everything else (PE-34-3).
 $parallelSearch = ($_['parallelSearch'] ?? false) === true;
+// The hint of plan 45-25 (I-45-23-03, I-45-23-04): the locks of the server live
+// in a cache that only one PHP process sees (APCu or ArrayCache as
+// memcache.locking), so cron and the refill route do not keep each other
+// apart. Rendered on the server only, like the hint above: the value changes
+// with config.php alone. Switched off file locking gets no hint here, the
+// setup check "Transactional File Locking" of Nextcloud reports it.
+$lockingUnshared = ($_['lockingUnshared'] ?? false) === true;
 $migrationDocsUrls = [
 	'de' => 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md',
 	'fr' => 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md',
@@ -474,6 +481,10 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
 			<span class="findling-banner__text" id="findling-banner-parallel-text"><?php p($l->t('At least one app of the full text search framework (fulltextsearch, files_fulltextsearch) is enabled next to Findling. Results from the same file can then appear twice in the search bar. Disable these apps once Findling has finished its first index run.')); ?></span>
 			<a class="findling-banner__link" href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener"><?php p($l->t('Steps in the documentation')); ?></a>
+		</p>
+		<p class="findling-banner findling-banner--warning" id="findling-banner-locking"<?php if (!$lockingUnshared) { ?> hidden<?php } ?>>
+			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+			<span class="findling-banner__text" id="findling-banner-locking-text"><?php p($l->t('File locking on this server cannot keep background jobs apart: its locks live in a local cache such as APCu, which cron jobs and the web server do not share. Part of the indexing can then run twice at the same time. Redis or the database as the locking backend avoids this.')); ?></span>
 		</p>
 	</div>
 

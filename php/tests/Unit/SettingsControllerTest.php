@@ -11,6 +11,7 @@ use OCA\Findling\Service\AdminViewService;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
+use OCA\Findling\Service\LockingCheckService;
 use OCA\Findling\Service\ParallelSearchService;
 use OCA\Findling\Service\PathResolverService;
 use OCA\Findling\Service\QueueService;
@@ -28,6 +29,7 @@ use OCP\Files\Config\IUserMountCache;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\ICacheFactory;
+use OCP\IConfig;
 use OCP\IDateTimeFormatter;
 use OCP\IDBConnection;
 use OCP\IL10N;
@@ -83,10 +85,11 @@ final class SettingsControllerTest extends TestCase {
 
 	/**
 	 * The answer of adminGet('/status', ...), null (as before) for a backend that does not answer.
+	 * The system configuration the locking check reads, the defaults of an empty config.php unless a test hands one in (plan 45-25).
 	 *
 	 * @param array<string,mixed>|null $statusAnswer
 	 */
-	private function controller(?array $statusAnswer = null): SettingsController {
+	private function controller(?array $statusAnswer = null, ?IConfig $lockingConfig = null): SettingsController {
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueInt')->willReturnCallback(
 			fn (string $app, string $key, int $default = 0): int => is_int($this->values[$key] ?? null) ? $this->values[$key] : $default,
@@ -171,6 +174,9 @@ final class SettingsControllerTest extends TestCase {
 			// Final, so built for real over a doubled app manager that answers
 			// false for every app (plan 34-03).
 			new ParallelSearchService($this->createMock(IAppManager::class)),
+			// Final, so built for real over a system configuration double
+			// (plan 45-25).
+			new LockingCheckService($lockingConfig ?? $this->systemConfig([])),
 			$jobList,
 			// The logger of the per document count (plan 43-05).
 			$logger,
@@ -186,6 +192,23 @@ final class SettingsControllerTest extends TestCase {
 			$session,
 			$logger,
 		);
+	}
+
+	/**
+	 * A system configuration that knows $values and answers the default for every other key, as IConfig does.
+	 *
+	 * @param array<string,mixed> $values
+	 */
+	private function systemConfig(array $values): IConfig {
+		$config = $this->createMock(IConfig::class);
+		$config->method('getSystemValueBool')->willReturnCallback(
+			static fn (string $key, bool $default = false): bool => is_bool($values[$key] ?? null) ? $values[$key] : $default,
+		);
+		$config->method('getSystemValue')->willReturnCallback(
+			static fn (string $key, mixed $default = ''): mixed => array_key_exists($key, $values) ? $values[$key] : $default,
+		);
+
+		return $config;
 	}
 
 	/** @return array<array-key, mixed> */
@@ -792,6 +815,27 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
 		self::assertArrayHasKey('parallelSearch', $body);
 		self::assertFalse($body['parallelSearch']);
+	}
+
+	public function testTheOverviewCarriesLockingUnsharedAsFalseOnASharedLockingProvider(): void {
+		// Plan 45-25: the key is always there and a bool. A config.php without
+		// memcache.locking locks in the database, which cron and the web
+		// server share.
+		$response = $this->controller(null, $this->systemConfig([]))->overview();
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
+		self::assertArrayHasKey('lockingUnshared', $body);
+		self::assertFalse($body['lockingUnshared']);
+	}
+
+	public function testTheOverviewCarriesLockingUnsharedAsTrueUnderApcu(): void {
+		$response = $this->controller(null, $this->systemConfig(['memcache.locking' => '\OC\Memcache\APCu']))->overview();
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
+		self::assertArrayHasKey('lockingUnshared', $body);
+		self::assertTrue($body['lockingUnshared']);
 	}
 
 	/** @return array<string, array{array<string,mixed>, ?int}> */

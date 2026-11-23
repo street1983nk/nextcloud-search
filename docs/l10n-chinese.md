@@ -29,17 +29,19 @@ again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added
 plan 45-18 (three keys added, one removed: the reason policy_blocked of issue #59 and the remedy of
 unreadable that names the owner first) and after plan 45-19 (one key added: the example path of the lookup),
 and again on 23.11.2026 after plan 45-24 (one key added: the note that a long queue holds the comparison run
-back, issue #25, F2; the Chinese wording is a machine draft under the reservation of this document):
+back, issue #25, F2; the Chinese wording is a machine draft under the reservation of this document) and
+after plan 45-25, task 1 (one key added: the note that file locking cannot keep the background jobs apart,
+I-45-23-03 and I-45-23-04; the Chinese wording is a machine draft under the reservation of this document):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **384** |
-| Keys in `zh_TW.json`, in the same order | **384** |
+| Keys in `de.json` | **385** |
+| Keys in `zh_TW.json`, in the same order | **385** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **384** |
+| rows in the table below | **385** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -260,6 +262,7 @@ this table cannot break on a wording.
 | `Findling is rebuilding its index so that the newly switched on languages can be searched. %1$s of %2$s documents have been carried over. Search keeps answering while this runs, and there is nothing to start or to restart.` | Findling baut seinen Index neu auf, damit die neu eingeschalteten Sprachen durchsucht werden können. %1$s von %2$s Dokumenten sind übertragen. Die Suche antwortet währenddessen weiter, und es gibt nichts zu starten oder neu zu starten. | Findling 正在重建索引，讓新啟用的語言可以被搜尋。%2$s 份文件中已轉移 %1$s 份。重建期間搜尋仍會回應，您不需要啟動或重新啟動任何東西。 |
 | `Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead. Either way the backend only tries again after a restart of the container.` | Findling möchte seinen Index für die neu eingeschalteten Sprachen neu aufbauen, und es ist nicht genug Platz: %s fehlen zusätzlich zu dem, was der Index bereits belegt. Geben Sie so viel frei, oder setzen Sie die Umgebungsvariable FINDLING_REBUILD_FALLBACK=fullreindex, damit das Backend die Dateien stattdessen neu liest. In beiden Fällen versucht es das Backend erst nach einem Neustart des Containers erneut. | Findling 需要為新啟用的語言重建索引，但空間不足：除了索引目前已使用的空間外，還需要 %s。請釋出這麼多空間，或設定環境變數 FINDLING_REBUILD_FALLBACK=fullreindex，改由後端重新讀取檔案。無論哪種做法，後端都要在容器重新啟動後才會再試。 |
 | `At least one app of the full text search framework (fulltextsearch, files_fulltextsearch) is enabled next to Findling. Results from the same file can then appear twice in the search bar. Disable these apps once Findling has finished its first index run.` | Mindestens eine App des Volltextsuche-Frameworks (fulltextsearch, files_fulltextsearch) ist neben Findling aktiviert. Treffer aus derselben Datei können dann doppelt in der Suchleiste erscheinen. Diese Apps deaktivieren, sobald Findlings erster Indexlauf abgeschlossen ist. | 除了 Findling 之外，至少還啟用了一個全文搜尋框架的應用程式（fulltextsearch、files_fulltextsearch）。這樣同一個檔案的結果可能會在搜尋列中出現兩次。請在 Findling 完成第一次索引後停用這些應用程式。 |
+| `File locking on this server cannot keep background jobs apart: its locks live in a local cache such as APCu, which cron jobs and the web server do not share. Part of the indexing can then run twice at the same time. Redis or the database as the locking backend avoids this.` | Die Dateisperren dieses Servers können Hintergrundjobs nicht auseinanderhalten: Sie liegen in einem lokalen Cache wie APCu, den Cron-Jobs und Webserver nicht teilen. Ein Teil der Indexierung kann dann zweimal gleichzeitig laufen. Mit Redis oder der Datenbank für die Dateisperren passiert das nicht. | 此伺服器的檔案鎖定無法將背景作業彼此區隔：其鎖定存放在 APCu 等本機快取中，而 cron 工作與網頁伺服器並不共用此快取。因此部分索引作業可能會同時執行兩次。改用 Redis 或資料庫作為鎖定後端即可避免此情況。 |
 | `Languages of the index: %1$s switched on, %2$s with text in the index.` | Sprachen des Index: %1$s eingeschaltet, %2$s mit Text im Index. | 索引語言：已啟用 %1$s，索引中有文字的為 %2$s。 |
 | `No numbers yet` | Noch keine Zahlen | 尚無數字 |
 | `The first indexing pass has not finished. Findling started on its own, there is nothing to configure.` | Der erste Indexlauf ist noch nicht durch. Findling ist von selbst gestartet, es ist nichts einzustellen. | 第一輪索引尚未完成。Findling 已自行啟動，不需要任何設定。 |

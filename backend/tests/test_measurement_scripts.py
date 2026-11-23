@@ -1465,8 +1465,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # find, sort, sed and sha256sum over the same tree gave 05797073 as well; the recipe and the
 # pipeline over git archive of 0fc40005, the last commit before this change, gave 976184c1 with
 # 143 files (positive control).
-PHP_FILES_TODAY = 143
-PHP_TREE_HASH_TODAY = "05797073dd712321f2d32c844d0415f30dfcdd69843d6fd4d6646a2c36affa63"
+# Moved on 2026-11-23 by plan 45-25, task 1 (locking): two files came,
+# lib/Service/LockingCheckService.php (whether memcache.locking is a cache that only one PHP process
+# sees, APCu or ArrayCache, with file locking switched on) and tests/Unit/LockingCheckServiceTest.php;
+# lib/Service/AdminViewService.php takes the service in its constructor and carries lockingUnshared
+# in the overview; templates/admin.php renders the banner findling-banner-locking, hidden while it is
+# false; tests/Unit/AdminSettingsTest.php and SettingsControllerTest.php build the view with the new
+# argument and hold the overview cases. No file went, so PHP_FILES_TODAY moves to 145. The recipe
+# gave 8eae94a1; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# 8eae94a1 as well; the recipe and the pipeline over git archive of 504cd787, the last commit before
+# this change, gave 05797073 with 143 files (positive control).
+PHP_FILES_TODAY = 145
+PHP_TREE_HASH_TODAY = "8eae94a14b936088001e1ad9403ffce9983fa051a78856722570da3ed5c1411f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

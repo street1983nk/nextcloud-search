@@ -1175,6 +1175,50 @@ Hinweis beim nächsten Laden der Seite weg; das Abfragen alle fünf Sekunden
 schaltet ihn nicht um, weil die Apps auf der Apps-Seite gewechselt werden und
 die Statusseite danach ohnehin neu geladen wird.
 
+## Dateisperren und Hintergrundjobs (ab 1.7.0)
+
+Die Indexierung über alle Speicher läuft in Scheiben: Cron und
+`occ background-job:execute` arbeiten sie im CLI ab, die Nachschub-Route im
+Webserver. Damit keine Scheibe zweimal gleichzeitig läuft, nimmt jede Scheibe
+eine Dateisperre über den Sperrdienst von Nextcloud. Das trägt nur, wenn CLI und
+Webserver dieselben Sperren sehen.
+
+- **Bedingung des Hinweises:** die Dateisperren sind eingeschaltet und
+  `memcache.locking` in `config.php` ist `\OC\Memcache\APCu` oder
+  `\OC\Memcache\ArrayCache` (mit oder ohne führenden Backslash, unabhängig
+  von Groß- und Kleinschreibung). APCu liegt im Speicher eines PHP-Prozesses bzw.
+  eines FPM-Pools; Cron und Webserver teilen ihn nicht, zwei Cron-Läufe auch
+  nicht. ArrayCache lebt nur für eine einzige Anfrage. Dann steht im Block
+  "Deckungsgrad der Suche" direkt unter dem Hinweis zu fulltextsearch:
+
+  "Die Dateisperren dieses Servers können Hintergrundjobs nicht
+  auseinanderhalten: Sie liegen in einem lokalen Cache wie APCu, den Cron-Jobs
+  und Webserver nicht teilen. Ein Teil der Indexierung kann dann zweimal
+  gleichzeitig laufen. Mit Redis oder der Datenbank für die Dateisperren
+  passiert das nicht."
+
+- **Folge:** ein Teil der Indexierung kann doppelt laufen, still, ohne Meldung
+  im Protokoll. Die Lücke besteht seit 1.4.0 (für die Sperre der Scheiben schon
+  seit 1.2.0) und ist mit 1.7.0 nicht neu.
+- **Abhilfe:** Redis, Memcached oder die Datenbank für die Dateisperren, also
+  `memcache.locking` auf Redis setzen (`'memcache.locking' => '\OC\Memcache\Redis'`
+  samt `redis`-Eintrag) oder den Eintrag `memcache.locking` entfernen; ohne ihn
+  sperrt Nextcloud in der Datenbank. Den Hinweis zeigt die Seite beim nächsten
+  Laden nicht mehr; das Abfragen alle fünf Sekunden schaltet ihn nicht um, weil
+  sich der Wert nur mit `config.php` ändert.
+- **Ausgeschaltete Dateisperren** (`'filelocking.enabled' => false`): dieselbe
+  Folge, die Scheiben sperren gar nicht. Findling zeigt dafür keinen eigenen
+  Hinweis, weil die Einrichtungsprüfung "Transactional File Locking" von
+  Nextcloud (Verwaltung, Übersicht) diese Einstellung schon als Fehler meldet.
+  Abhilfe dort: den Eintrag `'filelocking.enabled' => false` aus `config.php`
+  entfernen, die Dateisperren also nicht ausschalten.
+- **Grenze:** die Seite liest nur den Wert aus `config.php`. Fehlt die Klasse
+  des Sperr-Caches nur in einer Laufzeit, etwa die PHP-Erweiterung redis nur im
+  CLI, fällt diese Laufzeit still auf die Datenbank zurück, während der
+  Webserver in Redis sperrt. Die Sperren sind dann ebenfalls getrennt, und die
+  Seite erkennt das nicht. Prüfen lässt es sich mit `php -m` im CLI und in der
+  PHP-Info des Webservers.
+
 ## Hinweis bei wartendem Abgleich
 
 Seit 1.7.0 (Issue #25, Befund F2). Unter dem Satz zum nicht antwortenden

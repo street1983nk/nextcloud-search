@@ -9,6 +9,7 @@ use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\ExternalMountService;
 use OCA\Findling\Service\FileStateService;
+use OCA\Findling\Service\LockingCheckService;
 use OCA\Findling\Service\ParallelSearchService;
 use OCA\Findling\Service\PathResolverService;
 use OCA\Findling\Service\ProbeService;
@@ -30,6 +31,7 @@ use OCP\Files\Config\IUserMountCache;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\ICacheFactory;
+use OCP\IConfig;
 use OCP\IDateTimeFormatter;
 use OCP\IDBConnection;
 use OCP\IL10N;
@@ -162,6 +164,7 @@ final class AdminSettingsTest extends TestCase {
 			$this->createMock(IL10N::class),
 			$this->createMock(IDateTimeFormatter::class),
 			new ParallelSearchService($this->createMock(IAppManager::class)),
+			new LockingCheckService($this->createMock(IConfig::class)),
 			$jobList,
 			$logger,
 			$this->createMock(ICacheFactory::class),

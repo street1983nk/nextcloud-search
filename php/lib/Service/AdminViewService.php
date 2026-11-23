@@ -639,6 +639,8 @@ final class AdminViewService {
 		private IL10N $l10n,
 		private IDateTimeFormatter $dateTimeFormatter,
 		private ParallelSearchService $parallelSearch,
+		// Whether file locking keeps the background jobs apart (plan 45-25).
+		private LockingCheckService $lockingCheck,
 		private IJobList $jobList,
 		private LoggerInterface $logger,
 		// The local cache that keeps the line about the share identities to
@@ -675,7 +677,7 @@ final class AdminViewService {
 	 *     probeStep:string, profileCheck:?array<string,mixed>,
 	 *     profileEnv:list<array{field:string, value:int, variable:string}>,
 	 *     reindexDocuments:int, reindexSecondsInt8:?int, reindexSecondsFp32:?int,
-	 *     fp32DownloadBytes:int, parallelSearch:bool,
+	 *     fp32DownloadBytes:int, parallelSearch:bool, lockingUnshared:bool,
 	 *     pause:string, pausedSince:?int, pauseWished:bool
 	 * }
 	 */
@@ -907,6 +909,11 @@ final class AdminViewService {
 			// the template only; the script leaves the banner alone, because the
 			// apps are switched on the apps page and the admin reloads after it.
 			'parallelSearch' => $this->parallelSearch->active(),
+			// Plan 45-25 (I-45-23-03, I-45-23-04): the locks of the server live
+			// in a cache that only one PHP process sees, so cron and the refill
+			// route do not keep each other apart. Rendered by the template only,
+			// like parallelSearch: the value changes with config.php alone.
+			'lockingUnshared' => $this->lockingCheck->unshared(),
 			// The backup pause (issue #37, D-41-01, D-41-06): the state out of
 			// the closed set plus "unsupported", the moment "paused" was
 			// reached, and the stored wish, which decides what the switch says.

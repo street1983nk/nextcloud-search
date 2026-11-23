@@ -4504,8 +4504,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # two of plan 45-18 (label and remedy of policy_blocked, #59; the remedy of
     # unreadable changed its key and so moved nothing); one of plan 45-19 (the
     # example path of the lookup); one of plan 45-24 (the note of the held
-    # comparison run, issue #25, F2)
-    assert len(keys_of["de.json"]) == 384
+    # comparison run, issue #25, F2); one of plan 45-25, task 1 (the banner of
+    # file locking that cannot keep the background jobs apart, I-45-23-03 and
+    # I-45-23-04, Text 5)
+    assert len(keys_of["de.json"]) == 385
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -6124,6 +6126,112 @@ def test_the_parallel_banner_stands_alone_and_links_the_migration_page() -> None
     assert "'parallelSearch' => $this->parallelSearch->active()," in view
     # The sentence stands once in the template, so a second copy cannot drift.
     assert template.count(f"'{PARALLEL_SENTENCE}'") == 1
+
+
+# Plan 45-25, task 1 (I-45-23-02 to I-45-23-05, `Entscheid Locking 45-23` l1):
+# the hint while the locks of the server live in a cache that only one PHP
+# process sees (APCu, ArrayCache as memcache.locking). Text 5 of 45-23-PLAN.md,
+# approved by the owner on 2026-11-23 02:08 ("Ok", `Freigabe Text 5 45-25` in
+# 45-FREIGABEN.md); DE and FR are the approved wordings, the six other
+# languages are drafts after their documents.
+LOCKING_BANNER_ID = "findling-banner-locking"
+LOCKING_SENTENCE = (
+    "File locking on this server cannot keep background jobs apart: its locks live in a local cache such as "
+    "APCu, which cron jobs and the web server do not share. Part of the indexing can then run twice at the same "
+    "time. Redis or the database as the locking backend avoids this."
+)
+APPROVED_25_LOCKING = {
+    "de": (
+        "Die Dateisperren dieses Servers können Hintergrundjobs nicht auseinanderhalten: Sie liegen in einem "
+        "lokalen Cache wie APCu, den Cron-Jobs und Webserver nicht teilen. Ein Teil der Indexierung kann dann "
+        "zweimal gleichzeitig laufen. Mit Redis oder der Datenbank für die Dateisperren passiert das nicht."
+    ),
+    "fr": (
+        "Le verrouillage des fichiers de ce serveur ne peut pas séparer les tâches d'arrière-plan : ses verrous "
+        "se trouvent dans un cache local comme APCu, que les tâches cron et le serveur web ne partagent pas. Une "
+        "partie de l'indexation peut alors s'exécuter deux fois en même temps. Redis ou la base de données comme "
+        "système de verrouillage évite cela."
+    ),
+}
+LOCKING_BANNER_OPEN = (
+    '<p class="findling-banner findling-banner--warning" id="findling-banner-locking"'
+    "<?php if (!$lockingUnshared) { ?> hidden<?php } ?>>"
+)
+LOCKING_FLAG_READ = "$lockingUnshared = ($_['lockingUnshared'] ?? false) === true;"
+
+
+def scan_locking_banner(template: str, script: str, catalogues: Mapping[str, Mapping[str, object]]) -> list[str]:
+    """Findings of the banner about file locking in the template, the script and the catalogues.
+
+    One element with its id, of the warning kind, directly after the banner of
+    UMST-02 inside the banner block, hidden unless the overview key is true,
+    carrying the approved sentence in its text span; the template reads the
+    key as a strict bool, the script never touches the banner (the value only
+    changes with the server configuration, as for the banner of UMST-02), and
+    every catalogue carries the sentence.
+    """
+    findings: list[str] = []
+    banners = template.count(f'id="{LOCKING_BANNER_ID}"')
+    if banners != 1:
+        findings.append(f"the template carries {banners} banners {LOCKING_BANNER_ID}")
+        return findings
+    if template.count(LOCKING_BANNER_OPEN) != 1:
+        findings.append("the banner is not a warning paragraph hidden unless lockingUnshared is true")
+        return findings
+    start = template.index(LOCKING_BANNER_OPEN)
+    parallel = template.index(PARALLEL_BANNER_OPEN)
+    parallel_end = template.index("</p>", parallel) + len("</p>")
+    block_end = template.index("\n\t</div>", template.index(COVERAGE_BANNERS_OPEN))
+    if not parallel_end <= start < block_end or template[parallel_end:start].strip() != "":
+        findings.append("the banner does not stand directly after the banner of UMST-02 inside the banner block")
+    element = template[start : template.index("</p>", start)]
+    text_span = (
+        f'<span class="findling-banner__text" id="{LOCKING_BANNER_ID}-text">'
+        f"<?php p($l->t('{LOCKING_SENTENCE}')); ?></span>"
+    )
+    if text_span not in element:
+        findings.append("the banner does not carry the approved sentence in its text span")
+    if LOCKING_FLAG_READ not in template:
+        findings.append("the template does not read lockingUnshared as a strict bool")
+    if LOCKING_BANNER_ID in script:
+        findings.append(f"the script mentions {LOCKING_BANNER_ID}")
+    findings.extend(f"{name} lacks the sentence" for name in catalogues_without(LOCKING_SENTENCE, catalogues))
+    return findings
+
+
+def test_an_unshared_locking_provider_has_a_banner_on_the_page() -> None:
+    """I-45-23-03 and I-45-23-04: the page says when file locking cannot keep the background jobs apart."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    assert len(L10N_CATALOGUES) == 18
+    catalogues = {catalogue.name: catalogue_of(catalogue) for catalogue in L10N_CATALOGUES}
+
+    assert scan_locking_banner(template, script, catalogues) == []
+    # The key is built once, out of the detection class.
+    assert view.count("'lockingUnshared' => ") == 1
+    assert "'lockingUnshared' => $this->lockingCheck->unshared()," in view
+    # The sentence stands once in the template, so a second copy cannot drift.
+    assert template.count(f"'{LOCKING_SENTENCE}'") == 1
+    for catalogue in (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS):
+        assert catalogues[catalogue.name][LOCKING_SENTENCE] == APPROVED_25_LOCKING["de"], catalogue.name
+    for catalogue in (L10N_FR_JSON, L10N_FR_JS):
+        assert catalogues[catalogue.name][LOCKING_SENTENCE] == APPROVED_25_LOCKING["fr"], catalogue.name
+    for document, _ in LANGUAGE_TABLES:
+        assert LOCKING_SENTENCE in language_table(document), document.name
+
+    # The failing samples: a banner without its hidden condition, a catalogue
+    # without the sentence, a banner the script touches, each one finding.
+    always_shown = template.replace(LOCKING_BANNER_OPEN, LOCKING_BANNER_OPEN.replace(" hidden", " data-x"))
+    assert len(scan_locking_banner(always_shown, script, catalogues)) == 1
+    lacking = dict(catalogues)
+    lacking["zh_TW.js"] = {key: value for key, value in lacking["zh_TW.js"].items() if key != LOCKING_SENTENCE}
+    assert scan_locking_banner(template, script, lacking) == ["zh_TW.js lacks the sentence"]
+    assert len(scan_locking_banner(template, script + f"\nshown('{LOCKING_BANNER_ID}', true)\n", catalogues)) == 1
+    start = template.index(LOCKING_BANNER_OPEN)
+    banner = template[start : template.index("</p>", start) + len("</p>")]
+    moved = template.replace(banner, "").replace(BANNER_LOOP_OPEN, banner + BANNER_LOOP_OPEN, 1)
+    assert len(scan_locking_banner(moved, script, catalogues)) == 1
 
 
 def test_the_migration_link_follows_the_language_of_the_admin() -> None:
