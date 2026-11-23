@@ -90,6 +90,41 @@ verloren wären Geschwindigkeit, Einfachheit und Prüfbarkeit.
 Die Festplattenverschlüsselung des Hosts löst dasselbe Problem eine Ebene
 tiefer, mit geprüftem Krypto, für den Index und die Nextcloud-Daten zugleich.
 
+## Wasserzeichen von Nextcloud Office (ab 1.7.0)
+
+- **Wer liest:** Findling öffnet eine Datei ohne angemeldete Person. Nur wenn
+  die Secure View von Nextcloud Office (Wasserzeichen) dieses Öffnen ablehnt,
+  liest Findling die Datei einmal erneut im Namen einer Person, die sie lesen
+  darf: zuerst als Besitzer, ohne erkennbaren Besitzer als einer der übrigen
+  Nutzer, höchstens 20. Die Prüfspur (admin_audit) nennt für diesen
+  Lesevorgang diese Person: neben der eigenen Zeile von admin_audit, die die
+  angemeldete Person der Anfrage nennt (hier keine, `--`), schreibt Findling
+  eine Zeile `Findling read the file with id "<id>" at "<Pfad>" as the user
+  "<uid>" after the secure view of Nextcloud Office refused it without a user`,
+  mit Datei-ID, Pfad und Nutzer, nie mit Inhalt. Ohne admin_audit entsteht diese
+  Zeile nicht. Die info-Zeile `Findling: read a file as a reader of it after
+  secure view refused the first open` in `nextcloud.log` nennt dieselbe Person
+  unter `reader`. Für jede andere Datei bleibt es wie in 1.6.5 bei einem Lesen
+  ohne Person.
+- **Team Folder:** groupfolders meldet für einen Team Folder die lesende Person
+  selbst als Besitzer. Unter `watermark_shareAll` darf ein Mitglied eine Datei
+  im Team Folder deshalb selbst herunterladen, und Findling liest sie nach der
+  Ablehnung des ersten Öffnens als dieses Mitglied; es liest damit nur, was die
+  Person selbst herunterladen darf.
+- **Keine Umgehung:** gilt das Wasserzeichen auch für diese Personen oder lehnt
+  eine andere Regel das Öffnen ab, liest Findling die Datei nicht, sondern
+  urteilt `policy_blocked` ("Durch eine Regel blockiert").
+- **Keine Textausschnitte:** Suchtreffer einer Datei, die die suchende Person
+  nur unter dem Wasserzeichen sehen darf, zeigen Name und Pfad, aber keinen
+  Textausschnitt. In den Modi für fremde Dateien (`watermark_shareAll`,
+  `watermark_shareRead`, `watermark_shareDisabledDownload`) zeigt bei aktivem Wasserzeichen
+  keine fremde Datei einen Ausschnitt, auch eine Freigabe mit Download nicht:
+  ob eine Freigabe ohne Download hinter einem Treffer steht, lässt sich mit den
+  öffentlichen Schnittstellen von Nextcloud nicht sicher erkennen, deshalb
+  unterdrückt Findling lieber einen Ausschnitt zu viel. Das gilt auch für
+  Treffer aus einem Inhalt, der vor dem Einschalten des Wasserzeichens indexiert
+  wurde.
+
 ## Was sonst noch gilt
 
 - Jeder Treffer wird von Nextcloud rechtegeprüft, in PHP auf dem Server, nicht

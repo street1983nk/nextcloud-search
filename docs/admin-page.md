@@ -747,6 +747,49 @@ kennt. Die Abhilfe ist eine Berechtigung im Team Folder, keine gelöschte
 Datei. Wer die Datei später finden
 darf, entscheidet davon unabhängig die Nachprüfung jeder Suche.
 
+Seit 1.7.0 fragt Findling zuerst den Besitzer der Datei, dann die übrigen
+Nutzer alphabetisch, höchstens 20. Die Abhilfe zu `skipped(unreadable)` sagt
+das: "Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team
+Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest
+eine Datei nur als Nutzer, der sie öffnen darf, und fragt zuerst ihren Besitzer,
+dann ihre übrigen Nutzer in alphabetischer Reihenfolge, höchstens 20. Eine
+gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht."
+
+### Durch eine Regel blockiert (`policy_blocked`, ab 1.7.0)
+
+Neuer Grund in der Fehlerliste (Issue #59): "Durch eine Regel blockiert", mit
+der Abhilfe "Eine Regel verhindert, dass Findling die Datei als einer der
+gefragten Nutzer liest, zum Beispiel ein Wasserzeichen von Nextcloud Office, das
+auch für den Besitzer gilt. Der nächtliche Abgleich versucht es bis zu dreimal
+erneut, eine Änderung an der Datei sofort."
+
+Woher er kommt: Findling öffnet eine Datei ohne angemeldete Person. Lehnt die
+Secure View von Nextcloud Office (Wasserzeichen) das ab, liest Findling die
+Datei einmal erneut im Namen einer Person, die sie lesen darf, zuerst als
+Besitzer, ohne erkennbaren Besitzer (etwa in einem Team Folder) als einer der
+übrigen Nutzer, höchstens 20. Gilt das Wasserzeichen auch für diese Personen
+(etwa `watermark_allTags` für eine Datei mit dem Tag oder `watermark_shareAll`
+in einem Team Folder) oder
+lehnt eine andere Regel das Öffnen ab, etwa eine Zugriffsregel von
+files_accesscontrol, umgeht Findling die Sperre nicht: das Gateway antwortet 403
+mit `X-Findling-Refusal: policy`, und die Datei steht hier. Ein Nutzer, für den
+die Datei schon beim Auflösen nicht lesbar ist, wird übersprungen und nie
+gelesen. Dieser Grund zählt nicht als Ausfall des Gateways. Die Warnung
+`Findling: reading a file was blocked by a rule` in `nextcloud.log` nennt mit
+`asked` die Zahl der gefragten Nutzer, übersprungene eingeschlossen. Hat nicht
+die Secure View abgelehnt, sondern eine andere Regel, nennt sie unter `origin`
+Klasse und Funktion, aus der die Ablehnung kam, etwa
+`OCA\FilesAccessControl\Operation::checkFileAccess` für eine Zugriffsregel von
+files_accesscontrol; nie die Meldung der Ausnahme und nie einen Pfad. Ein Lesen
+im Namen einer anderen Person nennt die info-Zeile `Findling: read a file as a
+reader of it after secure view refused the first open` unter `reader`, und mit
+admin_audit steht dazu eine eigene Zeile in der Prüfspur (siehe
+docs/privacy.md).
+
+Platzhalter der Regelfelder (ab 1.7.0): das Ordnerfeld zeigt "Sicherungen"
+(EN "Backups", FR "Sauvegardes"), das Musterfeld in jeder Sprache
+`*.photoslibrary`.
+
 Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
 Fix an einer vorhandenen Team-Folder-Datei war dieser Fehler, und es bleibt in
 der Tabelle der Nextcloud-Seite stehen. Die Quittung des Containers nimmt nur

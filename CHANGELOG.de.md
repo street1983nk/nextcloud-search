@@ -44,6 +44,17 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   so lange gewartet wie sein Intervall (standardmäßig zwei Tage), läuft er
   trotzdem, nie während eines Crawls, und die Verwaltungsseite zeigt an,
   wenn er länger als sein Intervall gewartet hat (#25).
+- Eine Datei unter dem Wasserzeichen von Nextcloud Office, zum Beispiel ohne
+  Download geteilt, wird im Namen ihres Besitzers oder eines anderen Nutzers
+  gelesen, der sie lesen darf, statt als "Datei war nicht abrufbar" zu enden;
+  Audit-Protokolle nennen für diesen Lesevorgang diesen Nutzer. Eine Datei,
+  die das Wasserzeichen für alle Nutzer sperrt, bekommt auf der Admin-Seite
+  einen eigenen Grund (#59).
+- Suchtreffer einer Datei, die eine Person nur unter dem Wasserzeichen von
+  Nextcloud Office sehen darf, zeigen dieser Person keinen Textausschnitt.
+- Der Beispielpfad unter "Einzelne Datei prüfen" folgt der Sprache der Seite.
+- Ein Update von 1.3.x bricht nicht mehr mit einem Fehler "undefined method"
+  ab, es läuft in einem Durchgang durch (seit 1.5.0 betroffen).
 
 ## [1.6.5] - 2026-11-16
 

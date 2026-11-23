@@ -41,6 +41,16 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   holds the comparison run back for good. Once it has waited twice its
   interval (two days by default), it runs anyway, never during a crawl, and
   the admin page says when it has waited longer than its interval (#25).
+- A file under the watermark of Nextcloud Office, for example shared without
+  download, is read in the name of its owner or of another user allowed to
+  read it, instead of ending as "File was not retrievable"; audit logs name
+  that user for such a read. A file that the watermark keeps from every user
+  gets its own reason on the admin page (#59).
+- Search results of a file that a user may only see under the watermark of
+  Nextcloud Office show no text excerpt to that user.
+- The example path in "Look up one file" follows the language of the page.
+- Updating from 1.3.x no longer stops with an "undefined method" error; the
+  update runs through in one go (it broke with 1.5.0).
 
 ## [1.6.5] - 2026-11-16
 

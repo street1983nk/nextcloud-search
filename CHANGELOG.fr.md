@@ -47,6 +47,19 @@ dans [CHANGELOG.md](CHANGELOG.md).
   deux fois son intervalle (deux jours par défaut), elle a lieu malgré tout,
   jamais pendant un crawl, et la page d'administration indique quand elle a
   attendu plus longtemps que son intervalle (#25).
+- Un fichier soumis au filigrane de Nextcloud Office, par exemple partagé sans
+  téléchargement, est lu au nom de son propriétaire ou d'un autre utilisateur
+  autorisé à le lire, au lieu de finir en « Fichier non récupérable » ; les
+  journaux d'audit indiquent cet utilisateur pour cette lecture. Un fichier
+  que le filigrane bloque pour tous les utilisateurs reçoit son propre motif
+  sur la page d'administration (#59).
+- Les résultats de recherche d'un fichier qu'un utilisateur ne peut voir que
+  sous le filigrane de Nextcloud Office n'affichent aucun extrait de texte à
+  cet utilisateur.
+- Le chemin d'exemple sous « Vérifier un fichier » suit la langue de la page.
+- Une mise à jour depuis 1.3.x ne s'arrête plus avec une erreur « undefined
+  method » ; elle se déroule en une seule fois (problème présent depuis
+  1.5.0).
 
 ## [1.6.5] - 2026-11-16
 

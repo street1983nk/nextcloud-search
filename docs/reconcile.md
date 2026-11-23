@@ -174,6 +174,32 @@ Bekannte Grenze: Zeilen, die 1.6.0 oder 1.6.1 geschrieben haben, tragen die alte
 über alle Schreibvorgänge kumulierte Zählung. Liegt sie über 3, wiederholt der
 Abgleich die Datei nicht von selbst; Abhilfe ist `occ findling:index --restart`.
 
+Seit 1.7.0 (Issue #59) gilt dieselbe Strähne auch für `failed(policy_blocked)`,
+das Urteil einer Ablehnung durch eine Regel (Gateway-Antwort 403 mit dem Kopf
+`X-Findling-Refusal: policy`, etwa ein Wasserzeichen von Nextcloud Office, das
+auch für den Besitzer gilt): bei gleichem ETag bis zu dreimal erneut, einmal je
+Zyklus, mit demselben Zähler `attempts`. Eine solche Ablehnung zählt nicht als
+Ausfall des Gateways: sie hält keinen Durchlauf an und sperrt keine Zeile.
+
+Einmalige Erneuerung beim Update auf 1.7.0: 1.6.x hat die Ablehnung der Secure
+View von Nextcloud Office als `failed(gateway_error)` geurteilt, auf einer
+Instanz mit Wasserzeichen ist die Strähne dieser Dateien also verbraucht, und
+der Abgleich gäbe sie 1.7.0 nie mehr, obwohl 1.7.0 sie über den Besitzer lesen
+kann. Deshalb setzt der Container einmal je Datenbank jede Zeile
+`failed(gateway_error)` mit `attempts` über 1 auf 1 zurück, unter der Marke
+`refusal_streaks_1_7_0` in der Meta-Tabelle (neben der Marke
+`refusal_streaks_1_6_3` aus 1.6.3, jede in eigener Transaktion). Das geschieht
+im ersten Durchlauf, in dem die Companion-App Generation 4 meldet, also erst,
+wenn beide Teile 1.7 laufen: eine Companion-App 1.6.x lehnt eine solche Datei
+weiter mit 500 ab und würde die erneuerte Strähne sofort wieder verbrauchen.
+Was in der Zwischenzeit vor der alten Companion-App aufgelaufen ist, setzt die
+Erneuerung mit zurück; die Reihenfolge der beiden Updates spielt keine Rolle.
+Im Log steht genau eine Zeile `refusal streaks renewed once after the update,
+rows=<n> mark=refusal_streaks_1_7_0`; danach berührt kein Start und kein
+Durchlauf die Strähne mehr. Das kostet höchstens drei weitere Anfragen je
+solcher Datei und Datenbank; `occ findling:index --restart` ist dafür nicht
+nötig.
+
 ## Dateien unter einer Ausschlussregel (D-33-01)
 
 Die Regeln selbst kennt nur die PHP-Seite: Ordner-Präfixe und seit 1.5
