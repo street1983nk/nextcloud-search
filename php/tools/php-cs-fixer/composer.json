@@ -10,7 +10,7 @@
 		"All three packages were cleared by the owner before they were fetched, decision E-07 of 21.11.2026 in .planning/phases/44-php-sicherheits-gates/44-OWNER-DECISIONS.md."
 	],
 	"require-dev": {
-		"kubawerlos/php-cs-fixer-custom-fixers": "v3.37.4",
+		"kubawerlos/php-cs-fixer-custom-fixers": "v3.37.5",
 		"nextcloud/coding-standard": "v1.5.0",
 		"php-cs-fixer/shim": "v3.95.29"
 	},
