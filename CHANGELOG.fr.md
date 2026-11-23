@@ -42,6 +42,11 @@ dans [CHANGELOG.md](CHANGELOG.md).
   une instance active, il la retenait la plus grande partie de la journée. Le
   recomptage a lieu au plus toutes les six heures, et des règles enregistrées
   le lancent toujours en moins de 15 minutes (#25).
+- Une longue file d'attente, par exemple de documents numérisés en attente
+  d'OCR, ne retient plus la comparaison indéfiniment. Après avoir attendu
+  deux fois son intervalle (deux jours par défaut), elle a lieu malgré tout,
+  jamais pendant un crawl, et la page d'administration indique quand elle a
+  attendu plus longtemps que son intervalle (#25).
 
 ## [1.6.5] - 2026-11-16
 

@@ -39,6 +39,11 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   einer belebten Instanz hielt sie ihn bisher den größten Teil des Tages auf.
   Die Nachzählung läuft jetzt höchstens alle sechs Stunden, gespeicherte
   Regeln stoßen sie weiterhin innerhalb von 15 Minuten an (#25).
+- Eine lange Warteschlange, etwa mit gescannten Dokumenten vor der
+  Texterkennung, hält den Abgleich nicht mehr auf Dauer auf. Hat er doppelt
+  so lange gewartet wie sein Intervall (standardmäßig zwei Tage), läuft er
+  trotzdem, nie während eines Crawls, und die Verwaltungsseite zeigt an,
+  wenn er länger als sein Intervall gewartet hat (#25).
 
 ## [1.6.5] - 2026-11-16
 

@@ -978,7 +978,8 @@ Danach wirkt ein Muster auf drei Wegen:
    unter einer Regel liegt, geändert oder nicht. Der Takt kommt aus
    `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` (Vorgabe 24 Stunden),
    `FINDLING_RECONCILE_HOUR` (Vorgabe 2 Uhr Containerzeit) und dem Ruhe-Gate
-   `FINDLING_RECONCILE_QUIET_MAX`, siehe `docs/reconcile.md`. Dieser Weg fängt
+   `FINDLING_RECONCILE_QUIET_MAX`, das seit 1.7.0 höchstens zwei Intervalle lang
+   hält (Rückhalt, #25), siehe `docs/reconcile.md`. Dieser Weg fängt
    ein, was Weg A nicht sieht: eine Regel, die per `occ` gesetzt wurde, einen
    Mount, der später auftaucht, einen Ordner, der innerhalb eines Mounts unter
    eine Regel umbenannt wird. Er gilt für Präfixe genauso.
@@ -1174,6 +1175,32 @@ Hinweis beim nächsten Laden der Seite weg; das Abfragen alle fünf Sekunden
 schaltet ihn nicht um, weil die Apps auf der Apps-Seite gewechselt werden und
 die Statusseite danach ohnehin neu geladen wird.
 
+## Hinweis bei wartendem Abgleich
+
+Seit 1.7.0 (Issue #25, Befund F2). Unter dem Satz zum nicht antwortenden
+Content-Gateway steht dann:
+
+"Eine lange Warteschlange hält den Abgleichlauf schon länger als sein Intervall
+auf. Er läuft trotzdem, sobald er doppelt so lange gewartet hat, und dieser
+Hinweis bleibt, bis er alle Dateien durchgesehen hat; bis dahin können Dateien
+in der Suche fehlen, die nur er findet, zum Beispiel neue Dateien auf externen
+Speichern."
+
+- **Bedingung:** der Container sendet `reconcileHeldSince`, den Zeitpunkt, ab
+  dem die Ruhemarke `FINDLING_RECONCILE_QUIET_MAX` einen fälligen Abgleich
+  aufhält, sobald er mindestens ein Intervall
+  (`FINDLING_RECONCILE_MIN_INTERVAL_HOURS`, Vorgabe 24 Stunden) alt ist. Bei
+  abgeschaltetem Abgleich, ohne Zeitpunkt und in der Backup-Pause ist das Feld
+  null und der Hinweis verborgen. Ein Container vor 1.7.0 sendet das Feld nicht.
+- **Was passiert:** nach zwei Intervallen läuft der Abgleich trotzdem, nie
+  während eines Crawls. Der Hinweis verschwindet, sobald der Zyklus alle Mounts
+  durchgesehen hat. Einzelheiten: `docs/reconcile.md`, Abschnitt "Rückhalt bei
+  langer Warteschlange".
+- **Abhilfe:** in der Regel nichts tun, der Rückhalt holt den Abgleich nach.
+  Wer ihn früher laufen lassen will, hebt `FINDLING_RECONCILE_QUIET_MAX` bewusst
+  an; der Abgleich setzt dann erst bei mehr wartenden Zeilen aus und belastet
+  die Instanz neben einem Rückstand stärker.
+
 ## Backup-Pause
 
 Unter der Zeile zum Laufzustand steht der Schalter "Indexierung pausieren"
@@ -1195,7 +1222,8 @@ beziehungsweise "Indexierung fortsetzen" (Issue #37).
   Nextcloud-Datenbank, nicht auf das Volume des Backends; die Warteschlange
   wächst also und wird nach dem Fortsetzen abgearbeitet.
 - In der Pause blendet die Seite die Restzeit-Schätzung, den Satz zum nicht
-  antwortenden Content-Gateway und den Stillstands-Satz aus. Die Zahlen der
+  antwortenden Content-Gateway, den Hinweis zum wartenden Abgleich und den
+  Stillstands-Satz aus. Die Zahlen der
   Nextcloud-Seite bleiben sichtbar.
 - Ablauf eines Backups mit Pause: [backup.md](backup.md).
 

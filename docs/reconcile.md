@@ -39,7 +39,9 @@ angekommen ist.
 Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
 
 1. Ruhe-Gate prüfen. Steht mehr Arbeit in der Warteschlange als
-   `FINDLING_RECONCILE_QUIET_MAX` erlaubt, passiert nichts.
+   `FINDLING_RECONCILE_QUIET_MAX` erlaubt, passiert nichts, höchstens aber
+   zweimal das Mindestintervall lang und nie während eines Crawls (Abschnitt
+   "Rückhalt bei langer Warteschlange").
 2. Taktprüfung gegen die eigene Uhr und die Zeitstempel in der Tabelle
    `reconcile` der Container-Datenbank.
 3. Die Mountliste holen (`GET /mounts`).
@@ -395,13 +397,22 @@ Dazu zwei Sonderfälle, die beide nötig sind:
 Ruhig heißt dabei zweierlei: weniger wartende Zeilen als
 `FINDLING_RECONCILE_QUIET_MAX` und kein unfertiger Crawl. Den Crawl-Zustand
 meldet die Companion-App in der Zähler-Antwort als `crawling` (geplanter
-`SchedulerJob`, wartende Crawl-Zeile oder gehaltene Scheiben-Sperre). Eine leere
+`SchedulerJob`, wartende Crawl-Zeile oder die Markierung `findling/crawl-active`,
+die seit 1.7.0 nur eine Crawl-Scheibe hält). Eine Nachzählung des Nenners ist
+seit 1.7.0 kein Crawl mehr: ihre Scheiben nehmen die Markierung nicht, und ihre
+Runden beginnen höchstens alle sechs Stunden, gespeicherte Regeln ausgenommen
+(Issue #25, Befund F1). Bis 1.6.5 hielt eine laufende Nachzählung den Abgleich
+auf einer belebten Instanz den größten Teil des Tages auf. Eine leere
 Warteschlange während der Erstindexierung ist keine ruhige Instanz: ein Worker,
 der schneller abarbeitet als der Cron-getaktete Crawl liefert, hätte den Abgleich
 sonst vorauslaufen lassen, und jede noch nicht gecrawlte Datei wäre zweimal
 eingeplant worden (Lauf 8 der Abnahme-Anfahrt, 5000 Durchgänge mit Ergebnis
 "unchanged"). Das Protokoll sagt dann
 `reconcile stands down, the crawl is unfinished`.
+
+Die Ruhemarke hält einen fälligen Zyklus seit 1.7.0 höchstens zweimal das
+Mindestintervall lang auf, danach läuft er trotzdem, nie neben einem Crawl.
+Der Abschnitt "Rückhalt bei langer Warteschlange" unten beschreibt das.
 
 ### Warum das Wartungsfenster von Nextcloud nicht reicht
 
@@ -421,6 +432,83 @@ mittags erträglich ist. Dafür sorgen die Seitengröße, die Pause zwischen den
 Scheiben und vor allem das Ruhe-Gate, das vor jeder einzelnen Scheibe erneut
 geprüft wird. Ein Abgleich, der nur nachts erträglich ist, ist ein Abgleich, den
 ein Admin abschaltet.
+
+## Rückhalt bei langer Warteschlange (#25, 1.7.0)
+
+Die Ruhemarke `FINDLING_RECONCILE_QUIET_MAX` zählt die wartenden Zeilen jeder
+Art, auch OCR und Einbettung. Auf einer großen Instanz mit langem OCR-Rückstand
+hielt sie den Abgleich bis 1.6.5 tagelang auf (Issue #25, Befund F2). Was nur
+der Abgleich findet, blieb so lange unindexiert: neue externe Speicher nach der
+Installation, Änderungen auf SMB ohne Ereignis und der Nachholzyklus aus 1.5.
+Beim Melder stieg die Zahl der Office-Dokumente im Index von 5.700 auf 61.328,
+nachdem er die Marke auf 2000 gesetzt hatte. Eine höhere feste Marke verschiebt
+das Problem nur: auf einer großen Instanz ist jede Zahl wieder zu klein, auf
+einer 4-GB-Box zu groß. Deshalb gilt seit 1.7.0 ein Rückhalt über die Zeit.
+
+- **Schwelle.** Hält die Ruhemarke einen fälligen Zyklus zweimal
+  `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` lang zurück (Vorgabe 24, also 48
+  Stunden), läuft er trotzdem (`BACKSTOP_FACTOR = 2` in
+  `worker/reconcile.py`). Es gibt keinen eigenen Schalter: wer das Intervall
+  verkürzt, verkürzt auch den Rückhalt.
+- **Zeitpunkt.** Der Moment, ab dem die Ruhemarke einen fälligen Zyklus aufhält,
+  steht als ganze Sekunden unter dem Meta-Schlüssel `reconcile_quiet_held_since`
+  in `state.db`. Geschrieben wird er nur, wenn ein fälliger Zyklus wegen der
+  Ruhemarke aussetzt, beim Start einer Runde oder vor einer Scheibe, und nur,
+  solange keiner steht. Ein Neustart des Containers setzt die Wartezeit also
+  nicht zurück. Gelöscht (leerer Text) wird er erst, wenn eine Runde alle Mounts
+  zu Ende gelaufen ist; ein kurzes Absinken unter die Marke löscht nichts, sonst
+  käme eine Instanz, die um die Marke pendelt, nie ans Ende. Ein Wert, der keine
+  Zahl ist oder in der Zukunft liegt (Uhr zurückgestellt), gilt als "jetzt" und
+  wird neu geschrieben. Ein nicht fälliger Takt schreibt keinen Zeitpunkt.
+- **Nie neben einem Crawl.** Meldet die Companion-App `crawling`, läuft der
+  Abgleich nicht, auch nicht im Rückhalt, weder beim Start einer Runde noch vor
+  einer Scheibe (Lauf 8 der Abnahme-Anfahrt, Abschnitt "Wie der Takt zustande
+  kommt"). Ein Crawl setzt und löscht keinen Zeitpunkt; seine Dauer zählt in
+  die Wartezeit hinein, geöffnet wird im ersten Takt ohne Crawl. Eine
+  unlesbare Warteschlange hält den Abgleich ebenfalls.
+- **Protokoll.** In der Runde, die der Rückhalt öffnet, steht genau eine
+  warning-Zeile
+  `reconcile walks although the quiet mark holds, held for %d hours, %d rows are scheduled and the quiet mark is %d`,
+  nur mit ganzen Stunden, Zählern und Marke. Vor den Scheiben dieser Runde
+  steht keine Zeile `reconcile stands down, ...`. In jedem anderen Takt, in dem
+  die Ruhemarke hält, steht wie bisher die info-Zeile
+  `reconcile stands down, %d rows are scheduled and the quiet mark is %d`,
+  fällig oder nicht.
+- **Hinweis auf der Admin-Seite.** Der Container sendet `reconcileHeldSince`,
+  sobald der Zeitpunkt mindestens ein Intervall alt und der Abgleich
+  eingeschaltet ist. Die Seite zeigt dann den Hinweis "Eine lange
+  Warteschlange hält den Abgleichlauf schon länger als sein Intervall auf. ..."
+  (docs/admin-page.md, "Hinweis bei wartendem Abgleich"), also ein Intervall
+  vor dem Rückhalt, und bis der Zyklus durch ist.
+- **Last.** Ein Rückhalt-Zyklus geht Scheibe für Scheibe mit derselben Pause wie
+  jeder Zyklus; lehnt die Warteschlange eine Übergabe ab, endet die Runde mit
+  Back-off. Höchstens ein solcher Zyklus je zwei Intervalle. Damit ändert sich
+  D-03 bewusst: nach 48 Stunden öffnet der Rückhalt auch während der ersten
+  Indexierung einer frischen Instanz, sobald deren Crawl durch ist
+  (Owner-Entscheid z1 vom 22.11.2026).
+
+**Verträglichkeit.** Ein Container vor 1.7.0 sendet `reconcileHeldSince` nicht,
+die Seite zeigt dann keinen Hinweis; eine Companion-App vor 1.7.0 übergeht das
+Feld. Neben einer Companion-App 1.6.x meldet eine Nachzählung des Nenners
+zeitweise `crawling` (Befund F1, seit 1.7.0 behoben). Der Rückhalt öffnet dann
+in einer Pause zwischen zwei Nachzählungsscheiben, und eine Crawl-Meldung mitten
+im Zyklus beendet die Runde wie bisher; der unterbrochene Zyklus ist sofort
+wieder fällig.
+
+**Randfälle.**
+
+- Wird der Abgleich während der Wartezeit abgeschaltet
+  (`FINDLING_RECONCILE_ENABLED=false`), bleibt der Zeitpunkt in `state.db`
+  stehen, und das Statusfeld ist null. Nach dem Wiedereinschalten zählt die
+  alte Wartezeit weiter, der Rückhalt kann im ersten fälligen Takt ohne Crawl
+  öffnen. Das holt nach, was in der abgeschalteten Zeit fehlte; die
+  Crawl-Grenze gilt weiter.
+- Der einmalige Nachholzyklus aus 1.5 läuft bei abgeschaltetem Abgleich im
+  Einmal-Modus über dasselbe Objekt, und der Rückhalt gilt dort genauso, weil
+  der Nachholzyklus sofort fällig ist. Die Admin-Seite zeigt in dieser Lage
+  keinen Hinweis, weil das Statusfeld bei abgeschaltetem Abgleich null ist: der
+  Zyklus läuft genau einmal, und der Admin hat den regulären Abgleich bewusst
+  abgeschaltet.
 
 ## Der einmalige Nachholzyklus nach dem Upgrade auf 1.5
 
@@ -449,7 +537,9 @@ hatten unter 1.4.2 nie eine Zeile im Container, weil die Companion sie gar
 nicht eingereiht hat. Nur die Dateiliste findet sie. Deshalb ist nach Teil A
 ein Zyklus sofort fällig, unabhängig von Stunde und Mindestpause. Er vergleicht
 wie jeder Zyklus nur Metadaten. Das Ruhe-Gate gilt weiter, der Zyklus wartet
-also auf eine ruhige Warteschlange. Der erste Durchgang unter der Marke
+also auf eine ruhige Warteschlange, seit 1.7.0 aber höchstens zweimal das
+Mindestintervall lang und nie neben einem Crawl (Abschnitt "Rückhalt bei
+langer Warteschlange"). Der erste Durchgang unter der Marke
 beginnt jeden Mount von vorn, damit kein halber Zyklus von vorher mitzählt.
 
 Für die Dauer dieses einen Zyklus gelten zwei enge Ausnahmen:
@@ -518,7 +608,7 @@ Wert.
 | `FINDLING_RECONCILE_ENABLED` | `true` | Schaltet den Abgleich ganz ab. Aus heißt: der Index ist nur so gut wie der Ereignisstrom. Einzige Ausnahme ist der einmalige Nachholzyklus nach dem Upgrade auf 1.5 (Abschnitt oben). |
 | `FINDLING_RECONCILE_HOUR` | `2` | Bevorzugte Stunde der Containerzeit, 0 bis 23. |
 | `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` | `24` | Mindestabstand zwischen zwei vollständigen Zyklen. |
-| `FINDLING_RECONCILE_QUIET_MAX` | `100` | Wartende Zeilen, ab denen der Abgleich aussetzt (D-03). |
+| `FINDLING_RECONCILE_QUIET_MAX` | `100` | Wartende Zeilen, ab denen der Abgleich aussetzt (D-03). Seit 1.7.0 höchstens zweimal `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` lang, danach läuft er trotzdem, nie während eines Crawls (Rückhalt, #25). |
 | `FINDLING_RECONCILE_SLICE` | `500` | Dateien je Seite. Die PHP-Seite klemmt jeden Wert über 2000. |
 
 ## Was der Abnahmetest prüft
@@ -541,7 +631,9 @@ darum steht er dort und nicht nur in der Python-Suite.
 ## Was im Protokoll steht
 
 Ausschließlich Zähler: Mounts, Scheiben, gesehene Dateien, eingereihte Dateien je
-Art. Der Nachlauf über verschwundene Speicher schreibt eine Zeile mit seinen
+Art. Öffnet der Rückhalt eine Runde, steht eine warning-Zeile mit Stunden,
+wartenden Zeilen und Marke (Abschnitt "Rückhalt bei langer Warteschlange").
+Der Nachlauf über verschwundene Speicher schreibt eine Zeile mit seinen
 Zählern (`gone`, `deselected`, `stamped`, `removed`) und den Storage-IDs,
 höchstens 20 je Liste, der Rest als Anzahl ("and 281 more"). Kein
 Pfad, kein Dateiname, kein Titel, keine Datei-Id. Die Dateiliste ist das Privateste,

@@ -37,6 +37,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   waiting; on a busy instance it held the run back for most of the day. The
   recount now runs at most every six hours, and saved rules still start it
   within 15 minutes (#25).
+- A long queue, for example of scanned documents waiting for OCR, no longer
+  holds the comparison run back for good. Once it has waited twice its
+  interval (two days by default), it runs anyway, never during a crawl, and
+  the admin page says when it has waited longer than its interval (#25).
 
 ## [1.6.5] - 2026-11-16
 

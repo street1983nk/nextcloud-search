@@ -547,7 +547,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_RECONCILE_QUIET_MAX</name>
 				<display-name>Queue length the check tolerates</display-name>
-				<description>A whole number of waiting queue entries. Above it the check stands down and tries again later, so that it never competes with a first indexing run or a backlog of scanned documents. The default of 100 is about three batches of the indexing worker. Raising it makes the check more insistent on a busy instance; lowering it to 1 means it only ever runs on a completely empty queue.</description>
+				<description>A whole number of waiting queue entries. Above it the check stands down and tries again later, so that it never competes with a first indexing run or a backlog of scanned documents; once it has waited twice its minimum interval it runs anyway, but never during a crawl. The default of 100 is about three batches of the indexing worker. Raising it makes the check more insistent on a busy instance; lowering it to 1 means it only ever runs on a completely empty queue or after that wait.</description>
 				<default>100</default>
 			</variable>
 			<variable>
