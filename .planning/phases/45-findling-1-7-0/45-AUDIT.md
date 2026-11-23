@@ -2119,3 +2119,215 @@ Spalten wie vorher: Datei (ID), Leser laut Claim (`userId` der Gateway-URL), Ant
 | M5 Team Folder mit schreibendem Mitglied (TF-gemischt) | 153 | alice, gelesen als bob | 200 nach Ablehnung, asked 2 | indexed | 1/1/0 |
 
 carol findet in keinem Modus eine Datei außer TF-lesen, in dem sie Mitglied ist. Erst mit diesen fünf Modi und ihren Fällen sagt dieses Audit "alle Modi".
+
+### Live-Proben #25
+
+Plan 45-20 Task 2, 2026-11-23 ab 16:44 UTC, Repo-Kopf aca91fac (Code wie c9dc3270). Frische Instanz findling-25 (`<scratchpad>/compose-25.yaml`, Nextcloud 35.0.3, Port 8092, Volumes findling-25-html und findling-25-data), Begleit-App per Bind-Mount von php/ des Hauptarbeitsbaums, Backend als Container aus dem Image am Kopf (Owner-Entscheid t1: `docker buildx build --load -t findling-backend:45-20-head --build-context scripts=./scripts ./backend`, exit 0, Image fb8f3a3e5f55, 1,13 GB; vorher `test -z "$(docker ps -q)"` leer, findling-59 entfernt, 4,7 GB RAM frei, Docker-VM 6,2 GB), registriert per `<scratchpad>/reg25c.sh` (Kopie von scripts/dev/register-exapp.sh, Backend-Start durch das Compose-Profil ersetzt; Secret nur in `state-25/backend.env`). files_external aktiv, externer Speicher `/Ext1` vom Typ "Local" auf `<scratchpad>/state-25/ext1` (Mount-ID 1, Speicher 3), dort 50 000 kleine Textdateien unter `viele/` (`gen25txt.py`, `occ files:scan --path=/admin/files/Ext1`: 50 000 Dateien in 59 s), der Ordner `viele` per Regel ausgeschlossen (Präfix relativ zur Wurzel des Mounts, docs/admin-page.md), damit die Nachzählung sie zählt, der Abgleich sie aber nicht als Arbeit sieht. `occ background:cron`; Cron als Schleife auf dem Host, `docker exec -u www-data findling-25 php -f /var/www/html/cron.php` alle 60 s (ab 18:36 alle 300 s, Abschnitt F1 (b)), Läufe in `state-25/cron.log`.
+
+```
+$ occ app:list
+  - app_api: 35.0.0
+  - files_external: 2.0.0
+  - findling: 1.7.0
+$ occ config:system:get memcache.locking     -> (leer)
+$ occ config:system:get filelocking.enabled  -> (leer, Standard an)
+$ occ config:system:get memcache.local       -> \OC\Memcache\APCu
+$ php /tmp/hold20.php ...                     -> provider OC\Lock\DBLockingProvider
+```
+
+Locking-Provider: `OC\Lock\DBLockingProvider` (kein `memcache.locking`, Dateisperren an), also sehen Halte-Skript (CLI) und Webserver bzw. Cron dieselben Sperren; kein Umstellen nötig. `memcache.local` APCu betrifft nur den lokalen Cache.
+
+Verkürzt per Umgebung: FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 (Standard 24), FINDLING_RECONCILE_HOUR=<aktuelle UTC-Stunde des Containers, bei jedem Neustart nachgezogen> (Standard 3)
+
+#### F1 Nachzählung hält den Abgleich nicht auf
+
+Quellen am Kopf per `grep -n` bestätigt: backend/src/findling/worker/reconcile.py Z. 1158 `reconcile stands down, the crawl is unfinished`, Z. 1162 `reconcile stands down, %d rows are scheduled and the quiet mark is %d`, Z. 569 `reconcile walks although the quiet mark holds, held for %d hours, %d rows are scheduled and the quiet mark is %d`; php/lib/BackgroundJobs/ScanRecountJob.php Z. 135 `Findling: started a recount of the coverage denominator`; StorageCrawlJob.php Z. 104 `LOCK_NAME = 'findling/crawl-slice'`, Z. 129 `CRAWL_ACTIVE_LOCK = 'findling/crawl-active'`; CrawlAdvanceService.php `crawling()` liest nur den Marker und Crawl-Zeilen, keine recount-Zeile. Entscheid r1 (`Entscheid Regeln Nachzählung 45-23`): Auslöser ist je ein Speichern der Regeln über die Admin-Route (`<scratchpad>/rules25.sh <maxFileBytes>`: alle Felder mit ihren Werten, `exclusions ["viele"]`, `indexExternalStorage true`, `indexTeamFolders true`, keine Muster, `excludedExternalMounts` fehlt). Der Cap liegt an der Decke `maxFileBytesCeiling` 52428800; gewechselt wird zwischen A = 52428800 und B = 41943040, beide über jeder Datei der Probe.
+
+(a) Nachgestellte recount-Scheibe (`<scratchpad>/f1a.sh`, Ausgabe `state-25/f1a.txt`). Der letzte fertige Zyklus (Nachholzyklus nach dem ersten Crawl) endete um 17:17:36, der Abgleich war ab 18:17:36 mit Stunde 18 fällig.
+
+```
+== F1 (a) 2026-11-23T18:17:49Z
+-- Regeln: maxFileBytes 52428800 -> 41943040 um 18:17:49
+"saved":true
+"maxFileBytes":41943040
+-- Halte-Skript startet 18:17:51
+provider OC\Lock\DBLockingProvider
+2026-11-23 18:17:52 acquired findling/crawl-slice
+-- occ background-job:execute --force-execute 155372602947686400 um 18:17:55
+-- recount-Zeilen 18:17:55: n=2
+(alle 10 s bis 18:23:15: n=2)
+2026-11-23 18:23:22 released findling/crawl-slice
+recount-Zeilen 18:23:36: n=0
+```
+
+nextcloud.log: `18:17:55 Findling: started a recount of the coverage denominator {"mounts":"2"}`, `18:23:33 Findling: recounted a mount {"storage_id":"2","files_seen":"109"}`, `18:23:33 ... {"storage_id":"3","files_seen":"50000"}`. Das Backend wurde mit `FINDLING_RECONCILE_HOUR=18` um 18:18:26 neu angelegt (der erste Versuch aus dem Skript um 18:17:56 scheiterte an einem Pfad des Compose-Aufrufs und legte nichts neu an, der Container lief mit Stunde 16 weiter; von Hand wiederholt), sein erster Tick fiel in das Fenster. Backend-Log von 18:17:52 bis 18:23:22, alle reconcile-Zeilen, wörtlich:
+
+```
+2026-11-23T18:20:14.680463376Z INFO:findling.worker.reconcile:reconcile round walked, mounts=2 slices=102 seen=50109 stale=0 missing=0 given_up=0
+```
+
+Keine Zeile `reconcile stands down, the crawl is unfinished` in diesem Fenster; die Runde lief über beide Mounts, während die recount-Scheiben vor dem gehaltenen Slice-Lock warteten (die Kette überlebt, StorageCrawlJob.php Z. 256-268).
+
+Lock per Skript gehalten: findling/crawl-slice, 2026-11-23 18:17:52, 2026-11-23 18:23:22, recount-Zeilen 2
+
+Gegenkontrolle (`<scratchpad>/f1gegen.sh f1-gegen`, der Marker über einen Tick), wörtlich:
+
+```
+provider OC\Lock\DBLockingProvider
+2026-11-23 18:24:23 acquired findling/crawl-active
+2026-11-23 18:29:54 released findling/crawl-active
+-- Backend-Zeilen seit 2026-11-23T18:24:23Z
+2026-11-23T18:25:14.718167383Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+```
+
+Gegenkontrolle F1: 2026-11-23T18:25:14.718167383Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+
+(b) Echte Nachzählung. Erster Lauf mit Cron alle 60 s: Auslöser 41943040 -> 52428800 um 18:30:06 (nach dem Ende der Runde aus (a) um 18:23:36 und nach der Gegenkontrolle bis 18:29:54); ScanRecountJob lief im Cron um 18:33:39 (`started a recount ... {"mounts":"2"}`), beide Scheiben im nächsten Lauf um 18:34:40 (`recounted a mount ... "files_seen":"109"` und `"files_seen":"50000"`); in diesen 61 s lag kein Tick des Abgleichs (Ticks 18:30:14, 18:35:14), die Runde belegt also nichts über einen Tick. Die Nachzählung von 50 000 Einträgen dauert keine Sekunde je Scheibe (Budget 30 s, StorageCrawlJob.php Z. 69), mehr Scheiben je Mount gäbe es erst ab Millionen Dateien. Deshalb ein zweiter Lauf mit dem Cron-Takt, den Nextcloud empfiehlt (alle 5 Minuten, ab 18:36:04): die Kette eines Mounts liegt dann vom Planen bis zur Scheibe einen Cron-Lauf lang in `oc_jobs`, wie auf einer Instanz mit langer Nachzählung.
+
+Zweiter Lauf (`<scratchpad>/rc25.sh f1b2 80`, Ausgabe `state-25/f1b2.txt`), Auslöser 52428800 -> 41943040 um 18:37:35:
+
+```
+2026-11-23T18:52:22+00:00 level=1 user=-- app=findling  -- message=Findling: started a recount of the coverage denominator data={"app":"findling","mounts":"2"}
+18:52:35 recount-Zeilen 2
+(alle 20 s bis 18:57:xx: 2)
+2026-11-23T18:57:23+00:00 level=1 user=-- app=findling  -- message=Findling: recounted a mount data={"app":"findling","storage_id":"2","files_seen":"109"}
+2026-11-23T18:57:24+00:00 level=1 user=-- app=findling  -- message=Findling: recounted a mount data={"app":"findling","storage_id":"3","files_seen":"50000"}
+-- Backend-Zeilen seit 2026-11-23T18:37:41Z
+(keine reconcile-Zeile)
+```
+
+Der Tick des Abgleichs in der Runde ist im Zugriffsprotokoll belegt (`[23/Nov/2026:18:55:15 +0000] "GET /ocs/v2.php/apps/findling/queues/documents/stats`, die Abfrage, auf der `_gate` die Crawl-Frage stellt). Er schrieb keine Zeile `reconcile stands down, the crawl is unfinished`; da der Abgleich in diesem Tick nicht fällig war (Zyklus 18:20, Stunde 18), lief kein Gang, und ohne Sperre schreibt ein nicht fälliger Tick keine Zeile.
+
+Nachzählung echt: 2026-11-23T18:52:22, 2026-11-23T18:57:24, 1 Tick (18:55:15), Aussetzer wegen Crawl 0, Start nach Ende der Runde aus (a) 18:23:36 und nach der Gegenkontrolle 18:29:54, ausgelöst durch maxFileBytes 52428800 -> 41943040 um 18:37:35
+
+(c) Mindestabstand (`<scratchpad>/f1c.sh`, Ausgabe `state-25/f1c.txt`), direkt nach der Runde:
+
+```
+== F1 (c) 2026-11-23T18:58:10
+-- Upload Marke: 201 um 18:58:11
+-- force-execute ScanRecountJob 155372602947686400 um 18:58:16
+recount-Zeilen 18:58:20: n=0
+-- nextcloud.log recount seit 2026-11-23T18:58:10
+(keine Zeile)
+-- Regeln: maxFileBytes 41943040 -> 52428800 um 18:58:20
+"saved":true
+-- force-execute ScanRecountJob 155372602947686400 um 18:58:24
+recount-Zeilen 18:58:27: n=2
+2026-11-23T18:58:24+00:00 level=1 user=-- app=findling  -- message=Findling: started a recount of the coverage denominator data={"app":"findling","mounts":"2"}
+```
+
+Mindestabstand: nach einer Datei (Ereignis) 6 Minuten nach dem Start der letzten Runde keine neue Runde (keine Logzeile, keine recount-Zeile); nach gespeicherten Regeln (r1) startet die Runde sofort, wie entschieden.
+
+Auslöser F1: r1, maxFileBytes 52428800 -> 41943040 vor (a) um 18:17:49, 41943040 -> 52428800 vor dem ersten Lauf von (b) um 18:30:06, 52428800 -> 41943040 vor (b) um 18:37:35, 41943040 -> 52428800 in (c) um 18:58:20
+
+Ergebnis F1: bestanden, eine gehaltene recount-Scheibe hält den fälligen Gang nicht auf (Runde 18:20:14 ohne Aussetzen), der gehaltene Marker setzt aus (Gegenkontrolle), eine echte Nachzählung mit dem empfohlenen Cron-Takt schreibt in ihrem Tick keine Aussetz-Zeile, und der Mindestabstand von 6 h gilt für Ereignisse, nicht für gespeicherte Regeln.
+
+#### F2 Rückhalt bei langer Warteschlange
+
+Verkürzt per Umgebung: FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 (Standard 24, Rückhalt also nach 2 h statt 48 h), FINDLING_RECONCILE_QUIET_MAX=20 (Standard 100), FINDLING_RECONCILE_HOUR=19 (Standard 3), fällig gemacht zu Beginn von F2 (letzter Zyklus 2026-11-23 18:20:14 UTC, FINDLING_RECONCILE_HOUR=19); Cron alle 60 s
+
+Ablauf: 19:20:31 UTC Backend mit `FINDLING_RECONCILE_HOUR=19 FINDLING_RECONCILE_QUIET_MAX=20` neu angelegt (`<scratchpad>/be25.sh`), `occ findling:index --restart -n`. Rückstand: 9000 gescannte Seiten (`gen25img.py`, je eine A4-Seite 1240 x 1754 Pixel mit 40 Textzeilen und Rauschen, PNG, rund 180 kB) nach `ext1/scans`, per `occ files:scan --path=/admin/files/Ext1/scans` (9000 Dateien in 10 s) in den Dateicache; der Crawl brachte sie in die Warteschlange (Crawl-Gate bis 19:45:38: `reconcile stands down, the crawl is unfinished`). Beobachtung je 60 s (`<scratchpad>/f2watch.sh`, Ausgabe `state-25/f2watch.log`: scheduled, handed, `reconcile_quiet_held_since` per `meta.py` im Backend-Container, `/app/.venv/bin/python -I /tmp/meta.py /data/state.db`, Verbindung `file:...?mode=ro`, nur SELECT; im Container statt per `uv run` auf dem Host, weil state.db im Volume des Containers liegt). Die OCR läuft im Container (Tesseract aus dem Image), die Vormessung mit 60 Seiten vorab ergab rund 34 Seiten je Minute.
+
+Erster fälliger Tick über der Ruhemarke, wörtlich:
+
+```
+2026-11-23T19:50:38.669129247Z INFO:findling.worker.reconcile:reconcile stands down, 8822 rows are scheduled and the quiet mark is 20
+```
+
+```
+2026-11-23T19:50:24Z scheduled=8830 handed=4 reconcile_quiet_held_since=
+2026-11-23T19:51:27Z scheduled=8798 handed=4 reconcile_quiet_held_since=1795463438 (2026-11-23 19:50:38 UTC)
+2026-11-23T20:00:39Z scheduled=8504 handed=4 reconcile_quiet_held_since=1795463438 (2026-11-23 19:50:38 UTC)
+```
+
+Zeitpunkt gesetzt: 1795463438 (2026-11-23 19:50:38 UTC)
+
+Rückstand: 9000 Dateien, Abbaurate 31,8 je Minute (8830 um 19:50:24, 8504 um 20:00:39), reicht rechnerisch bis 2026-11-24 00:27 UTC, gebraucht bis 2026-11-23 21:53 UTC (Zeitpunkt plus zwei Intervalle plus ein Zyklus von rund 2 Minuten, gemessen in F1 18:18:26 bis 18:20:14)
+
+Die Status-Route vor einem Intervall (19:53 UTC, `GET /apps/findling/admin/overview` als admin): `"reconcileHeldSince":null`.
+
+Während des Wartens (`<scratchpad>/f2neu.sh`, Ausgabe `state-25/f2neu.txt`), wörtlich:
+
+```
+-- occ files_external:create /Ext2 local null::null -c datadir=/srv/ext2
+Storage created with id 2
+-- occ files:scan --path=/admin/files/Ext2 um 19:52:07
+numeric_id=4 | id=local::/srv/ext2/
+fileid=59194 | storage=4 | path=neu1.txt
+fileid=59195 | storage=4 | path=neu2.txt
+fileid=59196 | storage=4 | path=neu3.txt
+-- Warteschlange direkt nach dem Scan für 59194,59195,59196: n=0
+-- occ files:scan --path=/admin/files/Ext1 um 19:52:09
+fileid=59197 | storage=3 | path=ohne-ereignis.txt
+-- Warteschlange direkt nach dem Scan für 59197: n=0
+```
+
+Der Scan trägt die Dateien ohne Ereignis in den Dateicache ein (docs/reconcile.md Z. 21), die Warteschlange hat für keine von ihnen eine Zeile.
+
+Ein Intervall nach dem Zeitpunkt (Status-Route als admin alle 5 s ab 20:50:30, `GET /apps/findling/admin/overview`), wörtlich:
+
+```
+20:50:36 "reconcileHeldSince":null
+20:50:42 "reconcileHeldSince":1795463438
+```
+
+Hinweis nach einem Intervall: 2026-11-23 20:50:42 UTC, Abstand zum Zeitpunkt 3604 s
+
+Admin-Seite (Playwright, Chromium, angemeldet als admin mit Sprache de, `<scratchpad>/pw/shot25.js`, 20:51:34 UTC; der Einführungsdialog von Nextcloud verdeckte das erste Bild und wurde mit `occ app:disable firstrunwizard` abgeschaltet), Bild `<scratchpad>/state-25/f2-hinweis-de.png`, der Satz wörtlich:
+
+"Eine lange Warteschlange hält den Abgleichlauf schon länger als sein Intervall auf. Er läuft trotzdem, sobald er doppelt so lange gewartet hat, und dieser Hinweis bleibt, bis er alle Dateien durchgesehen hat; bis dahin können Dateien in der Suche fehlen, die nur er findet, zum Beispiel neue Dateien auf externen Speichern."
+
+Die Ticks bis zur Schwelle schreiben je die info-Zeile der Ruhemarke, etwa `2026-11-23T20:50:39.256264652Z INFO:findling.worker.reconcile:reconcile stands down, 6882 rows are scheduled and the quiet mark is 20`.
+
+An der Schwelle (Zeitpunkt plus zwei Intervalle, 21:50:38 UTC) zuerst die Gegenkontrolle (`<scratchpad>/f1gegen.sh f2-gegen`, der Marker über den Tick), wörtlich:
+
+```
+provider OC\Lock\DBLockingProvider
+2026-11-23 21:48:01 acquired findling/crawl-active
+2026-11-23 21:53:31 released findling/crawl-active
+-- Backend-Zeilen seit 2026-11-23T21:48:01Z
+2026-11-23T21:50:39.800012985Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+```
+
+Gegenkontrolle F2: 2026-11-23T21:50:39.800012985Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+
+In diesem Tick keine warning-Zeile. Nach dem Freigeben, im nächsten Tick, wörtlich:
+
+```
+2026-11-23T21:55:39.849573325Z WARNING:findling.worker.reconcile:reconcile walks although the quiet mark holds, held for 2 hours, 4800 rows are scheduled and the quiet mark is 20
+2026-11-23T21:57:48.999819491Z INFO:findling.worker.reconcile:reconcile round walked, mounts=3 slices=119 seen=58114 stale=4 missing=0 given_up=0
+```
+
+Rückhalt nach zwei Intervallen: 2026-11-23 21:55:39 UTC, Abstand zum Zeitpunkt 7501 s
+
+Der Zyklus lief über alle drei Mounts (Home von admin, Ext1, Ext2) und übergab genau die vier neuen Dateien (`stale=4`), die Warteschlange stand dabei noch bei 4800 Zeilen. Danach, wörtlich:
+
+```
+file_id=59194 | kind=content | locked_at=2026-11-23 21:57:49
+(59195, 59196, 59197 gleich, direkt beansprucht)
+file_id=59194 | storage_id=4 | path=Ext2/neu1.txt | state=indexed | reason=None
+file_id=59195 | storage_id=4 | path=Ext2/neu2.txt | state=indexed | reason=None
+file_id=59196 | storage_id=4 | path=Ext2/neu3.txt | state=indexed | reason=None
+file_id=59197 | storage_id=3 | path=Ext1/ohne-ereignis.txt | state=indexed | reason=None
+-- oc_findling_file_state: keine Zeile (indexiert)
+Neuspeicherprobe1 admin=1
+Neuspeicherprobe2 admin=1
+Neuspeicherprobe3 admin=1
+Ohneereignisprobe admin=1
+```
+
+Neuer externer Speicher: 4, neu1.txt, neu2.txt, neu3.txt (59194, 59195, 59196), Warteschlange nach dem Scan 0, indexed
+
+Datei ohne Ereignis: 59197, Warteschlange nach dem Scan 0, indexed
+
+Nach dem Zyklus (21:57:53 UTC): Status-Route `"reconcileHeldSince":null`, die Admin-Seite zeigt den Hinweis nicht mehr (Bild `<scratchpad>/state-25/f2-nach-de.png`, sichtbare Texte ohne den Satz). Abschluss: Beobachtung und Cron beendet, Logs nach `state-25/nextcloud-ende.log` und `backend-ende.log`, `docker compose -f compose-25.yaml -p findling-25 --profile backend down -v` (`Volume findling-25-html Removed`, `Volume findling-25-data Removed`), Host-Verzeichnisse und Skripte bleiben im Scratchpad.
+
+Ergebnis F2: bestanden, über der Ruhemarke setzte der fällige Abgleich aus, der Zeitpunkt wurde im ersten fälligen Tick geschrieben und gemessen, die Status-Route zeigte reconcileHeldSince und die Admin-Seite den Hinweis ab einem Intervall (3604 s), an der Schwelle setzte der gehaltene Marker aus, und im nächsten Tick (7501 s) lief der Zyklus mit der warning-Zeile und fand den neuen externen Speicher und die Datei ohne Ereignis; danach Hinweis und reconcileHeldSince weg.
+
+#### Abweichungen und Befunde der Live-Proben
+
+- Backend als Container aus dem Image am Kopf (Owner-Entscheid t1); state.db liegt im Volume, deshalb lesen `meta.py` und `files25.py` im Container (`/app/.venv/bin/python -I`, `mode=ro`), nicht per `uv run` auf dem Host.
+- Der Ausschluss `Ext1/viele` griff nicht, weil Präfixe relativ zur Wurzel des Mounts gelten (docs/admin-page.md, so dokumentiert); korrigiert auf `viele`. Die Räumung der bereits gecrawlten Zeilen lief mit dem Cron im Minutentakt über Stunden; sie wurde einmalig mit `cron.php` in schneller Folge abgearbeitet (110 Läufe, `state-25/cron.log`). Kein Befund: die Räumung arbeitet in Blöcken je Cron-Lauf.
+- F1 (b): die Nachzählung von 50 000 Einträgen braucht keine Sekunde je Scheibe; eine Runde spannt einen Tick erst mit dem von Nextcloud empfohlenen Cron-Takt von 5 Minuten (zweiter Lauf). Der erste Lauf mit 60 s steht oben ebenfalls.
+- F2: die 9000 Seiten kamen über den Crawl in die Warteschlange; der Crawl hält den Abgleich bis zu seinem Ende (19:45:38), der Zeitpunkt entstand im ersten fälligen Tick danach.
+- Keine Befunde ab LOW.
