@@ -123,6 +123,7 @@ final class MigrationSelfContainedTest extends TestCase {
 		$names = array_map('basename', glob(self::migrationDir() . '/Version*.php') ?: []);
 
 		self::assertContains('Version001603Date20261108000000.php', $names);
+		self::assertContains('Version001700Date20261123000000.php', $names);
 		self::assertGreaterThanOrEqual(count(self::GRANDFATHERED) + 1, count($names));
 		foreach (array_keys(self::GRANDFATHERED) as $name) {
 			self::assertContains($name, $names, 'the frozen list names a migration that is gone');

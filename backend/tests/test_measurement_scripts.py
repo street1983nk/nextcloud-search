@@ -1481,8 +1481,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # stays at 145. The recipe gave d75974c9; the independent pipeline of find, sort, sed and sha256sum
 # over the same tree gave d75974c9 as well; the recipe and the pipeline over git archive of
 # 39b2b436, the last commit before this change, gave 8eae94a1 with 145 files (positive control).
-PHP_FILES_TODAY = 145
-PHP_TREE_HASH_TODAY = "d75974c94a3836fc37d5bbe08db0ff2624feaa0633e4a5230976c319fb2a4778"
+# Moved on 2026-11-23 by plan 45-26, task 2 (migration): two files came,
+# lib/Migration/Version001700Date20261123000000.php (the minor step to 1.7 drops the recorded
+# container version, with no class of the app) and tests/Unit/Version001700Date20261123000000Test.php;
+# tests/Unit/MigrationSelfContainedTest.php names the new file as a positive control. No file went,
+# so PHP_FILES_TODAY moves to 147. The recipe gave a8d90c20; the independent pipeline of find, sort,
+# sed and sha256sum over the same tree gave a8d90c20 as well; the recipe and the pipeline over git
+# archive of 2343885d, the last commit before this change, gave d75974c9 with 145 files (positive
+# control).
+PHP_FILES_TODAY = 147
+PHP_TREE_HASH_TODAY = "a8d90c20d70dc6c932a0d4fcf756fb67ee6cf64fe67fbcf79c324b93509f0091"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

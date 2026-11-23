@@ -1324,3 +1324,27 @@ Je einzeln, danach die Datei byte-gleich zurück (`restored_identical=yes`); Skr
 (M28) Schlüssel `Backups` aus php/l10n/zh_TW.json entfernt -> rot: `test_the_example_folder_of_the_rules_comes_from_the_catalogue` (`1 failed`)
 
 Gates Task 2 (verify-Zeile wörtlich aus `<scratchpad>/v25_t2.sh`, mit der Zeile im Plan byte-gleich verglichen, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1416 tests, 8870 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest der vier Dateien `971 passed`. Der erste Lauf fiel an ruff format (zwei Umbrüche im neuen Test); formatiert, dazu ein Kommentar zum Fehl-Sample berichtigt (zwei Befunde, nicht einer), danach der ganze Lauf ein zweites Mal grün.
+
+### RED und GREEN 45-26
+
+Plan 45-26, 2026-11-23, nach `Entscheid I-45-23-07 45-26` ("Wie empfohlen", 2026-11-23 06:08 UTC, m1, eingetragen in 2343885d). Kopf vor dem Plan 71b9cfb6. Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer.
+
+#### Migration 1.7
+
+Name: `Version001700Date20261123000000` (UTC-Tag des Commits 2026-11-23, nach Version001603Date20261108000000 sortiert). Migration ohne Klasse der App (Imports nur Closure, OCP\IAppConfig, OCP\Migration\IOutput, OCP\Migration\SimpleMigrationStep), Literale `APP_ID = 'findling'` und `BACKEND_VERSION_KEY = 'backend_app_version'`, postSchemaChange wie Version001600Date20261028000000 mit Wächter für den zweiten Lauf, kein setValue, kein changeSchema, Konstruktor nur IAppConfig. Test php/tests/Unit/Version001700Date20261123000000Test.php mit testTheClassNameIsTheFileName, testARecordedVersionIsDroppedAndNamedInTheOutput, testAnInstanceThatNeverRecordedOneIsLeftAlone, testASecondRunDropsNothingAndThrowsNothing, testTheLiteralsMirrorTheConstantsOfTheApp, testTheMigrationIsHandedTheAppConfigOnly, testTheMigrationHasNoSchemaStep; MigrationSelfContainedTest erfasst die Datei über den DataProvider (nicht in GRANDFATHERED) und nennt sie in testTheDirectoryIsTheOneWithTheMigrations als Positivkontrolle. Keine CHANGELOG-Zeile: gegenüber 1.6.5 ändert sich für Nutzer nichts, die Migration verhindert nur einen Rückschritt.
+
+RED Migration 1.7: Tests: 23, Assertions: 33, Errors: 7, Failures: 1.
+(gefiltert `bash scripts/dev/phpunit_docker.sh --filter 'Version001700|MigrationSelfContained'`; die sieben Fälle des neuen Tests mit `Class "OCA\Findling\Migration\Version001700Date20261123000000" not found` bzw. `ReflectionException`, die Positivkontrolle mit `Failed asserting that an array contains 'Version001700Date20261123000000.php'.`)
+GREEN Migration 1.7: OK (24 tests, 66 assertions)
+
+Baumhash php/ nach Task 2: Rezept und unabhängige Pipeline `a8d90c20...` mit 147 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 2343885d` -> `d75974c9...` mit 145 (gleich dem bisherigen PHP_TREE_HASH_TODAY).
+
+#### Migration 1.7 Mutationen
+
+Je einzeln, gefiltert wie oben, danach Version001700Date20261123000000.php byte-gleich zurück (`restored_identical=yes`, SHA-256 `7aefa894...` vor und nach gleich); Skripte `<scratchpad>/p26/mutate26.py` und `<scratchpad>/p26/mut.sh`.
+
+(M29) Zeile mit deleteKey entfernt -> rot: `testARecordedVersionIsDroppedAndNamedInTheOutput`, dazu `testASecondRunDropsNothingAndThrowsNothing` (`Failures: 2`)
+(M30) `self::BACKEND_VERSION_KEY` im deleteKey-Aufruf durch `\OCA\Findling\Service\ExAppService::KEY_BACKEND_VERSION` ersetzt -> rot: `MigrationSelfContainedTest::testAMigrationNamesNoClassOfTheApp` mit dem Datensatz "Version001700Date20261123000000.php" (`Failures: 1`)
+(M31) Wächter entfernt (kein `return` bei '') -> rot: `testASecondRunDropsNothingAndThrowsNothing`, dazu `testAnInstanceThatNeverRecordedOneIsLeftAlone` (`Failures: 2`)
+
+Gates Task 2 (verify-Zeile byte-gleich aus dem Plan nach `<scratchpad>/p26/v2.sh` gezogen, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1424 tests, 8895 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33, v34, v35; php-cs-fixer ohne Verstoß; zizmor und actionlint grün, Probe gesehen), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright `0 errors, 0 warnings, 0 informations`, vulture still, pytest `tests/test_measurement_scripts.py` `572 passed`.
