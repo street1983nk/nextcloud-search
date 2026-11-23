@@ -1515,8 +1515,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # independent pipeline of find, sort, sed and sha256sum over the same tree gave 29be4d73 as well;
 # the recipe and the pipeline over git archive of 151dca7b, the last commit before this change,
 # gave 5837bf28 with 147 files (positive control).
+# Moved on 2026-11-23 by plan 45-20 (c2, LOW, diagnosis for admins): lib/Service/GatewayReader.php
+# names the origin of another ForbiddenException as class::function of its first frame, never its
+# message or arguments, lib/Controller/GatewayController.php puts it into the warning line, and
+# tests/Unit/SecureViewRefusal.php, GatewayReaderTest.php and GatewayControllerTest.php hold it. No
+# file came or went, so PHP_FILES_TODAY stays at 147. The recipe gave 3acaf6d9; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 3acaf6d9 as well; the recipe
+# and the pipeline over git archive of 1d191e7e, the last commit before this change, gave 29be4d73
+# with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "29be4d73c3b4055e26d71ffaa7d15a137dac92edb3fd2e63c5aeaac4ea63fcd9"
+PHP_TREE_HASH_TODAY = "3acaf6d9aeb517ab35e6eccaf3ff377e5a86399cdf62614669be8a81f1cac2fe"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

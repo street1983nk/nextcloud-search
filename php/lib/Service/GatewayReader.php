@@ -79,6 +79,9 @@ final class GatewayReader {
 	public const SECURE_VIEW_WRAPPER = 'OCA\Richdocuments\Storage\SecureViewWrapper';
 	public const SECURE_VIEW_FUNCTION = 'checkFileAccess';
 
+	/** A class or function name as PHP writes it into a trace, closures included. */
+	private const NAME = '/^[A-Za-z_\\\\{}][A-Za-z0-9_\\\\{}]{0,254}$/';
+
 	/**
 	 * The line admin_audit writes for a read inside actAs (plan 45-20, a4).
 	 *
@@ -102,7 +105,7 @@ final class GatewayReader {
 	}
 
 	/**
-	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string}
+	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string, origin?: string}
 	 */
 	public function open(int $fileId, string $userId): array {
 		// A NoUserException of the named user travels up unchanged: the
@@ -120,7 +123,7 @@ final class GatewayReader {
 			return $this->opened($file, $userId, 0);
 		} catch (ForbiddenException $e) {
 			if (!self::isSecureViewRefusal($e)) {
-				return ['outcome' => self::OUTCOME_POLICY, 'asked' => 0];
+				return ['outcome' => self::OUTCOME_POLICY, 'asked' => 0, 'origin' => self::origin($e)];
 			}
 		}
 
@@ -144,9 +147,32 @@ final class GatewayReader {
 	}
 
 	/**
+	 * Where another ForbiddenException came from, for the warning line of the
+	 * controller (plan 45-20, c2): class::function of the first frame of its
+	 * trace, the function alone for a frame without a class, 'unknown' without
+	 * a frame. Two names out of the code and nothing else: never the message
+	 * (another app may put a path into it) and never the arguments of the frame,
+	 * which the trace carries unless zend.exception_ignore_args is on. A name
+	 * outside the characters of a PHP identifier counts as unknown.
+	 */
+	public static function origin(\Throwable $e): string {
+		$frame = $e->getTrace()[0] ?? [];
+		$function = $frame['function'] ?? null;
+		if (!is_string($function) || preg_match(self::NAME, $function) !== 1) {
+			return 'unknown';
+		}
+		$class = $frame['class'] ?? null;
+		if (!is_string($class) || preg_match(self::NAME, $class) !== 1) {
+			return $function;
+		}
+
+		return $class . '::' . $function;
+	}
+
+	/**
 	 * The second round, after a refusal of the secure view.
 	 *
-	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string}
+	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string, origin?: string}
 	 */
 	private function openAgain(int $fileId): array {
 		$candidates = $this->readerCandidates->forFile($fileId);
@@ -179,7 +205,7 @@ final class GatewayReader {
 	 * the reader as well. policy: another ForbiddenException. ok: opened.
 	 * Every other Throwable of the open travels up.
 	 *
-	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string}|null
+	 * @return array{outcome: string, asked: int, file?: File, stream?: resource|false, size?: int, storage?: \OCP\Files\Storage\IStorage, reader?: string, origin?: string}|null
 	 */
 	private function openAs(string $reader, int $fileId, int $asked): ?array {
 		return $this->readerContext->actAs($reader, function () use ($reader, $fileId, $asked): ?array {
@@ -199,7 +225,7 @@ final class GatewayReader {
 			try {
 				$opened = $this->opened($file, $reader, $asked);
 			} catch (ForbiddenException $e) {
-				return self::isSecureViewRefusal($e) ? null : ['outcome' => self::OUTCOME_POLICY, 'asked' => $asked];
+				return self::isSecureViewRefusal($e) ? null : ['outcome' => self::OUTCOME_POLICY, 'asked' => $asked, 'origin' => self::origin($e)];
 			}
 
 			// Only a read that happened, and only here, inside actAs: a plain

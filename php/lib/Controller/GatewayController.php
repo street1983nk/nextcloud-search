@@ -117,7 +117,7 @@ final class GatewayController extends OCSController {
 				return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 			}
 			if ($opened['outcome'] === GatewayReader::OUTCOME_POLICY) {
-				return $this->blockedByARule($fileId, $opened['asked']);
+				return $this->blockedByARule($fileId, $opened['asked'], $opened['origin'] ?? null);
 			}
 			if ($opened['asked'] > 0) {
 				// The file id, how many readers were asked and who read it (plan
@@ -228,8 +228,14 @@ final class GatewayController extends OCSController {
 	 * A static sentence, the file id and how many readers were asked, never a
 	 * name or a path (security audit L6).
 	 */
-	private function blockedByARule(int $fileId, int $asked): DataResponse {
-		$this->logger->warning('Findling: reading a file was blocked by a rule', ['fileId' => $fileId, 'asked' => $asked]);
+	private function blockedByARule(int $fileId, int $asked, ?string $origin): DataResponse {
+		// The origin only for another ForbiddenException (plan 45-20, c2):
+		// class::function out of the trace, never its message or arguments.
+		$context = ['fileId' => $fileId, 'asked' => $asked];
+		if ($origin !== null) {
+			$context['origin'] = $origin;
+		}
+		$this->logger->warning('Findling: reading a file was blocked by a rule', $context);
 		$response = new DataResponse(['error' => 'Reading this file is blocked by a rule.'], Http::STATUS_FORBIDDEN);
 		$response->addHeader(self::REFUSAL_HEADER, self::REFUSAL_POLICY);
 
