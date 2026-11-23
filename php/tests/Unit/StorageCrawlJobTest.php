@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
+use OCA\Findling\Service\CrawlAdvanceService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
@@ -230,6 +231,7 @@ final class StorageCrawlJobTest extends TestCase {
 		IJobList $jobList,
 		StorageService $storageService,
 		ScanStatsService $scanStats,
+		?ILockingProvider $locking = null,
 	): StorageCrawlJob {
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueInt')->willReturnCallback(
@@ -262,7 +264,7 @@ final class StorageCrawlJobTest extends TestCase {
 			new ExclusionService($appConfig, $storageService, $jobList, $logger),
 			$appConfig,
 			$db,
-			$this->createMock(ILockingProvider::class),
+			$locking ?? $this->createMock(ILockingProvider::class),
 			$logger,
 		);
 	}
@@ -487,6 +489,7 @@ final class StorageCrawlJobTest extends TestCase {
 		QueueService $queue,
 		IDBConnection $db,
 		ILockingProvider $locking,
+		?LoggerInterface $logger = null,
 	): StorageCrawlJob {
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getTime')->willReturn(self::NOW);
@@ -499,7 +502,7 @@ final class StorageCrawlJobTest extends TestCase {
 			static fn (string $app, string $key, array $default = []): array => $default,
 		);
 
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger ??= $this->createMock(LoggerInterface::class);
 
 		return new StorageCrawlJob(
 			$time,
@@ -603,9 +606,9 @@ final class StorageCrawlJobTest extends TestCase {
 		$db->expects($this->once())->method('rollBack');
 		$db->expects($this->never())->method('commit');
 
-		$locking = $this->createMock(ILockingProvider::class);
-		$locking->expects($this->once())->method('releaseLock')
-			->with(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+		// Since issue #25 a crawl slice gives back two locks, the crawl marker
+		// first and the slice lock after it; each exactly once.
+		$locking = $this->fakeLocking();
 
 		$jobList = $this->createMock(IJobList::class);
 		$jobList->expects($this->once())->method('scheduleAfter')
@@ -615,6 +618,14 @@ final class StorageCrawlJobTest extends TestCase {
 			$this->crawlJob($jobList, $storageService, $queue, $db, $locking),
 			self::crawlArgument(4711),
 		);
+
+		self::assertSame([
+			'acquire ' . StorageCrawlJob::LOCK_NAME,
+			'acquire ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::LOCK_NAME,
+		], $locking->calls);
+		self::assertSame([], $locking->held);
 	}
 
 	/**
@@ -667,17 +678,26 @@ final class StorageCrawlJobTest extends TestCase {
 		$db = $this->createMock(IDBConnection::class);
 		$db->expects($this->once())->method('rollBack');
 
-		$locking = $this->createMock(ILockingProvider::class);
-		$locking->expects($this->once())->method('releaseLock');
+		$locking = $this->fakeLocking();
 
 		$jobList = $this->createMock(IJobList::class);
 		$jobList->expects($this->never())->method('scheduleAfter');
 
-		$this->expectException(\OCP\DB\Exception::class);
-		$this->runJob(
-			$this->crawlJob($jobList, $storageService, $queue, $db, $locking),
-			self::crawlArgument(4711, 4),
-		);
+		try {
+			$this->runJob(
+				$this->crawlJob($jobList, $storageService, $queue, $db, $locking),
+				self::crawlArgument(4711, 4),
+			);
+			self::fail('the fifth database error in a row has to end the slice loudly');
+		} catch (\OCP\DB\Exception) {
+		}
+
+		// Each of the two locks given back exactly once, nothing left held.
+		self::assertSame([
+			'release ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::LOCK_NAME,
+		], array_values(array_filter($locking->calls, static fn (string $call): bool => str_starts_with($call, 'release '))));
+		self::assertSame([], $locking->held);
 	}
 
 	/**
@@ -725,5 +745,472 @@ final class StorageCrawlJobTest extends TestCase {
 			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
 			self::crawlArgument(4711, 3),
 		);
+	}
+
+	// -- the crawl marker (issue #25, F1) -----------------------------------------
+
+	/**
+	 * A locking provider that behaves like the real ones for exclusive locks
+	 * (ILockingProvider of nextcloud/ocp v33.0.9, v34.0.6 and v35.0.3: isLocked,
+	 * acquireLock, releaseLock, changeLock, releaseAll): a second exclusive
+	 * acquire of a held path is a LockedException. It writes down every acquire
+	 * and release in order, and it throws on request where a real backend can
+	 * throw (a database error of the DBLockingProvider, a broken connection to
+	 * Redis).
+	 *
+	 * @return ILockingProvider&object{held: array<string, int>, calls: list<string>, acquireThrows: array<string, \Throwable>, releaseThrows: array<string, \Throwable>}
+	 */
+	private function fakeLocking(): ILockingProvider {
+		return new class() implements ILockingProvider {
+			/** @var array<string, int> */
+			public array $held = [];
+			/** @var list<string> */
+			public array $calls = [];
+			/** @var array<string, \Throwable> */
+			public array $acquireThrows = [];
+			/** @var array<string, \Throwable> */
+			public array $releaseThrows = [];
+
+			public function isLocked(string $path, int $type): bool {
+				return ($this->held[$path] ?? null) === $type;
+			}
+
+			public function acquireLock(string $path, int $type, ?string $readablePath = null): void {
+				$this->calls[] = 'acquire ' . $path;
+				if (isset($this->acquireThrows[$path])) {
+					throw $this->acquireThrows[$path];
+				}
+				if (isset($this->held[$path])) {
+					throw new LockedException($path);
+				}
+				$this->held[$path] = $type;
+			}
+
+			public function releaseLock(string $path, int $type): void {
+				$this->calls[] = 'release ' . $path;
+				if (isset($this->releaseThrows[$path])) {
+					throw $this->releaseThrows[$path];
+				}
+				unset($this->held[$path]);
+			}
+
+			public function changeLock(string $path, int $targetType): void {
+				$this->held[$path] = $targetType;
+			}
+
+			public function releaseAll(): void {
+				$this->held = [];
+			}
+		};
+	}
+
+	/**
+	 * What the reconcile of the container is told at this moment: the answer
+	 * of CrawlAdvanceService::crawling() on the same locking provider, with no
+	 * row in the job list (the row of the running slice is gone since before
+	 * run()).
+	 */
+	private function crawlingNow(ILockingProvider $locking): bool {
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturn([]);
+
+		return (new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class), $locking))->crawling();
+	}
+
+	/**
+	 * A job list and a logger that write into one journal, so that a test can
+	 * tell whether the successor was planned before the warning was logged.
+	 *
+	 * @param list<string> $journal
+	 * @param list<array<mixed>> $scheduled
+	 * @param list<array{string, array<string, mixed>}> $warnings
+	 * @return array{IJobList, LoggerInterface}
+	 */
+	private function journaled(array &$journal, array &$scheduled, array &$warnings): array {
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('scheduleAfter')->willReturnCallback(
+			function (string $class, int $runAfter, mixed $argument) use (&$journal, &$scheduled): void {
+				self::assertSame(StorageCrawlJob::class, $class);
+				self::assertSame(self::NOW + 5, $runAfter);
+				$journal[] = 'scheduled';
+				$scheduled[] = (array)$argument;
+			},
+		);
+
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->method('warning')->willReturnCallback(
+			function (string|\Stringable $message, array $context = []) use (&$journal, &$warnings): void {
+				$journal[] = 'warning';
+				$warnings[] = [(string)$message, $context];
+			},
+		);
+
+		return [$jobList, $logger];
+	}
+
+	/**
+	 * A crawl argument with the keys in the order successorArgument() writes
+	 * them, so that assertSame compares the shape as well.
+	 *
+	 * @param array<string, int> $sums
+	 * @return array<string, int|string>
+	 */
+	private static function successorOf(int $lastFileId, int $retries, bool $recount, array $sums = []): array {
+		$argument = self::crawlArgument($lastFileId, $retries);
+		if (!$recount) {
+			return $argument;
+		}
+		$argument['mode'] = StorageCrawlJob::MODE_RECOUNT;
+		foreach (['files_seen', 'bytes_seen', 'ocr_candidates', 'pdf_seen', 'over_cap', 'excluded'] as $key) {
+			$argument[$key] = $sums[$key] ?? 0;
+		}
+
+		return $argument;
+	}
+
+	public function testACrawlSliceHoldsTheCrawlMarkerWhileItRuns(): void {
+		$locking = $this->fakeLocking();
+		$during = [];
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->expects($this->once())->method('getFilesInMount')->willReturnCallback(
+			function () use ($locking, &$during): array {
+				$during[] = $this->crawlingNow($locking);
+				return $this->entries(4712, 4714);
+			},
+		);
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(4714));
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+			self::crawlArgument(4711),
+		);
+
+		// While the slice ran and its row was gone: an unfinished crawl.
+		self::assertSame([true], $during);
+		// Taken after the slice lock, given back before it.
+		self::assertSame([
+			'acquire ' . StorageCrawlJob::LOCK_NAME,
+			'acquire ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::LOCK_NAME,
+		], $locking->calls);
+		// And afterwards no crawl any more.
+		self::assertSame([], $locking->held);
+		self::assertFalse($this->crawlingNow($locking));
+	}
+
+	public function testARecountSliceNeverTakesTheCrawlMarker(): void {
+		$locking = $this->fakeLocking();
+		$during = [];
+
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getTime')->willReturn(self::NOW);
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$pages = [[$this->entry(10, 'files/Report.pdf', 1000, 'application/pdf')], []];
+		$storageService->method('getFilesInMount')->willReturnCallback(
+			function () use ($locking, &$during, &$pages): array {
+				$during[] = [
+					'crawling' => $this->crawlingNow($locking),
+					'slice_locked' => $locking->isLocked(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE),
+				];
+				return array_shift($pages) ?? [];
+			},
+		);
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$this->runJob(
+			$this->recountJob($time, $jobList, $storageService, $this->scanStats(self::finishedRow()), $locking),
+			self::recountArgument(0),
+		);
+
+		// The recount is no crawl, and it still runs under the slice lock, so
+		// the serialisation with the crawl stays as it was.
+		self::assertSame([
+			['crawling' => false, 'slice_locked' => true],
+			['crawling' => false, 'slice_locked' => true],
+		], $during);
+		self::assertNotContains('acquire ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK, $locking->calls);
+		self::assertSame([], $locking->held);
+	}
+
+	public function testTheCrawlMarkerIsReleasedWhenTheSliceThrows(): void {
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		$queue = $this->createMock(QueueService::class);
+		$queue->method('enqueue')->willThrowException(new \OCP\DB\Exception('database is locked'));
+
+		$locking = $this->fakeLocking();
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		try {
+			$this->runJob(
+				$this->crawlJob($jobList, $storageService, $queue, $this->createMock(IDBConnection::class), $locking),
+				self::crawlArgument(4711, 4),
+			);
+			self::fail('the slice has to end loudly after MAX_RETRIES');
+		} catch (\OCP\DB\Exception) {
+		}
+
+		self::assertFalse($locking->isLocked(StorageCrawlJob::CRAWL_ACTIVE_LOCK, ILockingProvider::LOCK_EXCLUSIVE));
+		self::assertFalse($locking->isLocked(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE));
+		self::assertFalse($this->crawlingNow($locking));
+	}
+
+	public function testAStaleCrawlMarkerDoesNotStopTheCrawl(): void {
+		// The marker of a process that died mid-slice: it lives until the TTL
+		// of the locking provider runs out. It is only a signal, the slice lock
+		// is what serialises, so the slice crawls anyway and leaves the foreign
+		// marker alone.
+		$locking = $this->fakeLocking();
+		$locking->held[StorageCrawlJob::CRAWL_ACTIVE_LOCK] = ILockingProvider::LOCK_EXCLUSIVE;
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->expects($this->once())->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(4714));
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+			self::crawlArgument(4711),
+		);
+
+		self::assertNotContains('release ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK, $locking->calls);
+		self::assertSame([StorageCrawlJob::CRAWL_ACTIVE_LOCK => ILockingProvider::LOCK_EXCLUSIVE], $locking->held);
+	}
+
+	public function testALostSliceLockNeverTakesTheCrawlMarker(): void {
+		$locking = $this->fakeLocking();
+		$locking->held[StorageCrawlJob::LOCK_NAME] = ILockingProvider::LOCK_EXCLUSIVE;
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(4711));
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+			self::crawlArgument(4711),
+		);
+
+		self::assertSame(['acquire ' . StorageCrawlJob::LOCK_NAME], $locking->calls);
+		self::assertSame([StorageCrawlJob::LOCK_NAME => ILockingProvider::LOCK_EXCLUSIVE], $locking->held);
+	}
+
+	/**
+	 * A passing error while the marker is taken: a database error of the
+	 * DBLockingProvider, or a broken connection to Redis as the locking cache.
+	 * The marker is taken inside the try whose finally gives the slice lock
+	 * back, so nothing stays held; and since the row of this QueuedJob is gone
+	 * since before run(), a successor with retries + 1 keeps the chain of the
+	 * mount alive, as the retry path of 43-27 does inside the slice.
+	 */
+	public function testAFailingCrawlMarkerLeavesNoSliceLockBehind(): void {
+		$this->assertAFailingMarkerKeepsTheChain(new \OCP\DB\Exception('database is locked'));
+
+		self::assertTrue(class_exists(\RedisException::class), 'ext-redis is missing, the Redis case of isPassingLockError would go untested');
+		$this->assertAFailingMarkerKeepsTheChain(new \RedisException('read error on connection'));
+	}
+
+	private function assertAFailingMarkerKeepsTheChain(\Throwable $error): void {
+		$journal = [];
+		$scheduled = [];
+		$warnings = [];
+		[$jobList, $logger] = $this->journaled($journal, $scheduled, $warnings);
+
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::CRAWL_ACTIVE_LOCK] = $error;
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking, $logger),
+			self::crawlArgument(4711),
+		);
+
+		self::assertSame(['scheduled', 'warning'], $journal, get_class($error));
+		self::assertSame([self::successorOf(4711, 1, false)], $scheduled);
+		self::assertSame(['storage_id', 'retries', 'exception'], array_keys($warnings[0][1]));
+		self::assertSame(3, $warnings[0][1]['storage_id']);
+		self::assertSame(1, $warnings[0][1]['retries']);
+		self::assertSame($error, $warnings[0][1]['exception']);
+		self::assertSame([
+			'acquire ' . StorageCrawlJob::LOCK_NAME,
+			'acquire ' . StorageCrawlJob::CRAWL_ACTIVE_LOCK,
+			'release ' . StorageCrawlJob::LOCK_NAME,
+		], $locking->calls);
+		self::assertSame([], $locking->held);
+	}
+
+	public function testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly(): void {
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::CRAWL_ACTIVE_LOCK] = new \OCP\DB\Exception('database is locked');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		try {
+			$this->runJob(
+				$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+				self::crawlArgument(4711, 4),
+			);
+			self::fail('the fifth passing error in a row has to end the slice loudly');
+		} catch (\OCP\DB\Exception) {
+		}
+
+		self::assertSame([], $locking->held);
+	}
+
+	public function testAFailingMarkerReleaseStillReleasesTheSliceLock(): void {
+		$locking = $this->fakeLocking();
+		$locking->releaseThrows[StorageCrawlJob::CRAWL_ACTIVE_LOCK] = new \RuntimeException('the locking backend went away');
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		try {
+			$this->runJob(
+				$this->crawlJob($this->createMock(IJobList::class), $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+				self::crawlArgument(4711),
+			);
+			self::fail('a throwing release of the marker is not swallowed');
+		} catch (\RuntimeException $e) {
+			self::assertSame('the locking backend went away', $e->getMessage());
+		}
+
+		self::assertContains('release ' . StorageCrawlJob::LOCK_NAME, $locking->calls);
+		self::assertFalse($locking->isLocked(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE));
+	}
+
+	public function testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce(): void {
+		// No passing error: a defect or a configuration that never works. It
+		// is not tried five times before anybody sees it.
+		$journal = [];
+		$scheduled = [];
+		$warnings = [];
+		[$jobList, $logger] = $this->journaled($journal, $scheduled, $warnings);
+
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::CRAWL_ACTIVE_LOCK] = new \RuntimeException('a defect');
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		try {
+			$this->runJob(
+				$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking, $logger),
+				self::crawlArgument(4711),
+			);
+			self::fail('an unexpected error at the marker has to end the slice at once');
+		} catch (\RuntimeException $e) {
+			self::assertSame('a defect', $e->getMessage());
+		}
+
+		self::assertSame([], $journal);
+		self::assertSame([], $locking->held);
+	}
+
+	/**
+	 * I-45-23-06: since v1.2.0 run() caught only a LockedException when it took
+	 * the slice lock, and a database error of the DBLockingProvider or a broken
+	 * connection to Redis ended the chain of the mount there without a
+	 * successor, as it did inside the slice before 43-27.
+	 */
+	public function testADatabaseErrorAtTheSliceLockKeepsTheChain(): void {
+		$sums = ['files_seen' => 5, 'bytes_seen' => 5000, 'ocr_candidates' => 1, 'pdf_seen' => 2, 'over_cap' => 1, 'excluded' => 1];
+
+		$this->assertAFailingSliceLockKeepsTheChain(new \OCP\DB\Exception('database is locked'), false, []);
+		$this->assertAFailingSliceLockKeepsTheChain(new \OCP\DB\Exception('database is locked'), true, $sums);
+
+		self::assertTrue(class_exists(\RedisException::class), 'ext-redis is missing, the Redis case of isPassingLockError would go untested');
+		$this->assertAFailingSliceLockKeepsTheChain(new \RedisException('read error on connection'), false, []);
+		$this->assertAFailingSliceLockKeepsTheChain(new \RedisException('read error on connection'), true, $sums);
+	}
+
+	/**
+	 * @param array<string, int> $sums
+	 */
+	private function assertAFailingSliceLockKeepsTheChain(\Throwable $error, bool $recount, array $sums): void {
+		$journal = [];
+		$scheduled = [];
+		$warnings = [];
+		[$jobList, $logger] = $this->journaled($journal, $scheduled, $warnings);
+
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::LOCK_NAME] = $error;
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		$argument = $recount ? self::recountArgument(4711, $sums) : self::crawlArgument(4711);
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking, $logger),
+			$argument,
+		);
+
+		$label = get_class($error) . ($recount ? ' recount' : ' crawl');
+		self::assertSame(['scheduled', 'warning'], $journal, $label);
+		self::assertSame([self::successorOf(4711, 1, $recount, $sums)], $scheduled, $label);
+		self::assertSame(['storage_id', 'retries', 'exception'], array_keys($warnings[0][1]), $label);
+		self::assertSame(1, $warnings[0][1]['retries'], $label);
+		// The slice lock was never held: nothing to give back, no marker.
+		self::assertSame(['acquire ' . StorageCrawlJob::LOCK_NAME], $locking->calls, $label);
+	}
+
+	public function testASliceLockThatKeepsFailingEndsTheChainLoudly(): void {
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::LOCK_NAME] = new \OCP\DB\Exception('database is locked');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->runJob(
+			$this->crawlJob($jobList, $this->createMock(StorageService::class), $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+			self::crawlArgument(4711, 4),
+		);
+	}
+
+	public function testAnUnexpectedErrorAtTheSliceLockEndsTheChainAtOnce(): void {
+		$journal = [];
+		$scheduled = [];
+		$warnings = [];
+		[$jobList, $logger] = $this->journaled($journal, $scheduled, $warnings);
+
+		$locking = $this->fakeLocking();
+		$locking->acquireThrows[StorageCrawlJob::LOCK_NAME] = new \RuntimeException('a defect');
+
+		try {
+			$this->runJob(
+				$this->crawlJob($jobList, $this->createMock(StorageService::class), $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking, $logger),
+				self::crawlArgument(4711),
+			);
+			self::fail('an unexpected error at the slice lock has to end the chain at once');
+		} catch (\RuntimeException $e) {
+			self::assertSame('a defect', $e->getMessage());
+		}
+
+		self::assertSame([], $journal);
 	}
 }

@@ -171,12 +171,18 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		return $jobList;
 	}
 
-	private function service(IJobList $jobList, bool $sliceLocked = false): CrawlAdvanceService {
+	/**
+	 * The service on a locking double that holds the slice lock and the crawl
+	 * marker as told. Since issue #25 the two are separate: every slice, a
+	 * crawl as well as a recount, holds the slice lock, and only a crawl slice
+	 * holds the marker on top.
+	 */
+	private function service(IJobList $jobList, bool $sliceLocked = false, bool $markerHeld = false): CrawlAdvanceService {
 		$locks = $this->createMock(ILockingProvider::class);
 		$locks->method('isLocked')->willReturnCallback(
-			static fn (string $path, int $type): bool => $sliceLocked
-				&& $path === StorageCrawlJob::LOCK_NAME
-				&& $type === ILockingProvider::LOCK_EXCLUSIVE,
+			static fn (string $path, int $type): bool => $type === ILockingProvider::LOCK_EXCLUSIVE
+				&& (($sliceLocked && $path === StorageCrawlJob::LOCK_NAME)
+					|| ($markerHeld && $path === StorageCrawlJob::CRAWL_ACTIVE_LOCK)),
 		);
 		return new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class), $locks);
 	}
@@ -210,11 +216,39 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		self::assertTrue($this->service($this->jobListWith([SchedulerJob::class => [$scheduler]]))->crawling());
 	}
 
-	public function testARunningSliceIsAnUnfinishedCrawl(): void {
-		// A QueuedJob removes its row before it runs, and the successor is only
-		// planned at the end of the slice: for those seconds the last chain of
-		// the instance has no row at all. The slice lock is held exactly then.
-		self::assertTrue($this->service($this->jobListWith([]), sliceLocked: true)->crawling());
+	/**
+	 * The seconds without a row (13993fd9, v1.4.0): a QueuedJob removes its row
+	 * before it runs, and the successor is only planned at the end of the
+	 * slice, so for those seconds the last crawl chain of the instance has no
+	 * row at all. Without an answer for them the reconcile would walk ahead of
+	 * the crawl again (run 8 of 28-07). Since issue #25 the answer is the
+	 * crawl marker, which only a crawl slice takes, and no longer the slice
+	 * lock a recount holds as well.
+	 */
+	public function testARunningCrawlSliceWithoutARowIsAnUnfinishedCrawl(): void {
+		self::assertTrue($this->service($this->jobListWith([]), sliceLocked: true, markerHeld: true)->crawling());
+	}
+
+	/**
+	 * Issue #25, F1: a recount slice holds the same slice lock as a crawl
+	 * slice, and on a busy instance the recount ran for most of the day. The
+	 * reconcile read every one of those slices as an unfinished crawl and stood
+	 * down, about 160 of 288 ticks a day. A recount queues nothing; it is no
+	 * crawl, whether its row is there or not.
+	 */
+	public function testARecountSliceHoldingTheSliceLockIsNoCrawl(): void {
+		$recount = $this->createMock(IJob::class);
+		$recount->method('getArgument')->willReturn(array_merge(self::CANONICAL, [
+			'mode' => StorageCrawlJob::MODE_RECOUNT,
+		]));
+
+		self::assertFalse($this->service($this->jobListWith([StorageCrawlJob::class => [$recount]]), sliceLocked: true)->crawling());
+	}
+
+	public function testTheSliceLockAloneIsNoCrawl(): void {
+		// The last slice of a recount chain, whose row is gone since before
+		// run(): only the slice lock is held, the marker is free.
+		self::assertFalse($this->service($this->jobListWith([]), sliceLocked: true)->crawling());
 	}
 
 	public function testARecountRowAloneIsNoCrawl(): void {

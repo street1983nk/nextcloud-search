@@ -997,3 +997,128 @@ Baumhash php/: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `ff
 GREEN (Commit mit `fix(45-22): a hit under secure view shows no excerpt to that user`): verify-Zeile wörtlich aus `<scratchpad>/w22/v22_t3.sh`, seriell, Docker vorher leer -> `VERIFY_EXIT=0`: `STATIC_OK`, PHPUnit `OK (1382 tests, 8690 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen die drei ocp-Tags, Probe 3; php-cs 0, Probe gesehen; zizmor und actionlint grün), pytest der sieben Dateien `816 passed`, ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund. Docker danach leer. Zwischen dem Lauf und dem Commit blieb der Baum außer diesem Absatz unverändert.
 
 Echter Beleg folgt in 45-20 Schritt D, die Sichtprüfung im Neulauf von 45-10 (DE/EN/FR). Für 45-20 festgehalten: unter shareDisabledDownload zeigt auch eine Freigabe mit Download und ein Team Folder keinen Ausschnitt (Rückfall oben); eine Gegenkontrolle "Freigabe mit Download zeigt den Ausschnitt" gilt dort nur, wenn kein Modus für fremde Dateien (shareAll, shareRead, shareDisabledDownload) an ist.
+
+### RED und GREEN 45-23
+
+Plan 45-23 Task 2 und 3, 2026-11-23, nach `Entscheid Fix #25 in 1.7.0 45-23` und den Zeilen `Freigabe Texte #25 45-23`, `Entscheid Regeln Nachzählung 45-23` (r1), `Entscheid Rückhalt-Weg 45-23` (z1), `Entscheid Mindestabstand 45-23` (6h) und `Entscheid Locking 45-23` (l1). Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer.
+
+#### Quellen F1
+
+Abgerufen am 2026-11-23 per `git clone --depth 1 --filter=blob:none --sparse` von nextcloud/server (Zweige stable33 1732389, stable34 0d928f1, stable35 dd471ac) und nextcloud-deps/ocp (Tags v33.0.9 43727c5, v34.0.6 a924e5e, v35.0.3 a7babe4, die Tags der Psalm-Matrix in php.yml), abgelegt unter `<scratchpad>/src23/`.
+
+ILockingProvider (OCP/Lock/ILockingProvider.php; v33.0.9 und v34.0.6 byte-gleich, SHA-256 c34ef631; v35.0.3 c148711b, eine Zeile später):
+
+| Stelle | v33.0.9 | v34.0.6 | v35.0.3 |
+|---|---|---|---|
+| `LOCK_SHARED = 1` / `LOCK_EXCLUSIVE = 2` | Z. 23 / 27 | Z. 23 / 27 | Z. 24 / 28 |
+| `isLocked(string $path, int $type): bool` | Z. 33 | Z. 33 | Z. 34 |
+| `acquireLock(string $path, int $type, ?string $readablePath = null): void` | Z. 41 | Z. 41 | Z. 42 |
+| `releaseLock(string $path, int $type): void` | Z. 47 | Z. 47 | Z. 48 |
+| `changeLock(string $path, int $targetType): void` / `releaseAll(): void` | Z. 56 / 62 | Z. 56 / 62 | Z. 57 / 63 |
+| `class LockedException extends \Exception` (LockedException.php) | Z. 16 | Z. 16 | Z. 17 |
+
+Wahl des Providers und TTL (lib/private/Server.php):
+
+| Stelle | stable33 | stable34 | stable35 |
+|---|---|---|---|
+| `registerService(ILockingProvider::class, ...)` | Z. 935 | Z. 968 | Z. 866 |
+| `filelocking.ttl`, Standard `max(3600, max_execution_time)` | Z. 938 | Z. 971 | Z. 869 |
+| `filelocking.enabled` (Standard true) | Z. 939 | Z. 972 | Z. 870 |
+| `createLocking('lock')`, kein NullCache -> `MemcacheLockingProvider($memcache, $timeFactory, $ttl)` | Z. 942 / 945 | Z. 975 / 978 | Z. 873 / 876 |
+| sonst `DBLockingProvider(..., $ttl, !\OC::$CLI)` | Z. 947 | Z. 980 | Z. 878 |
+| `filelocking.enabled` false -> `NoopLockingProvider` | Z. 954 | Z. 987 | Z. 885 |
+
+Damit läuft der Marker über denselben Provider wie der Slice-Lock und hat dieselbe TTL; ein abgestürzter Prozess hinterlässt den Marker höchstens bis zu ihrem Ablauf (T-45-81).
+
+Was beim Nehmen geworfen wird:
+
+| Stelle | stable33 | stable34 | stable35 |
+|---|---|---|---|
+| DBLockingProvider::acquireLock | Z. 105 | Z. 109 | Z. 110 |
+| darin `initLockField()` über `insertIgnoreConflict` und `executeStatement()` (wirft `OCP\DB\Exception` bei einem Datenbankfehler, kein catch in der Methode) | Z. 66, 117, 135 | Z. 68, 121, 139 | Z. 69, 122, 140 |
+| belegter Lock -> `throw new LockedException` | Z. 139 | Z. 143 | Z. 144 |
+| MemcacheLockingProvider::acquireLock, exklusiv `add` + `cas`, belegt -> LockedException | Z. 61, 76 | Z. 63, 78 | Z. 64, 79 |
+| Memcache/Redis.php `@throws \Exception` an `getCache()`; kein einziges `catch` in der Datei (ein `\RedisException` oder `\RedisClusterException` von phpredis geht durch `add` und `cas` nach außen) | Z. 53, 55; add Z. 143, cas Z. 188 | Z. 54, 56; add Z. 150, cas Z. 198 | Z. 52, 54; add Z. 148, cas Z. 196 |
+| RedisFactory `throw new \Exception('Redis support is not available')` (dauerhaft, kein vorübergehender Fehler) | Z. 145 | Z. 135, 142 | Z. 136, 140 |
+| NoopLockingProvider `isLocked` -> false, `acquireLock` tut nichts | Z. 22, 29 | Z. 23, 31 | Z. 24, 32 |
+
+Laufzeitbild der Tests: `docker run --rm nextcloud:32.0.15-apache php -m` listet `redis` (dazu `apcu`, `memcached`); `phpversion("redis")` 6.3.0, `class_exists("RedisException")` und `class_exists("RedisClusterException")` beide wahr. In CI fehlte ext-redis im Job phpunit (setup-php `extensions:` ohne redis); seit 45-23 steht `redis` am Ende der Liste.
+
+APCu als `memcache.locking` (lib/private/Memcache/Factory.php und APCu.php):
+
+| Stelle | stable33 | stable34 | stable35 |
+|---|---|---|---|
+| Factory: Locking-Cache ohne Klasse, ohne IMemcache oder `!isAvailable()` -> `NULL_CACHE` (dann DBLockingProvider) | Z. 97-103 | Z. 99-105 | Z. 100-106 |
+| Factory: Kommentar "APCu however cannot be shared between PHP instances (CLI and web) anyway." | Z. 69-72 | Z. 71-74 | Z. 72-75 |
+| `createLocking()` baut `new $this->lockingCacheClass(...)` | Z. 162 | Z. 165 | Z. 166 |
+| APCu::isAvailable, im CLI ohne `apc.enable_cli` false | Z. 111, 116 | Z. 122, 127 | Z. 123, 128 |
+| APCu speichert über `apcu_add` und `apcu_cas` im Speicher des Prozesses | Z. 66, 105 | Z. 73, 115 | Z. 74, 116 |
+
+Einrichtungsprüfungen von Nextcloud: apps/settings/lib/SetupChecks/FileLocking.php meldet den NoopLockingProvider als Fehler ("Transactional File Locking is disabled. ...", stable33 Z. 47, stable34 Z. 50, stable35 Z. 50; Bedingung `instanceof NoopLockingProvider` Z. 37 / 39 / 39); MemcacheConfigured.php liest `memcache.locking` nur für das Memcached-Modul (Z. 38 / 41 / 42). Für APCu als Locking-Cache gibt es keine Prüfung.
+
+I-45-23-01 (offen, kein Threat dieses Plans): F3 aus #25 ("JPG-Schleife") ist nicht belegt; Kandidat backend/src/findling/worker/poller.py (ein Zeitüberschreiten einer Datei erstattet den ganzen Stapel zurück). Wartet auf Logs des Melders; belegen sie ihn, eigener Plan.
+
+I-45-23-02 (INFO, vorbestehend seit 1.4.0, kein Fix): Bei `filelocking.enabled = false` liefert Server.php den NoopLockingProvider (Tabelle oben). Dann antwortet `isLocked()` immer false, crawling() sieht die zeilenlosen Sekunden einer Crawl-Scheibe nicht, und der Slice-Lock serialisiert nicht. Nextcloud meldet diese Einstellung selbst als Fehler (FileLocking.php); nach `Entscheid Locking 45-23` (l1) verweist die Doku in 45-25 darauf, ohne eigenen Hinweis.
+
+I-45-23-03 (INFO, vorbestehend seit 1.4.0, Umgang nach l1 in 45-25): Unter APCu als `memcache.locking` liegen die Locks im Speicher des jeweiligen PHP-Prozesses bzw. FPM-Pools. Ein CLI-Prozess (Cron, `occ`) und FPM sehen ihre Locks gegenseitig nicht (Kommentar in Factory.php, Tabelle oben); crawling() im FPM (QueueController) sieht also den Marker einer Crawl-Scheibe aus dem Cron nicht. Auch zwei CLI-Prozesse sehen sich nicht: mit `apc.enable_cli` hat jeder CLI-Prozess seinen eigenen APCu-Speicher, der mit dem Prozess endet; ohne `apc.enable_cli` ist APCu im CLI nicht verfügbar (APCu::isAvailable), die Factory fällt auf NullCache und Server.php auf den DBLockingProvider zurück, der FPM-Pool aber sperrt weiter in APCu. Weder Cron und `occ background-job:execute` noch zwei Cron-Läufe sehen sich also. Für den Slice-Lock gilt das seit 1.2.0 genauso.
+
+I-45-23-04 (INFO, vorbestehend, Umgang nach l1 in 45-25): Dieselbe Trennung hebt unter APCu die Serialisierung über den Slice-Lock zwischen Cron (CLI) und Nachschub-Route (FPM) auf; eine Scheibe kann dann zweimal gleichzeitig laufen. Kein Fix in 45-23; nach `Entscheid Locking 45-23` (l1) bekommt die Admin-Seite in 45-25 einen Hinweis und docs/admin-page.md einen Abschnitt.
+
+I-45-23-05 (INFO, für 45-20 Task 2): Die Live-Probe hält Locks per CLI-Skript und braucht deshalb einen von CLI und FPM geteilten Provider (Redis, Memcached oder DB). Unter APCu stellt 45-20 um und begründet es im Audit.
+
+I-45-23-06 (LOW, vorbestehend, behoben in 45-23 Task 2): Stelle StorageCrawlJob::run(), Nehmen des Slice-Locks (bis 26b80929 Z. 225-237) mit nur `catch (LockedException)`; Folge: eine `OCP\DB\Exception` des DBLockingProvider oder ein `\RedisException` beendete die Kette des Mounts ohne Nachfolger (die Zeile der QueuedJob ist vor run() gelöscht), wie vor 43-27 in crawlSlice; seit 1d47563b (2026-09-11, erstes Release v1.2.0, `git log -S 'acquireLock(self::LOCK_NAME'`); Fix: zweiter Zweig `catch (\Throwable $e)` mit `self::isPassingLockError($e)` und der Grenze MAX_RETRIES, Nachfolger mit gleichem Modus, gleichen Summen und `retries + 1` vor der warning-Zeile ohne Pfad; Tests `testADatabaseErrorAtTheSliceLockKeepsTheChain`, `testASliceLockThatKeepsFailingEndsTheChainLoudly`, `testAnUnexpectedErrorAtTheSliceLockEndsTheChainAtOnce`; Mutation M23.
+
+#### F1 Marker
+
+Umsetzung: `StorageCrawlJob::CRAWL_ACTIVE_LOCK = 'findling/crawl-active'`. run() setzt nach dem Slice-Lock `$marked = false;` und öffnet sofort das try, dessen finally den Slice-Lock freigibt; darin nur im Crawl-Modus `acquireLock(CRAWL_ACTIVE_LOCK)` mit zwei catch-Zweigen: LockedException (fremder Marker eines abgestürzten Prozesses: debug ohne Werte, die Scheibe läuft, kein Freigeben) und Throwable (vorübergehend nach `isPassingLockError()` und unter MAX_RETRIES: Nachfolger mit `retries + 1`, dann warning `'Findling: a crawl slice could not take the crawl marker and will be tried again'` mit `storage_id`, `retries`, `exception`, return; sonst weiterwerfen). Freigabe verschachtelt: `finally { try { if ($marked) releaseLock(CRAWL_ACTIVE_LOCK) } finally { releaseLock(LOCK_NAME) } }`. Beim Nehmen des Slice-Locks neu `catch (\Throwable $e)` nach demselben Muster (Meldung `'Findling: a crawl slice could not take the slice lock and will be tried again'`, Modus und Summen reisen mit, kein releaseLock). `isPassingLockError()`: `DbException`, `is_a($e, 'RedisException')`, `is_a($e, 'RedisClusterException')`. CrawlAdvanceService::crawling() liest als Lock-Signal nur noch `isLocked(StorageCrawlJob::CRAWL_ACTIVE_LOCK, ILockingProvider::LOCK_EXCLUSIVE)`; der Klassen-Docblock ("It also takes no lock of its own") bleibt wahr. CI: `redis` in `extensions:` des Jobs phpunit.
+
+Tests: CrawlAdvanceServiceTest `testARecountSliceHoldingTheSliceLockIsNoCrawl`, `testTheSliceLockAloneIsNoCrawl`, `testARunningCrawlSliceWithoutARowIsAnUnfinishedCrawl` (ersetzt `testARunningSliceIsAnUnfinishedCrawl`). StorageCrawlJobTest mit einem Fake-ILockingProvider (anonyme Klasse, Methoden wie OCP v33 bis v35, exklusive Locks, LockedException bei Doppelbelegung, protokolliert acquire und release, wirft auf Wunsch): `testACrawlSliceHoldsTheCrawlMarkerWhileItRuns`, `testARecountSliceNeverTakesTheCrawlMarker`, `testTheCrawlMarkerIsReleasedWhenTheSliceThrows`, `testAStaleCrawlMarkerDoesNotStopTheCrawl`, `testALostSliceLockNeverTakesTheCrawlMarker`, `testAFailingCrawlMarkerLeavesNoSliceLockBehind` (DbException und `\RedisException`, vorher `class_exists(\RedisException::class)`), `testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly`, `testAFailingMarkerReleaseStillReleasesTheSliceLock`, `testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce`, `testADatabaseErrorAtTheSliceLockKeepsTheChain` (DbException und `\RedisException`, je Crawl und Nachzählung mit Summen), `testASliceLockThatKeepsFailingEndsTheChainLoudly`, `testAnUnexpectedErrorAtTheSliceLockEndsTheChainAtOnce`. Reihenfolge Nachfolger vor warning über ein gemeinsames Protokoll von Jobliste und Logger. Angepasst: `testADatabaseErrorInASliceReschedulesTheCursorItArrivedWith` und `testTheFifthFailureInARowWithoutProgressEndsTheChainLoudly` erwarteten genau ein releaseLock mit LOCK_NAME; sie laufen jetzt auf dem Fake und prüfen beide Freigaben in der Reihenfolge Marker, Slice-Lock, je genau einmal, und dass danach nichts gehalten ist.
+
+RED (nicht committet): `bash scripts/dev/phpunit_docker.sh --filter 'CrawlAdvanceServiceTest|StorageCrawlJobTest'` -> `Tests: 38, Assertions: 128, Errors: 10, Failures: 3.`, wörtlich (Errors 3 bis 9 mit derselben Meldung wie 1 und 2):
+
+```
+1) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testADatabaseErrorInASliceReschedulesTheCursorItArrivedWith
+Error: Undefined constant OCA\Findling\BackgroundJobs\StorageCrawlJob::CRAWL_ACTIVE_LOCK
+2) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testTheFifthFailureInARowWithoutProgressEndsTheChainLoudly
+Error: Undefined constant OCA\Findling\BackgroundJobs\StorageCrawlJob::CRAWL_ACTIVE_LOCK
+3) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testACrawlSliceHoldsTheCrawlMarkerWhileItRuns
+4) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testTheCrawlMarkerIsReleasedWhenTheSliceThrows
+5) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testAStaleCrawlMarkerDoesNotStopTheCrawl
+6) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testAFailingCrawlMarkerLeavesNoSliceLockBehind
+7) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly
+8) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testAFailingMarkerReleaseStillReleasesTheSliceLock
+9) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce
+10) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testADatabaseErrorAtTheSliceLockKeepsTheChain
+OCP\DB\Exception: database is locked
+
+1) OCA\Findling\Tests\Unit\CrawlAdvanceServiceTest::testARecountSliceHoldingTheSliceLockIsNoCrawl
+Failed asserting that true is false.
+2) OCA\Findling\Tests\Unit\CrawlAdvanceServiceTest::testTheSliceLockAloneIsNoCrawl
+Failed asserting that true is false.
+3) OCA\Findling\Tests\Unit\StorageCrawlJobTest::testARecountSliceNeverTakesTheCrawlMarker
+Failed asserting that two arrays are identical.
+```
+
+Abweichung von "RED nur mit den neuen Fällen": die beiden angepassten Fälle (Errors 1 und 2) waren rot, weil sie die noch fehlende Konstante nennen, nicht wegen einer geänderten Aussage. Vor dem Fix schon grün und deshalb keine RED-Zeugen: `testARunningCrawlSliceWithoutARowIsAnUnfinishedCrawl` (der gehaltene Slice-Lock genügte bisher), `testALostSliceLockNeverTakesTheCrawlMarker` (bisher kein Marker), `testASliceLockThatKeepsFailingEndsTheChainLoudly` und `testAnUnexpectedErrorAtTheSliceLockEndsTheChainAtOnce` (bisher warf jeder Fehler am Slice-Lock weiter); sie halten Verhalten fest, das der Fix nicht verlieren darf, und M23 und M24 belegen die Zweige, die sie bewachen.
+
+GREEN gefiltert: derselbe Aufruf -> `OK (38 tests, 225 assertions)`.
+
+#### F1 Mutationen
+
+Je einzeln, danach die Quellen byte-gleich zurück (`restored_identical=yes` je Lauf, SHA-256 über StorageCrawlJob.php, CrawlAdvanceService.php und SettingsService.php vor und nach); Skripte `<scratchpad>/mutate23.py` und `<scratchpad>/mut23.sh`, je gefiltertes PHPUnit `CrawlAdvanceServiceTest|StorageCrawlJobTest`.
+
+(M1) crawling() liest wieder LOCK_NAME statt CRAWL_ACTIVE_LOCK -> rot: `testARecountSliceHoldingTheSliceLockIsNoCrawl`, `testTheSliceLockAloneIsNoCrawl`, `testARecountSliceNeverTakesTheCrawlMarker` (`Failures: 3`)
+(M2) Marker auch im recount-Modus (`if (true)` statt `if (!$recount)`) -> rot: `testARecountSliceNeverTakesTheCrawlMarker` (`Failures: 1`)
+(M3) Marker im Crawl-Modus weggelassen (`if (false)`) -> rot: `testACrawlSliceHoldsTheCrawlMarkerWhileItRuns`, dazu `testADatabaseErrorInASliceReschedulesTheCursorItArrivedWith`, `testTheFifthFailureInARowWithoutProgressEndsTheChainLoudly`, `testAFailingCrawlMarkerLeavesNoSliceLockBehind`, `testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly`, `testAFailingMarkerReleaseStillReleasesTheSliceLock`, `testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce` (`Failures: 7`)
+(M4) Freigabe des Markers aus dem finally entfernt -> rot: `testTheCrawlMarkerIsReleasedWhenTheSliceThrows`, dazu `testACrawlSliceHoldsTheCrawlMarkerWhileItRuns`, `testADatabaseErrorInASliceReschedulesTheCursorItArrivedWith`, `testTheFifthFailureInARowWithoutProgressEndsTheChainLoudly`, `testAFailingMarkerReleaseStillReleasesTheSliceLock` (`Failures: 5`)
+(M5) fremden Marker freigeben (`if (true)` statt `if ($marked)` vor dem releaseLock des Markers) -> rot: `testAStaleCrawlMarkerDoesNotStopTheCrawl`, dazu `testAFailingCrawlMarkerLeavesNoSliceLockBehind` (`Failures: 2`)
+(M17) Marker vor dem try genommen (Nehmen samt beiden catch-Zweigen vor das try gezogen, dessen finally den Slice-Lock freigibt) -> rot: `testAFailingCrawlMarkerLeavesNoSliceLockBehind`, dazu `testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly`, `testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce` (`Failures: 3`, der Slice-Lock bleibt gehalten)
+(M18) kein Nachfolger bei einem Fehler beim Marker (scheduleAfter im Throwable-Zweig entfernt) -> rot: `testAFailingCrawlMarkerLeavesNoSliceLockBehind` (`Failures: 1`)
+(M21) Grenze `$retries + 1 >= self::MAX_RETRIES` im Zweig des Markers entfernt -> rot: `testACrawlMarkerThatKeepsFailingEndsTheSliceLoudly` (`Failures: 1`)
+(M22) flaches statt verschachteltes finally (beide releaseLock-Aufrufe hintereinander) -> rot: `testAFailingMarkerReleaseStillReleasesTheSliceLock` (`Failures: 1`)
+(M23) kein Nachfolger bei einem vorübergehenden Fehler am Slice-Lock (scheduleAfter im neuen Zweig entfernt) -> rot: `testADatabaseErrorAtTheSliceLockKeepsTheChain` (`Failures: 1`)
+(M24) `isPassingLockError()` antwortet für jede Ausnahme true -> rot: `testAnUnexpectedErrorAtTheCrawlMarkerEndsTheSliceAtOnce` und `testAnUnexpectedErrorAtTheSliceLockEndsTheChainAtOnce` (`Failures: 2`)
+
+Baumhash php/ nach Task 2: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `41a8dc1f...` mit 143 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 6227bdff` -> `ff141406...` mit 143 (gleich dem bisherigen PHP_TREE_HASH_TODAY).
+
+Gates Task 2 (verify-Zeile wörtlich aus `<scratchpad>/v23_t2.sh`, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: `STATIC_OK`, PHPUnit voll `OK (1396 tests, 8796 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; keine Meldung zu `is_a($e, 'RedisException')`; php-cs-fixer ohne Verstoß; zizmor und actionlint grün, Proben gesehen), pytest `tests/test_php_static_gates.py tests/test_reconcile.py tests/test_measurement_scripts.py` `748 passed`.

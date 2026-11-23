@@ -84,6 +84,11 @@ class StorageCrawlJob extends QueuedJob {
 	 * rethrow without a successor left nothing behind that would try again. A
 	 * database that refuses this often in a row is no passing lock any more,
 	 * and there the slice ends as before, with the error in the log.
+	 *
+	 * Since issue #25 the same bound holds for a passing error while run()
+	 * takes the slice lock and the crawl marker (the database behind the
+	 * DBLockingProvider, or the connection to Redis as the locking cache, see
+	 * isPassingLockError()), counted in the same argument retries.
 	 */
 	private const MAX_RETRIES = 5;
 
@@ -97,6 +102,31 @@ class StorageCrawlJob extends QueuedJob {
 	 * merge-safe enqueue would survive but a 4 GB box should not have to pay.
 	 */
 	public const LOCK_NAME = 'findling/crawl-slice';
+
+	/**
+	 * The signal "a crawl slice is running", held next to the slice lock and
+	 * only by a crawl slice, never by a recount slice.
+	 *
+	 * Why a marker next to the slice lock (issue #25, F1). A recount slice takes
+	 * the same slice lock as a crawl slice, because the two have to stay
+	 * serialised. CrawlAdvanceService::crawling() used to read that slice lock,
+	 * so every recount slice told the reconcile of the container "the crawl is
+	 * unfinished", and on a busy instance, where the recount ran most of the
+	 * day, the reconcile stood down at about 160 of 288 ticks. crawling() now
+	 * reads this marker instead.
+	 *
+	 * Why crawling() needs a lock signal at all (13993fd9, v1.4.0): a QueuedJob
+	 * removes its row before run(), and the successor is only planned at the
+	 * end of the slice, so for those seconds the last crawl chain has no row.
+	 *
+	 * The marker lives in the same ILockingProvider as the slice lock and so has
+	 * the same TTL (filelocking.ttl): a process that dies mid-slice leaves at
+	 * most that long an "unfinished crawl" behind, as the slice lock always
+	 * did. A marker that is held already (by such a dead process) holds up no
+	 * slice: the slice lock is what serialises, the marker is only a signal,
+	 * so the slice crawls anyway and never gives back a marker it did not take.
+	 */
+	public const CRAWL_ACTIVE_LOCK = 'findling/crawl-active';
 
 	/**
 	 * The floor of the wall clock budget a caller may ask for. Below this a
@@ -236,17 +266,103 @@ class StorageCrawlJob extends QueuedJob {
 				self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, $recount, $sums, $retries),
 			);
 			return;
+		} catch (\Throwable $e) {
+			// Not "taken by somebody else" but a failure of the locking backend
+			// (I-45-23-06, since v1.2.0 this ended the chain of the mount). A
+			// passing one gets a successor like the retry path of 43-27; the
+			// slice lock was never held, so there is nothing to give back.
+			if (!self::isPassingLockError($e) || $retries + 1 >= self::MAX_RETRIES) {
+				throw $e;
+			}
+			$this->jobList->scheduleAfter(
+				self::class,
+				$this->time->getTime() + self::INTERVAL,
+				self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, $recount, $sums, $retries + 1),
+			);
+			$this->logger->warning('Findling: a crawl slice could not take the slice lock and will be tried again', [
+				'storage_id' => $storageId,
+				'retries' => $retries + 1,
+				'exception' => $e,
+			]);
+			return;
 		}
 
+		// The marker is taken inside this try, so that whatever happens while
+		// it is taken, the finally below gives the slice lock back.
+		$marked = false;
 		try {
+			if (!$recount) {
+				try {
+					$this->lockingProvider->acquireLock(self::CRAWL_ACTIVE_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+					$marked = true;
+				} catch (LockedException) {
+					// Held by a process that died mid-slice, until the TTL runs
+					// out. Only a signal: the slice runs, and the foreign marker
+					// is left alone.
+					$this->logger->debug('Findling: the crawl marker is held already, the slice runs anyway');
+				} catch (\Throwable $e) {
+					if (!self::isPassingLockError($e) || $retries + 1 >= self::MAX_RETRIES) {
+						throw $e;
+					}
+					$this->jobList->scheduleAfter(
+						self::class,
+						$this->time->getTime() + self::INTERVAL,
+						self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, false, [], $retries + 1),
+					);
+					$this->logger->warning('Findling: a crawl slice could not take the crawl marker and will be tried again', [
+						'storage_id' => $storageId,
+						'retries' => $retries + 1,
+						'exception' => $e,
+					]);
+					return;
+				}
+			}
+
 			if ($recount) {
 				$this->recountSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId, $sums);
 			} else {
 				$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId, $retries);
 			}
 		} finally {
-			$this->lockingProvider->releaseLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+			// Nested, so that a release of the marker that throws still gives
+			// the slice lock back; the marker goes first, the lock it lives
+			// under last.
+			try {
+				if ($marked) {
+					$this->lockingProvider->releaseLock(self::CRAWL_ACTIVE_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+				}
+			} finally {
+				$this->lockingProvider->releaseLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+			}
 		}
+	}
+
+	/**
+	 * Whether an error while a lock is taken is one that passes, so that the
+	 * chain of the mount is tried again instead of ending.
+	 *
+	 * What is thrown depends on the backend of the ILockingProvider (Nextcloud
+	 * 33 to 35): the DBLockingProvider throws an OCP\DB\Exception when its
+	 * statement fails; the MemcacheLockingProvider over Redis lets a
+	 * RedisException or RedisClusterException of phpredis through when the
+	 * connection breaks or is overloaded (lib/private/Memcache/Redis.php);
+	 * Memcached and APCu report a held lock by their return values, which
+	 * arrive as a LockedException and are handled before this is asked. The
+	 * two Redis classes are named as strings because they only exist with
+	 * ext-redis.
+	 *
+	 * Only these three, not every Throwable: an exception('Redis support is not
+	 * available') of RedisFactory, a TypeError or a defect never passes, and
+	 * would otherwise be tried five times with a warning that promises "will be
+	 * tried again" before anybody sees it. crawlSlice() keeps its own branch on
+	 * OCP\DB\Exception alone, because inside a slice only the database speaks.
+	 * Unlike that branch (43-27), the two branches of run() plan the successor
+	 * before they log: should the logger throw, the successor stands already,
+	 * and should scheduleAfter throw, no warning claims a retry that is not
+	 * there.
+	 */
+	private static function isPassingLockError(\Throwable $e): bool {
+		return $e instanceof DbException || is_a($e, 'RedisException') || is_a($e, 'RedisClusterException');
 	}
 
 	/**

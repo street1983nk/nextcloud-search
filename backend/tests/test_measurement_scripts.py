@@ -1439,8 +1439,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # recipe gave ff141406; the independent pipeline of find, sort, sed and sha256sum over the same
 # tree gave ff141406 as well; the recipe and the pipeline over git archive of d57bd962, the last
 # commit before this change, gave a6c5f8d1 with 141 files (positive control).
+# Moved on 2026-11-23 by plan 45-23, task 2 (issue #25): lib/BackgroundJobs/StorageCrawlJob.php
+# takes the crawl marker findling/crawl-active next to the slice lock in the crawl mode only,
+# retries a passing error of the locking backend at the slice lock and at the marker
+# (isPassingLockError) and gives both locks back in a nested finally;
+# lib/Service/CrawlAdvanceService.php reads the marker instead of the slice lock in crawling();
+# tests/Unit/StorageCrawlJobTest.php and CrawlAdvanceServiceTest.php hold the cases. No file came
+# or went, so PHP_FILES_TODAY stays at 143. The recipe gave 41a8dc1f; the independent pipeline of
+# find, sort, sed and sha256sum over the same tree gave 41a8dc1f as well; the recipe and the
+# pipeline over git archive of 6227bdff, the last commit before this change, gave ff141406 with
+# 143 files (positive control).
 PHP_FILES_TODAY = 143
-PHP_TREE_HASH_TODAY = "ff141406828d9fa92f6d6309709bb1b62473a1ea4daa6184403667e9ea1a9960"
+PHP_TREE_HASH_TODAY = "41a8dc1f2dc140ffb2a1568d583fb803853c5244004e51153411a9983658df72"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

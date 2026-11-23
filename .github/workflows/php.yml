@@ -483,7 +483,12 @@ jobs:
           # It is also the reason the PHPUnit major is 11: 12 needs 8.3 and 13
           # needs 8.4.1.
           php-version: '8.2'
-          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+          # redis since issue #25: StorageCrawlJob::isPassingLockError retries a
+          # RedisException of the locking cache, and the two tests that throw
+          # one (testAFailingCrawlMarkerLeavesNoSliceLockBehind and
+          # testADatabaseErrorAtTheSliceLockKeepsTheChain) assert that the
+          # class exists instead of skipping the Redis case.
+          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip, redis
           coverage: none
 
       # The directory name has to be exactly the app id, for the same reason it

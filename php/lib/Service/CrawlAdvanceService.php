@@ -68,11 +68,16 @@ class CrawlAdvanceService {
 	 * Three answers count as unfinished. A SchedulerJob row: a restart or a
 	 * fresh install plans the crawl, and until it ran the whole crawl is ahead.
 	 * A crawl row of StorageCrawlJob: the chain of a mount waits for its next
-	 * slice. A held slice lock: a QueuedJob removes its row before it runs and
+	 * slice. A held crawl marker: a QueuedJob removes its row before it runs and
 	 * the successor is only planned at the end of the slice, so for those
 	 * seconds the last chain of the instance has no row at all. A recount row
 	 * alone is no crawl; it queues nothing and only starts once the crawl is
 	 * through.
+	 *
+	 * Recount slices take the same slice lock as crawl slices, but never the
+	 * marker (issue #25): reading the slice lock here made every recount slice
+	 * an unfinished crawl, and the reconcile stood down for most of the day on
+	 * a busy instance.
 	 */
 	public function crawling(): bool {
 		foreach ($this->jobList->getJobsIterator(SchedulerJob::class, 1, 0) as $job) {
@@ -83,7 +88,7 @@ class CrawlAdvanceService {
 				return true;
 			}
 		}
-		return $this->lockingProvider->isLocked(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+		return $this->lockingProvider->isLocked(StorageCrawlJob::CRAWL_ACTIVE_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
 	}
 
 	/**
