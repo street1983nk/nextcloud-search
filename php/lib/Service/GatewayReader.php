@@ -80,7 +80,7 @@ final class GatewayReader {
 	public const SECURE_VIEW_FUNCTION = 'checkFileAccess';
 
 	/** A class or function name as PHP writes it into a trace, closures included. */
-	private const NAME = '/^[A-Za-z_\\\\{}][A-Za-z0-9_\\\\{}]{0,254}$/';
+	private const NAME = '/^[A-Za-z_\\\\{}][A-Za-z0-9_\\\\{}]{0,254}$/D';
 
 	/**
 	 * The line admin_audit writes for a read inside actAs (plan 45-20, a4).

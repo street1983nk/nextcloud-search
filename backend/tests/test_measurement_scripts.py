@@ -1523,8 +1523,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 3acaf6d9 as well; the recipe
 # and the pipeline over git archive of 1d191e7e, the last commit before this change, gave 29be4d73
 # with 147 files (positive control).
+# Moved on 2026-11-23 by plan 45-20 (gate L-36-01 after c9dc3270): the anchored name check of
+# GatewayReader::origin carries the D modifier, so a name with a trailing newline is no name. No
+# file came or went, so PHP_FILES_TODAY stays at 147. The recipe gave 7e296129; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 7e296129 as well; the recipe
+# and the pipeline over git archive of 960dec8c, the last commit before this change, gave 3acaf6d9
+# with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "3acaf6d9aeb517ab35e6eccaf3ff377e5a86399cdf62614669be8a81f1cac2fe"
+PHP_TREE_HASH_TODAY = "7e2961299dc56b05b9be12b8b0f7689a359bdcc47cc7e977125013a94815e3b3"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
