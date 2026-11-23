@@ -1185,8 +1185,10 @@ Webserver dieselben Sperren sehen.
 
 - **Bedingung des Hinweises:** die Dateisperren sind eingeschaltet und
   `memcache.locking` in `config.php` ist `\OC\Memcache\APCu` oder
-  `\OC\Memcache\ArrayCache` (mit oder ohne führenden Backslash, unabhängig
-  von Groß- und Kleinschreibung). APCu liegt im Speicher eines PHP-Prozesses bzw.
+  `\OC\Memcache\ArrayCache` (mit oder ohne führenden Backslash; ein anders
+  geschriebener Name zählt nur, wenn PHP die Klasse unter ihm findet, sonst
+  sperrt Nextcloud ohnehin in der Datenbank, und der Hinweis bleibt aus). APCu
+  liegt im Speicher eines PHP-Prozesses bzw.
   eines FPM-Pools; Cron und Webserver teilen ihn nicht, zwei Cron-Läufe auch
   nicht. ArrayCache lebt nur für eine einzige Anfrage. Dann steht im Block
   "Deckungsgrad der Suche" direkt unter dem Hinweis zu fulltextsearch:
@@ -1217,7 +1219,9 @@ Webserver dieselben Sperren sehen.
   CLI, fällt diese Laufzeit still auf die Datenbank zurück, während der
   Webserver in Redis sperrt. Die Sperren sind dann ebenfalls getrennt, und die
   Seite erkennt das nicht. Prüfen lässt es sich mit `php -m` im CLI und in der
-  PHP-Info des Webservers.
+  PHP-Info des Webservers. Ist APCu im Webserver nicht verfügbar, sperrt der
+  Webserver in der Datenbank; ob das CLI dann in einem eigenen APCu sperrt,
+  sieht die Seite nicht und zeigt den Hinweis trotzdem.
 
 ## Hinweis bei wartendem Abgleich
 

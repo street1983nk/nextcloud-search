@@ -1499,8 +1499,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # find, sort, sed and sha256sum over the same tree gave 8ed19fc8 as well; the recipe and the
 # pipeline over git archive of d2a218ba, the last commit before this change, gave a8d90c20 with
 # 147 files (positive control).
+# Moved on 2026-11-23 by plan 45-26, task 5 (I-45-25-01): lib/Service/LockingCheckService.php
+# asks class_exists() with the raw value of memcache.locking after the name matched, as the
+# memcache factory checks it, through a seam that production leaves empty, and
+# tests/Unit/LockingCheckServiceTest.php holds the cases with a class check as a test double. No
+# file came or went, so PHP_FILES_TODAY stays at 147. The recipe gave 5837bf28; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 5837bf28 as well; the recipe
+# and the pipeline over git archive of c3eaff7f, the last commit before this change, gave
+# 8ed19fc8 with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "8ed19fc84de7a98802b66259810e4584be2a217791e78fd433405f0238ce85cb"
+PHP_TREE_HASH_TODAY = "5837bf28c2c2e083c49b5b79475330f62f0c5d76e40ab9c25b05bf84605b06d3"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
