@@ -1843,7 +1843,7 @@ def test_a_spent_refusal_of_1_6_is_work_again_after_the_renewal_of_1_7_0(
     store.write_meta(repo.REFUSAL_RENEW_MARK, repo.RENEW_DONE)
     _refused(store, 10, reconcile_module.GATEWAY_ERROR_RETRIES + 1)
     if renewed:
-        assert store.renew_refusal_streaks() == 1
+        assert store.renew_refusal_streaks(companion_generation=4) == 1
     row = store.file_row(10)
     assert row is not None
     assert row["attempts"] == (1 if renewed else reconcile_module.GATEWAY_ERROR_RETRIES + 1)

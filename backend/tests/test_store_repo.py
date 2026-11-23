@@ -972,7 +972,7 @@ def test_the_renewal_of_1_7_0_brings_a_spent_refusal_of_1_6_back_once(
     before = {file_id: _attempts(store, file_id) for file_id in (3, 4, 5, 6)}
 
     with caplog.at_level(logging.INFO, logger="findling"):
-        assert store.renew_refusal_streaks() == 1
+        assert store.renew_refusal_streaks(companion_generation=4) == 1
 
     assert _attempts(store, 1) == 1
     assert _attempts(store, 2) == 1
@@ -984,7 +984,7 @@ def test_the_renewal_of_1_7_0_brings_a_spent_refusal_of_1_6_back_once(
     # Once: a second call renews nothing, also not a streak that ran up since.
     _a_spent_refusal(store, 1)
     spent = _attempts(store, 1)
-    assert store.renew_refusal_streaks() is None
+    assert store.renew_refusal_streaks(companion_generation=4) is None
     assert _attempts(store, 1) == spent
 
 
@@ -994,7 +994,7 @@ def test_a_database_without_either_mark_renews_under_both_with_a_line_each(
     _a_spent_refusal(store, 1)
 
     with caplog.at_level(logging.INFO, logger="findling"):
-        assert store.renew_refusal_streaks() == 1
+        assert store.renew_refusal_streaks(companion_generation=4) == 1
 
     assert _attempts(store, 1) == 1
     assert _renew_marks(store) == {REFUSAL_RENEW_MARK: "done", repo_module.REFUSAL_RENEW_MARK_1_7_0: "done"}
@@ -1003,7 +1003,58 @@ def test_a_database_without_either_mark_renews_under_both_with_a_line_each(
         "refusal streaks renewed once after the update, rows=1 mark=refusal_streaks_1_6_3",
         "refusal streaks renewed once after the update, rows=0 mark=refusal_streaks_1_7_0",
     ]
+    assert store.renew_refusal_streaks(companion_generation=4) is None
+
+
+@pytest.mark.parametrize("generation", [None, 2, 3])
+def test_the_renewal_of_1_7_0_waits_for_a_companion_of_generation_4(store: Store, generation: int | None) -> None:
+    # Checkpoint of plan 45-20 (MEDIUM, owner f1, 2026-11-23): with the
+    # container updated first, a 1.6.x companion (generation 3) refused the
+    # renewed files again with 500, and three charges of one escalation spent
+    # the streak before the companion was updated. The renewal of 1.7.0 waits
+    # for a companion that announces generation 4, so the order of the two
+    # updates does not matter.
+    store.write_meta(REFUSAL_RENEW_MARK, "done")
+    _a_spent_refusal(store, 1)
+    spent = _attempts(store, 1)
+
+    assert store.renew_refusal_streaks(companion_generation=generation) is None
     assert store.renew_refusal_streaks() is None
+
+    assert _attempts(store, 1) == spent
+    assert repo_module.REFUSAL_RENEW_MARK_1_7_0 not in store.read_meta()
+    assert store.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == set()
+
+    assert store.renew_refusal_streaks(companion_generation=4) == 1
+    assert _attempts(store, 1) == 1
+    assert _renew_marks(store) == {REFUSAL_RENEW_MARK: "done", repo_module.REFUSAL_RENEW_MARK_1_7_0: "done"}
+
+
+def test_a_later_generation_renews_as_well(store: Store) -> None:
+    store.write_meta(REFUSAL_RENEW_MARK, "done")
+    _a_spent_refusal(store, 1)
+
+    assert store.renew_refusal_streaks(companion_generation=5) == 1
+    assert _attempts(store, 1) == 1
+
+
+def test_refusals_under_a_companion_of_generation_3_leave_no_trace_after_the_renewal(store: Store) -> None:
+    # The window between the two updates: the container runs 1.7.0, the
+    # companion still 1.6.x. Every refusal there and every charge of an
+    # escalation adds to attempts, up to past the cap. The renewal once the
+    # companion announces 4 puts the streak back at 1, whatever ran up before.
+    store.write_meta(REFUSAL_RENEW_MARK, "done")
+    _a_spent_refusal(store, 1)
+    store.renew_refusal_streaks(companion_generation=3)
+    for _ in range(GATEWAY_ERROR_RETRIES + 3):
+        store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert store.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == set()
+
+    assert store.renew_refusal_streaks(companion_generation=4) == 1
+
+    assert _attempts(store, 1) == 1
+    assert store.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == {1}
+    assert store.renew_refusal_streaks(companion_generation=4) is None
 
 
 def test_the_renewal_of_1_7_0_alone_leaves_the_mark_of_1_6_3_to_its_own_run(store: Store) -> None:

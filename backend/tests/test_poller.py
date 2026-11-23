@@ -77,7 +77,17 @@ from findling.nc.queue import (
     QueueStats,
 )
 from findling.profile import Profile, note_hardware, snapshot
-from findling.store.repo import CATCHUP_MARK, CATCHUP_RECONCILE, RECHECK_MARK, FileMeta, Store, open_store
+from findling.store.repo import (
+    CATCHUP_MARK,
+    CATCHUP_RECONCILE,
+    RECHECK_MARK,
+    REFUSAL_RENEW_MARK,
+    REFUSAL_RENEW_MARK_1_7_0,
+    RENEW_DONE,
+    FileMeta,
+    Store,
+    open_store,
+)
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
@@ -6277,6 +6287,72 @@ def _corrupt_sidecar(store: Store) -> QueueJob:
         "corrupt",
     )
     return job
+
+
+@pytest.mark.parametrize(("generation", "renewed"), [(None, False), (3, False), (4, True)])
+async def test_the_renewal_of_1_7_0_runs_in_the_first_pass_that_reads_generation_4(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, generation: int | None, renewed: bool
+) -> None:
+    # Checkpoint of plan 45-20 (MEDIUM, owner f1): the renewal of the spent
+    # refusal streaks of 1.6 waits for a companion of generation 4, read on
+    # the profile answer of a pass, so the order of the two updates does not
+    # matter. Before that, a 1.6.x companion would spend the renewed streak.
+    store.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
+    for _ in range(5):
+        store.record(7, _refused_file(7), "failed", "gateway_error")
+    queue = _FakeQueue()
+    queue.verdicts_answer = generation
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    row = store.file_row(7)
+    assert row is not None
+    assert (REFUSAL_RENEW_MARK_1_7_0 in store.read_meta()) is renewed
+    assert row["attempts"] == (1 if renewed else 5)
+
+
+async def test_a_companion_updated_later_still_gets_the_renewal(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The recommended order, container first: passes in front of a 1.6.x
+    # companion renew nothing, the first pass that reads 4 renews once.
+    store.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
+    for _ in range(5):
+        store.record(7, _refused_file(7), "failed", "gateway_error")
+    queue = _FakeQueue()
+    queue.verdicts_answer = 3
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+    assert REFUSAL_RENEW_MARK_1_7_0 not in store.read_meta()
+
+    queue.verdicts_answer = 4
+    await poller.run_once()
+    row = store.file_row(7)
+    assert row is not None
+    assert row["attempts"] == 1
+    assert store.read_meta()[REFUSAL_RENEW_MARK_1_7_0] == RENEW_DONE
+
+    store.record(7, _refused_file(7), "failed", "gateway_error")
+    await poller.run_once()
+    row = store.file_row(7)
+    assert row is not None
+    assert row["attempts"] == 2
+
+
+def _refused_file(file_id: int) -> FileMeta:
+    return FileMeta(
+        storage_id=1,
+        root_id=2,
+        path=f"files/wz-{file_id}.odt",
+        title=f"wz-{file_id}.odt",
+        mime="application/vnd.oasis.opendocument.text",
+        size=10,
+        mtime=4,
+        etag="aaa",
+    )
 
 
 async def test_without_the_signal_the_re_check_never_starts(
