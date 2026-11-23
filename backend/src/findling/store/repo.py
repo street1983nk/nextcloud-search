@@ -245,6 +245,11 @@ RENEW_DONE: Final = "done"
 # requests per such file and database (T-45-69).
 REFUSAL_RENEW_MARK_1_7_0: Final = "refusal_streaks_1_7_0"
 
+# The verdict generation a companion announces from 1.7.0 on (#59, the one that
+# reads a file under the watermark as its owner). The renewal of 1.7.0 waits
+# for it, see Store.renew_refusal_streaks (plan 45-20).
+RENEW_1_7_0_MIN_GENERATION: Final = 4
+
 # The renewal itself: attempts back to 1, the value a streak starts at in
 # _RECORD_SQL, so the stored refusal counts as the first one of a new streak and
 # the reconcile asks again up to its cap, exactly as after a fresh refusal. Only
@@ -1629,7 +1634,7 @@ class Store:
             candidates.update(int(file_id) for (file_id,) in rows)
         return candidates
 
-    def renew_refusal_streaks(self) -> int | None:
+    def renew_refusal_streaks(self, *, companion_generation: int | None = None) -> int | None:
         """Give every spent refusal one new streak, once per mark (plans 43-20, 45-18).
 
         See :data:`REFUSAL_RENEW_MARK` (1.6.2 to 1.6.3) and
@@ -1638,11 +1643,24 @@ class Store:
         the rows and writes the mark, so the poller and the reconcile opening
         the same database at the same moment renew once and not twice, and a
         later start never touches a streak that ran up under this code. The
-        number of rows that moved under the marks that ran, or None when both
-        marks were already there.
+        number of rows that moved under the marks that ran, or None when no
+        mark ran.
+
+        The mark of 1.7.0 runs only once the companion announces generation 4
+        or later (``companion_generation``, read by the poller on the profile
+        answer of a pass; plan 45-20, checkpoint MEDIUM, owner f1). A 1.6.x
+        companion announces 3 and still refuses a file under the watermark with
+        500; renewing in front of it handed the files to that companion again,
+        and three charges of one escalation spent the streak before the
+        companion was updated. Waiting for 4 makes the order of the two updates
+        irrelevant: whatever ran up in front of the old companion is reset by
+        the renewal that follows.
         """
         renewed: int | None = None
-        for mark in (REFUSAL_RENEW_MARK, REFUSAL_RENEW_MARK_1_7_0):
+        marks = [REFUSAL_RENEW_MARK]
+        if companion_generation is not None and companion_generation >= RENEW_1_7_0_MIN_GENERATION:
+            marks.append(REFUSAL_RENEW_MARK_1_7_0)
+        for mark in marks:
             rows = self._renew_refusal_streaks_once(mark)
             if rows is not None:
                 renewed = rows if renewed is None else renewed + rows

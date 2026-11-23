@@ -325,10 +325,11 @@ def _open_state() -> Store | None:
     if not path.exists():
         return None
     store = open_store(path)
-    # The same once as in the poller (plans 43-20 and 45-18, one renewal per
-    # mark), and for the case where a round opens the database before the first
-    # pass did: the rows this round reads are then already renewed. Behind the
-    # backup hold as well.
+    # The same once as in the poller (plan 43-20, the mark of 1.6.3), and for
+    # the case where a round opens the database before the first pass did: the
+    # rows this round reads are then already renewed. The mark of 1.7.0 is not
+    # asked here, it waits for a companion of generation 4, which only the
+    # poller reads (plan 45-20). Behind the backup hold as well.
     store.renew_refusal_streaks()
     return store
 
@@ -864,7 +865,9 @@ class Reconcile:
         Store.renew_refusal_streaks), so such a file reaches the gateway of
         1.6.3 again and gets its verdict; the same once more for a streak 1.6.x
         spent on a refusal of the secure view (plan 45-18, issue #59), so such
-        a file reaches the gateway of 1.7.0, which reads it as its owner.
+        a file reaches the gateway of 1.7.0, which reads it as its owner; that
+        renewal runs in the first pass of the poller that reads a companion of
+        generation 4 (plan 45-20), never in front of a 1.6.x companion.
         failed(policy_blocked) is a refusal of the same kind and the same cap.
         """
         known = store.known_etags([row.file_id for row in rows])

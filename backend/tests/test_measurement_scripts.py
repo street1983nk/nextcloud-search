@@ -3011,8 +3011,19 @@ PHP_TREE_HASH_TODAY = "5837bf28c2c2e083c49b5b79475330f62f0c5d76e40ab9c25b05bf846
 # over the CRLF normalised tree: d45bc1d3... both ways, and the recipe and
 # the same pipeline over git archive of 0fc40005 before the step gave
 # 6de76760... (positive control).
+#
+# Moved on 2026-11-23 by plan 45-20 (checkpoint MEDIUM, owner f1): the
+# renewal of the refusal streaks under refusal_streaks_1_7_0 waits for a
+# companion of generation 4 (store/repo.py RENEW_1_7_0_MIN_GENERATION,
+# worker/poller.py asks it in the first pass that reads 4), and
+# worker/reconcile.py says so in its comments. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83; the PHP pair does not move with this step.
+# Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: efc966a5... both ways, and the recipe and the same
+# pipeline over git archive of 42ed3b23 before the step gave d45bc1d3...
+# (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "d45bc1d3bf1a5b232d49419568b5addf121e55713b57e2c52384b5dbf6a2a462"
+PACKAGE_TREE_HASH_TODAY = "efc966a57025a30276ce5d3c9decc1f6f8554cc2cf8a05c071f21071bb0e4e8e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

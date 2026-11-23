@@ -122,7 +122,7 @@ from findling.nc.queue import (
 from findling.precision import note_chosen_precision
 from findling.profile import Profile, note_chosen, note_index_files
 from findling.profile import snapshot as profile_snapshot
-from findling.store.repo import FileMeta, Store, open_store
+from findling.store.repo import RENEW_1_7_0_MIN_GENERATION, FileMeta, Store, open_store
 from findling.store.vectors import VectorStore, open_vectors
 from findling.worker.catchup import catchup_step
 from findling.worker.embedding import (
@@ -482,7 +482,8 @@ def _open_state() -> Store:
     store = open_store(settings().state_db, meta=expected)
     start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
     # Once per database (plan 43-20): here and not in open_store, because this
-    # runs inside a pass, behind the hold of a backup pause (D-41-19).
+    # runs inside a pass, behind the hold of a backup pause (D-41-19). The mark
+    # of 1.7.0 waits for a companion of generation 4, see run_once (45-20).
     store.renew_refusal_streaks()
     return store
 
@@ -617,6 +618,10 @@ class Poller:
         # The same shortcut for the catch-up after the upgrade to 1.5 (FMT-06):
         # True once part A is over; the truth is CATCHUP_MARK in state.db.
         self._catchup_done = False
+        # The same shortcut for the renewal of 1.7.0 (plan 45-20): True once a
+        # pass read generation 4 or later and asked the store; the truth is
+        # REFUSAL_RENEW_MARK_1_7_0 in state.db.
+        self._renew_1_7_0_asked = False
         # Whether this process told the profile its stock yet (D-29-12). The
         # first pass does it before the claim, so that the slots of that very
         # pass already carry the full index term; after it, every pass that
@@ -1141,6 +1146,21 @@ class Poller:
         # in the same round. Its length is bounded: about 43 requeue calls on
         # the stock of the reporting instance. A failure is a log line with the
         # class name and nothing else; the next round tries again at the cursor.
+        # The renewal of the refusal streaks of 1.6 (#59, plan 45-20): only in
+        # front of a companion of generation 4, which reads a file under the
+        # watermark as its owner; a 1.6.x companion would refuse the renewed
+        # files again and spend the streak. Before the claim, so the reconcile
+        # finds the files as work on its next cycle. Once per process; the
+        # store writes the mark and never renews twice.
+        if (
+            not self._renew_1_7_0_asked
+            and choice.verdicts is not None
+            and choice.verdicts >= RENEW_1_7_0_MIN_GENERATION
+        ):
+            store = self._store_or_die()
+            await asyncio.to_thread(lambda: store.renew_refusal_streaks(companion_generation=choice.verdicts))
+            self._renew_1_7_0_asked = True
+
         if not self._recheck_done and choice.verdicts in KNOWN_VERDICTS_GENERATIONS:
             try:
                 self._recheck_done = await recheck_step(self._store_or_die(), queue)
