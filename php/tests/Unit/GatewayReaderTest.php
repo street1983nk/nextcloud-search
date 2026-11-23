@@ -7,6 +7,8 @@ namespace OCA\Findling\Tests\Unit;
 use OCA\Findling\Service\GatewayReader;
 use OCA\Findling\Service\ReaderCandidates;
 use OCA\Findling\Service\ReaderContext;
+use OCP\EventDispatcher\Event;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
@@ -18,6 +20,7 @@ use OCP\Files\StorageNotAvailableException;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\Log\Audit\CriticalActionPerformedEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +54,9 @@ final class GatewayReaderTest extends TestCase {
 	private IUserSession&MockObject $session;
 	private ?IUser $active = null;
 
+	/** @var list<array{Event, ?string}> event, active user at the dispatch */
+	private array $events = [];
+
 	/** @var list<array{string, string, ?string}> step, user, active user */
 	private array $steps = [];
 
@@ -80,6 +86,7 @@ final class GatewayReaderTest extends TestCase {
 		});
 		$this->mountCache = $this->createMock(IUserMountCache::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->events = [];
 	}
 
 	private function reader(): GatewayReader {
@@ -96,7 +103,32 @@ final class GatewayReaderTest extends TestCase {
 			new ReaderContext($this->session, $userManager),
 			new ReaderCandidates($this->mountCache, $this->logger),
 			$this->logger,
+			$this->dispatcher(),
 		);
+	}
+
+	private function dispatcher(): IEventDispatcher {
+		$dispatcher = $this->createMock(IEventDispatcher::class);
+		$dispatcher->method('dispatchTyped')->willReturnCallback(function (Event $event): void {
+			$this->events[] = [$event, $this->active?->getUID()];
+		});
+
+		return $dispatcher;
+	}
+
+	/**
+	 * The audit events, as message, parameters and obfuscation.
+	 *
+	 * @return list<array{string, array<array-key, mixed>, bool}>
+	 */
+	private function auditEvents(): array {
+		$events = [];
+		foreach ($this->events as [$event]) {
+			self::assertInstanceOf(CriticalActionPerformedEvent::class, $event);
+			$events[] = [$event->getLogMessage(), $event->getParameters(), $event->getObfuscateParameters()];
+		}
+
+		return $events;
 	}
 
 	/**
@@ -127,6 +159,7 @@ final class GatewayReaderTest extends TestCase {
 		$file = $this->createMock(File::class);
 		$file->method('isReadable')->willReturn(true);
 		$file->method('getSize')->willReturn(5);
+		$file->method('getPath')->willReturn('/' . $uid . '/files/a.odt');
 		$file->method('getStorage')->willReturn($this->createMock(IStorage::class));
 		$file->method('fopen')->with('r')->willReturnCallback(function () use ($uid, $opens) {
 			$this->steps[] = ['fopen', $uid, $this->active?->getUID()];
@@ -190,6 +223,67 @@ final class GatewayReaderTest extends TestCase {
 		}
 
 		return $opens;
+	}
+
+	public function testAReadInActAsTellsTheAuditLogWhoRead(): void {
+		// a4 (plan 45-20, owner decision): the identity admin_audit takes for a
+		// read is the session user, which actAs does not set. The gateway names
+		// the reading user itself, through the public audit event: file id,
+		// path and uid, never a byte of the content.
+		$this->mounts([['alice', '/alice/files/a.odt/', self::SHARING], ['bob', '/bob/', self::LOCAL_HOME]]);
+		$this->sees('alice', SecureViewRefusal::real());
+		$this->sees('bob', self::stream('bobs bytes'));
+
+		$opened = $this->reader()->open(self::FILE_ID, 'alice');
+
+		self::assertSame(GatewayReader::OUTCOME_OK, $opened['outcome']);
+		self::assertSame([[
+			GatewayReader::AUDIT_MESSAGE,
+			['id' => self::FILE_ID, 'path' => '/bob/files/a.odt', 'reader' => 'bob'],
+			false,
+		]], $this->auditEvents());
+		self::assertStringContainsString('"%s"', GatewayReader::AUDIT_MESSAGE);
+		self::assertSame(3, substr_count(GatewayReader::AUDIT_MESSAGE, '%s'));
+	}
+
+	public function testAReadOfAnotherReaderWithoutAnOwnerNamesThatReader(): void {
+		$this->mounts([
+			['member01', '/member01/files/TF/', self::GROUPFOLDERS],
+			['member02', '/member02/files/TF/', self::GROUPFOLDERS],
+		]);
+		$this->sees('member01', SecureViewRefusal::real());
+		$this->sees('member02', self::stream('member02'));
+
+		$opened = $this->reader()->open(self::FILE_ID, 'member01');
+
+		self::assertSame('member02', $opened['reader']);
+		self::assertSame([[
+			GatewayReader::AUDIT_MESSAGE,
+			['id' => self::FILE_ID, 'path' => '/member02/files/a.odt', 'reader' => 'member02'],
+			false,
+		]], $this->auditEvents());
+	}
+
+	public function testAnOpenOutsideActAsTellsTheAuditLogNothingOfItsOwn(): void {
+		// A plain read stays as in 1.6.5: admin_audit writes its own line.
+		$this->mounts([['alice', '/alice/files/a.odt/', self::SHARING], ['bob', '/bob/', self::LOCAL_HOME]]);
+		$this->sees('alice', self::stream('alice'));
+
+		$this->reader()->open(self::FILE_ID, 'alice');
+
+		self::assertSame([], $this->events);
+	}
+
+	public function testARefusalInActAsTellsTheAuditLogNothing(): void {
+		// Nothing was read, so nothing is named as read.
+		$this->mounts([['alice', '/alice/files/a.odt/', self::SHARING], ['bob', '/bob/', self::LOCAL_HOME]]);
+		$this->sees('alice', SecureViewRefusal::real());
+		$this->sees('bob', SecureViewRefusal::real());
+
+		$opened = $this->reader()->open(self::FILE_ID, 'alice');
+
+		self::assertSame(GatewayReader::OUTCOME_POLICY, $opened['outcome']);
+		self::assertSame([], $this->events);
 	}
 
 	public function testAnOpenThatSucceedsOutsideActAsIsNotRepeated(): void {

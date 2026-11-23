@@ -128,6 +128,7 @@ final class GatewayControllerTest extends TestCase {
 				new ReaderContext($this->session, $this->userManager),
 				new ReaderCandidates($this->mountCache, $this->logger),
 				$this->logger,
+				$this->createMock(\OCP\EventDispatcher\IEventDispatcher::class),
 			),
 			// The reader on a fake clock, so the thirty second deadline of the
 			// first block costs no real time in the cases that run into it.
@@ -583,7 +584,7 @@ final class GatewayControllerTest extends TestCase {
 		], $steps);
 		$this->logger->expects(self::once())->method('info')->with(
 			'Findling: read a file as a reader of it after secure view refused the first open',
-			['fileId' => 11, 'asked' => 1],
+			['fileId' => 11, 'asked' => 1, 'reader' => 'bob'],
 		);
 		$this->logger->expects(self::never())->method('warning');
 		$this->logger->expects(self::never())->method('error');
