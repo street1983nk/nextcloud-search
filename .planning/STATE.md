@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "45-23 fertig (941c68f0); als Nächstes 45-24"
-last_updated: "2026-11-23T05:30:00.000Z"
-last_activity: "2026-11-23, 45-23 fertig: Owner-Zeilen #25 (Go mit den Empfehlungen, 18:37 UTC) 6227bdff; Marker-Lock, crawling() nur für Crawl-Scheiben, isPassingLockError 104bf781; Mindestabstand 6 h, Doku, CHANGELOG 941c68f0 (lokal, nicht gepusht)"
+stopped_at: "45-24 fertig (7d2d7a64); als Nächstes 45-25"
+last_updated: "2026-11-23T06:45:00.000Z"
+last_activity: "2026-11-23, 45-24 fertig: Rückhalt gegen die Ruhemarke (BACKSTOP_FACTOR 2, reconcile_quiet_held_since, nie neben einem Crawl, warning-Zeile) 0fc40005; reconcileHeldSince und Hinweis in 18 Katalogen bc98ec2b; Doku, info.xml Text 4, CHANGELOG Text 2 7d2d7a64 (lokal, nicht gepusht)"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 36
-  completed_plans: 24
-  percent: 67
+  completed_plans: 25
+  percent: 69
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-01 bis 45-09, 45-17, 45-18, 45-19, 45-22 und 45-23 von 26 fertig, 45-10 pausiert; als Nächstes 45-24, dann 45-25, 45-26 (Release-Blocker Migration des Minor-Schritts 1.7), 45-20, 45-21, 45-10 komplett neu
+Plan: 45-01 bis 45-09, 45-17, 45-18, 45-19, 45-22, 45-23 und 45-24 von 26 fertig, 45-10 pausiert; als Nächstes 45-25, dann 45-26 (Release-Blocker Migration des Minor-Schritts 1.7), 45-20, 45-21, 45-10 komplett neu
 Status: Ready to execute
-Last activity: 2026-11-23, 45-23 fertig: Owner-Zeilen zu #25 ("Go mit den Empfehlungen", 2026-11-22 18:37 UTC: Texte 1 bis 4, r1, z1, 6h, l1; Text 5 getrennt in 45-25) 6227bdff; Marker-Lock 'findling/crawl-active' nur im Crawl-Modus, crawling() liest nur ihn, isPassingLockError an Slice-Lock und Marker (I-45-23-06 behoben), ext-redis im CI-Job phpunit 104bf781; Mindestabstand 6 h mit Regelausnahme r1 und Zukunftsfall, docs/admin-page.md, CHANGELOG Text 1 EN/DE/FR 941c68f0; kein Push. Davor 45-22 fertig: Owner "Go" 02:42 UTC (E3-Weg S3 mit S1-Auftrag für shareDisabledDownload, CHANGELOG E3 EN/DE/FR, Altbestand A1) d57bd962; SnippetPolicy vor exApp->snippets, Treffer bleiben mit Name und Pfad, S1 nicht mit öffentlichen OCP-APIs baubar, daher Rückfall auf S3 (Quellen im Audit) 143d0bf8; kein Push. Davor 45-19 fertig: Owner-Entscheid V-02-Regel c (18:37 UTC, "Go mit den Empfehlungen") cf53cfd8; ExternalMountService setzt duplicate nur nach dem Einhängepunkt, data-mount-duplicate am Haken, Bestätigung "/Share (ID 5), /Share (ID 8), /Share (ID 17)" in Form i c33103fe; Platzhalter der Diagnose aus dem Katalog in 18 Dateien, Schlüsselzahl 383 1b31b281; kein Push. Davor 45-18 fertig: policy_blocked in drei Vokabularlisten, Reason-Tabelle und 18 Katalogen, unreadable-Abhilfe "Besitzer zuerst" (c1: alter Schlüssel entfernt, SUPERSEDED_IN_1_7_0), Generation 4 beidseitig mit Rückfall gateway_error (W3), Zahl-Gates an MAX_READER_TRIES und GATEWAY_ERROR_RETRIES 7198db12; GatewayPolicyRefused (403 mit X-Findling-Refusal: policy), Urteil ohne Ausfallzählung (I-45-17-01), Serie bis 3 Nächte, Erneuerung refusal_streaks_1_7_0 5b1de936; kein Push
+Last activity: 2026-11-23, 45-24 fertig: Rückhalt nach z1 im Abgleich (BACKSTOP_FACTOR 2, Zeitpunkt reconcile_quiet_held_since im Zustandsspeicher, gelöscht nur nach ganzem Zyklus, nie neben einem Crawl, warning-Zeile beim Öffnen, keine Aussetz-Zeile in der Rückhalt-Runde, Mutationen M10 bis M15) 0fc40005; Statusfeld reconcileHeldSince ab einem Intervall, Hinweis findling-reconcile-held in 18 Katalogen und sechs Sprachtabellen, Schlüsselzahl 384, M16 bc98ec2b; docs/reconcile.md, docs/admin-page.md, info.xml Text 4, CHANGELOG Text 2 EN/DE/FR 7d2d7a64; kein Push. Davor 45-23 fertig: Owner-Zeilen zu #25 ("Go mit den Empfehlungen", 2026-11-22 18:37 UTC: Texte 1 bis 4, r1, z1, 6h, l1; Text 5 getrennt in 45-25) 6227bdff; Marker-Lock 'findling/crawl-active' nur im Crawl-Modus, crawling() liest nur ihn, isPassingLockError an Slice-Lock und Marker (I-45-23-06 behoben), ext-redis im CI-Job phpunit 104bf781; Mindestabstand 6 h mit Regelausnahme r1 und Zukunftsfall, docs/admin-page.md, CHANGELOG Text 1 EN/DE/FR 941c68f0; kein Push. Davor 45-22 fertig: Owner "Go" 02:42 UTC (E3-Weg S3 mit S1-Auftrag für shareDisabledDownload, CHANGELOG E3 EN/DE/FR, Altbestand A1) d57bd962; SnippetPolicy vor exApp->snippets, Treffer bleiben mit Name und Pfad, S1 nicht mit öffentlichen OCP-APIs baubar, daher Rückfall auf S3 (Quellen im Audit) 143d0bf8; kein Push. Davor 45-19 fertig: Owner-Entscheid V-02-Regel c (18:37 UTC, "Go mit den Empfehlungen") cf53cfd8; ExternalMountService setzt duplicate nur nach dem Einhängepunkt, data-mount-duplicate am Haken, Bestätigung "/Share (ID 5), /Share (ID 8), /Share (ID 17)" in Form i c33103fe; Platzhalter der Diagnose aus dem Katalog in 18 Dateien, Schlüsselzahl 383 1b31b281; kein Push. Davor 45-18 fertig: policy_blocked in drei Vokabularlisten, Reason-Tabelle und 18 Katalogen, unreadable-Abhilfe "Besitzer zuerst" (c1: alter Schlüssel entfernt, SUPERSEDED_IN_1_7_0), Generation 4 beidseitig mit Rückfall gateway_error (W3), Zahl-Gates an MAX_READER_TRIES und GATEWAY_ERROR_RETRIES 7198db12; GatewayPolicyRefused (403 mit X-Findling-Refusal: policy), Urteil ohne Ausfallzählung (I-45-17-01), Serie bis 3 Nächte, Erneuerung refusal_streaks_1_7_0 5b1de936; kein Push
 
 ## Performance Metrics
 
@@ -112,6 +112,7 @@ Last activity: 2026-11-23, 45-23 fertig: Owner-Zeilen zu #25 ("Go mit den Empfeh
 - v1.7: 45-19 in ca. 40 min laut Systemzeit inkl. ca. 25 min Docker, ohne die Pause nach dem Speicher-Abbruch (3 Tasks, 39 Dateien)
 - v1.7: 45-22 ab Task 2 in ca. 55 min laut Systemzeit inkl. ca. 35 min Docker (2 Tasks, 9 Dateien)
 - v1.7: 45-23 in ca. 85 min laut Systemzeit inkl. ca. 55 min Docker (3 Tasks, 16 Dateien)
+- v1.7: 45-24 in ca. 55 min laut Systemzeit inkl. ca. 15 min Docker (3 Tasks, 47 Dateien)
 
 ## Accumulated Context
 
@@ -146,6 +147,7 @@ Last activity: 2026-11-23, 45-23 fertig: Owner-Zeilen zu #25 ("Go mit den Empfeh
 - 45-19 (22.11.2026, cf53cfd8, c33103fe, 1b31b281): Owner-Entscheid V-02-Regel c ("Go mit den Empfehlungen", 18:37 UTC): ExternalMountService setzt duplicate nur nach dem Einhängepunkt, gleich welcher Typ (PHP-Fall testMountsThatShareAMountPointAreDuplicatesWhateverTheBackend ersetzt den alten); das Template setzt data-mount-duplicate="true" unter demselben Merkmal, admin.js liest nur den genauen Wert (mountDuplicateOf) und schreibt die Bestätigung in Form i ("/Share (ID 5), /Share (ID 8), /Share (ID 17)") mit einer Regex-Ersetzung samt Callback als Text (confirmedMounts). Platzhalter der Diagnose über $l->t('alice/files/Contracts/Rent.pdf') in 18 Katalogen und sechs Sprachtabellen (DE "alice/files/Verträge/Miete.pdf"), Schlüsselzahl 383. Mutationen V1 bis V4 und Gegenprobe Task 2 je rot. Baumhash PHP 141/a6c5f8d1. Befund I-45-19-01 (INFO): Regelfelder mit festen Platzhaltern "Backups" und "*.photoslibrary", nicht behoben. Lokal, nicht gepusht.
 - 45-22 (23.11.2026, d57bd962, 143d0bf8): Owner "Go" 02:42 UTC: E3-Weg S3, CHANGELOG E3 (EN/DE/FR, noch nicht in CHANGELOG eingetragen), Altbestand A1, kein neuer Satz. SnippetPolicy (final, eigene DI: IAppConfig, IFileAccess, IUserMountCache, ISystemTagObjectMapper, IGroupManager): ohne Wasserzeichen nur das Lesen von watermark_enabled; mit Wasserzeichen kein Ausschnitt für fremde Dateien unter shareAll, shareRead, shareDisabledDownload, eigene unter shareRead bei (a) Rohrechten oder (b) Knoten ohne UPDATE, allGroups für Mitglieder, allTags für getaggte Dateien, unbekannter watermark_*-Modus auf yes nimmt alles, fail-closed. S1 für shareDisabledDownload belegt (Super-Freigabe des Mounts), aber nicht mit OCP erreichbar: Rückfall auf S3 (Freigabe mit Download und Team Folder ohne Ausschnitt). SearchService: Konstruktor-Parameter und $allowed vor snippets; Gate Regel 8 in test_php_static_gates.py, SnippetPolicy ohne eigenes getFirstNodeById. Mutationen M1 bis M10 rot. Baumhash PHP 143/ff141406. Lokal, nicht gepusht.
 - 45-23 (23.11.2026, 6227bdff, 104bf781, 941c68f0): Owner "Go mit den Empfehlungen" (2026-11-22 18:37 UTC) zu #25: Texte 1 bis 4 wörtlich wie im Plan, r1, z1 (Änderung an D-03 und Last T-45-84 bestätigt), Mindestabstand 6 h, Locking l1; Text 5 nur über `Freigabe Text 5 45-25`. StorageCrawlJob nimmt im Crawl-Modus den Marker 'findling/crawl-active' im try des Slice-Locks, Freigabe verschachtelt; CrawlAdvanceService::crawling() liest nur den Marker (eine Nachzählung ist kein unfertiger Crawl mehr); isPassingLockError (DbException, RedisException, RedisClusterException) plant am Marker und am Slice-Lock einen Nachfolger mit retries + 1 bis MAX_RETRIES (I-45-23-06, seit v1.2.0, behoben); ext-redis im CI-Job phpunit. SettingsService::RECOUNT_MIN_INTERVAL_SECONDS 6 h ab dem Start der letzten Runde, gespeicherte Regeln nach der letzten Runde weiter binnen 15 Minuten, Zeitstempel in der Zukunft fällig. 15 Mutationen rot. Neu: I-45-23-07 (INFO, Marke aus Migration 1.5 wartet jetzt bis zu 6 h; Owner-Frage). Baumhash PHP 976184c1/143.
+- 45-24 (23.11.2026, 0fc40005, bc98ec2b, 7d2d7a64): Rückhalt nach z1: ein fälliger Abgleich, den die Ruhemarke zweimal sein Mindestintervall hält (BACKSTOP_FACTOR 2, kein Schalter), läuft trotzdem, nie bei crawling, nie bei unlesbarer Warteschlange; Zeitpunkt reconcile_quiet_held_since nur bei fälligem Abgleich, ein Schreibvorgang je Wartephase, ungültig oder Zukunft -> jetzt, gelöscht nur nach ROUND_WALKED; Gate geteilt in _gate (Grund) und _quiet (Zustand, info-Zeilen byte-gleich), Rundenflag ohne Aussetz-Zeile vor Scheiben (W3). reconcileHeldSince ab einem Intervall, null bei Abgleich aus und in der Backup-Pause; Text 3 DE/FR wörtlich, sechs Sprachen maschinell. IDX-10 bleibt offen bis zur Live-Probe in 45-20 Task 2.
 
 ### Decisions (Roadmap v1.6)
 
@@ -326,8 +328,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-23T05:30:00.000Z
-Stopped at: 45-23 fertig (6227bdff, 104bf781, 941c68f0, lokal); als Nächstes 45-24 (F2, Rückhalt nach z1); 45-10 bleibt pausiert bis nach 45-21
+Last session: 2026-11-23T06:45:00.000Z
+Stopped at: 45-24 fertig (0fc40005, bc98ec2b, 7d2d7a64, lokal); als Nächstes 45-25 (Dateisperren nach l1, Text 5 über `Freigabe Text 5 45-25`); 45-10 bleibt pausiert bis nach 45-21
 Resume file: None
 
 ## Operator Next Steps
