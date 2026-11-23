@@ -209,7 +209,7 @@ Plans:
 - [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
 - [x] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
 - [x] 45-22-PLAN.md: E3 keine Textausschnitte unter Secure View, Quellenbericht, Owner-Entscheid, SnippetPolicy (läuft vor 45-20) (COMP-05, REL-07)
-- [ ] 45-23-PLAN.md: #25 F1 Owner-Checkpoint Texte und Entscheide für 45-23 und 45-24, Marker-Lock: eine Nachzählung ist kein unfertiger Crawl, Mindestabstand der Nachzählung, Doku, CHANGELOG (IDX-09, REL-07)
+- [x] 45-23-PLAN.md: #25 F1 Owner-Checkpoint Texte und Entscheide für 45-23 und 45-24, Marker-Lock: eine Nachzählung ist kein unfertiger Crawl, Mindestabstand der Nachzählung, Doku, CHANGELOG (IDX-09, REL-07)
 - [ ] 45-24-PLAN.md: #25 F2 Rückhalt: der Abgleich läuft nach zweimal seinem Intervall trotz langer Warteschlange, nie neben einem Crawl, Zeitpunkt im Zustandsspeicher, Warnzeile, Hinweis in 18 Katalogen, Doku, CHANGELOG (IDX-10, REL-07)
 - [ ] 45-25-PLAN.md: Dateisperren, die Hintergrundjobs nicht trennen, nach `Entscheid Locking 45-23` (l1: Hinweis auf der Admin-Seite für APCu oder ArrayCache als Locking-Cache, Noop mit Verweis auf die Einrichtungsprüfung von Nextcloud, Doku; l2: Doku; l3: Vermerk), früher 45-24 Task 4; dazu Task 2: Platzhalter des Ordnerfelds der Regeln aus dem Katalog, I-45-19-01 (IDX-09, REL-07)
 - [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, Live-Proben #25 (F1, F2), CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07, IDX-09, IDX-10)
@@ -229,7 +229,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 13/25 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 14/25 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
