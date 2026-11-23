@@ -1489,8 +1489,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # sed and sha256sum over the same tree gave a8d90c20 as well; the recipe and the pipeline over git
 # archive of 2343885d, the last commit before this change, gave d75974c9 with 145 files (positive
 # control).
+# Moved on 2026-11-23 by plan 45-26, task 3 (I-45-23-07): lib/Migration/
+# Version001500Date20261012000000.php names no class of the app any more (I-45-26-01, an update
+# from 1.3.2 died on markScanStale()), sets the mark with its literals and forgets
+# scan_recounted_at, so a jump from 1.4 recounts at once (owner decision m1);
+# tests/Unit/Version001500Date20261012000000Test.php holds the cases and the literals, and
+# tests/Unit/MigrationSelfContainedTest.php drops the file from its frozen list. No file came or
+# went, so PHP_FILES_TODAY stays at 147. The recipe gave 8ed19fc8; the independent pipeline of
+# find, sort, sed and sha256sum over the same tree gave 8ed19fc8 as well; the recipe and the
+# pipeline over git archive of d2a218ba, the last commit before this change, gave a8d90c20 with
+# 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "a8d90c20d70dc6c932a0d4fcf756fb67ee6cf64fe67fbcf79c324b93509f0091"
+PHP_TREE_HASH_TODAY = "8ed19fc84de7a98802b66259810e4584be2a217791e78fd433405f0238ce85cb"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

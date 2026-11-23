@@ -48,7 +48,6 @@ final class MigrationSelfContainedTest extends TestCase {
 		'Version001300Date20260927000000.php' => ['OCA\Findling\Db\QueueMapper', 'OCA\Findling\Service\FileStateService'],
 		'Version001301Date20260929000000.php' => ['OCA\Findling\Db\QueueMapper', 'OCA\Findling\Service\FileStateService'],
 		'Version001400Date20261006000000.php' => ['OCA\Findling\AppInfo\Application', 'OCA\Findling\Service\ExAppService'],
-		'Version001500Date20261012000000.php' => ['OCA\Findling\AppInfo\Application', 'OCA\Findling\Service\ExAppService', 'OCA\Findling\Service\SettingsService'],
 		'Version001600Date20261028000000.php' => ['OCA\Findling\AppInfo\Application', 'OCA\Findling\Service\ExAppService'],
 	];
 

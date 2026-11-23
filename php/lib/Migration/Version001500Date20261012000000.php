@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Migration;
 
 use Closure;
-use OCA\Findling\AppInfo\Application;
-use OCA\Findling\Service\ExAppService;
-use OCA\Findling\Service\SettingsService;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
 use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
@@ -30,10 +28,28 @@ use OCP\Migration\SimpleMigrationStep;
  * page counts allowlist types only, and it was counted under the old list. Left
  * alone, it would stay there until the daily recount, and the page would show
  * more files as searchable than it counts as indexable, the class of issue #25.
- * SettingsService::markScanStale() is the same call the event listener makes
- * for a file operation: ScanRecountJob sees the mark within its interval and
- * counts again under the new list. The call writes one app config value and
- * nothing else, so it is as safe in maintenance mode as the delete above it.
+ * The mark is the one SettingsService::markScanStale() sets for a file
+ * operation, written the same way: only on the change from zero to a time.
+ * Since 1.7.0 a marked instance waits RECOUNT_MIN_INTERVAL_SECONDS of
+ * SettingsService from the start of the last recount round (issue #25, plan
+ * 45-23), and on a jump from 1.4.x that start is recorded. So this step also
+ * forgets scan_recounted_at, and the round under the allowlist of 1.5 begins
+ * in the next run of ScanRecountJob instead of up to six hours later (owner
+ * decision m1 on I-45-23-07, plan 45-26). Both writes touch one app config
+ * value each and nothing else, so they are as safe in maintenance mode as the
+ * delete of the version.
+ *
+ * This file names no class of the app since plan 45-26 (issue #51,
+ * I-45-26-01). It runs exactly on an update from a release before 1.5, in the
+ * process that already loaded the classes of that release, and the autoloader
+ * never loads a class twice: SettingsService::markScanStale() and
+ * SettingsService::KEY_SCAN_RECOUNTED_AT do not exist in 1.3.2, and an update
+ * from 1.3.2 died here with "Call to undefined method". So the app id, the
+ * keys and the mark stand here as literals, and
+ * Version001500Date20261012000000Test holds each of them against the constant
+ * it mirrors. Changing a migration that shipped is safe here: Nextcloud runs a
+ * migration of an app once (oc_migrations), so every instance that already
+ * had it never runs this file again.
  *
  * Nothing is asked of the container here, for the reason given in
  * Version001400Date20261006000000: a migration runs inside occ upgrade, in
@@ -49,9 +65,21 @@ use OCP\Migration\SimpleMigrationStep;
  * error anywhere.
  */
 class Version001500Date20261012000000 extends SimpleMigrationStep {
+	/** Application::APP_ID, as a literal (see the class comment). */
+	public const APP_ID = 'findling';
+
+	/** ExAppService::KEY_BACKEND_VERSION, as a literal. */
+	public const BACKEND_VERSION_KEY = 'backend_app_version';
+
+	/** SettingsService::KEY_SCAN_STALE_SINCE, as a literal. */
+	public const STALE_KEY = 'scan_stale_since';
+
+	/** SettingsService::KEY_SCAN_RECOUNTED_AT, as a literal. */
+	public const RECOUNTED_AT_KEY = 'scan_recounted_at';
+
 	public function __construct(
 		private IAppConfig $appConfig,
-		private SettingsService $settingsService,
+		private ITimeFactory $timeFactory,
 	) {
 	}
 
@@ -60,21 +88,27 @@ class Version001500Date20261012000000 extends SimpleMigrationStep {
 	 *
 	 * Guarded so a second run is a no-op: Nextcloud can replay a migration
 	 * after a failed upgrade, and one that throws on the second run turns a
-	 * recoverable upgrade into a broken instance. markScanStale() writes only on
-	 * the change from zero to a time, so a second call is a no-op as well.
+	 * recoverable upgrade into a broken instance. The mark is written only on
+	 * the change from zero to a time, and forgetting a key that is gone is a
+	 * no-op; at worst a replay costs one more recount round.
 	 */
 	public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void {
-		$this->settingsService->markScanStale();
+		if ($this->appConfig->getValueInt(self::APP_ID, self::STALE_KEY, 0) === 0) {
+			$this->appConfig->setValueInt(self::APP_ID, self::STALE_KEY, max(1, $this->timeFactory->getTime()));
+		}
 		$output->info('marked the coverage denominator for a recount under the allowlist of 1.5');
 
-		$recorded = $this->appConfig->getValueString(Application::APP_ID, ExAppService::KEY_BACKEND_VERSION, '');
+		$this->appConfig->deleteKey(self::APP_ID, self::RECOUNTED_AT_KEY);
+		$output->info('forgot when the last recount started, so the recount under the allowlist of 1.5 starts at once');
+
+		$recorded = $this->appConfig->getValueString(self::APP_ID, self::BACKEND_VERSION_KEY, '');
 		if ($recorded === '') {
 			$output->info('no recorded backend version to drop');
 
 			return;
 		}
 
-		$this->appConfig->deleteKey(Application::APP_ID, ExAppService::KEY_BACKEND_VERSION);
+		$this->appConfig->deleteKey(self::APP_ID, self::BACKEND_VERSION_KEY);
 		$output->info(sprintf('dropped the recorded backend version %s, it predates this update', $recorded));
 	}
 }
