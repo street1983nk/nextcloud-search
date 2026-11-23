@@ -1455,3 +1455,667 @@ Je einzeln, gefiltert wie oben, danach LockingCheckService.php byte-gleich zurü
 Nachtrag Task 5: der erste Lauf der verify-Zeile endete mit `VERIFY_EXIT=1` an der Prüfung `new LockingCheckService($config, ` (der Helfer rief den Konstruktor über mehrere Zeilen); der Helfer ruft ihn jetzt in einer Zeile, sonst gleich. GREEN danach erneut `OK (112 tests, 949 assertions)`, M37 bis M40 erneut je rot mit denselben Testnamen, Baumhash neu `5837bf28...` (147 Dateien, Positivkontrolle `git archive c3eaff7f` -> `8ed19fc8...`).
 
 Gates Task 5 (verify-Zeile byte-gleich aus dem Plan nach `<scratchpad>/p26/v5.sh` gezogen, zweiter voller Lauf nach dem Nachtrag oben, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1430 tests, 8961 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33, v34, v35; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `261 files already formatted`, pyright `0 errors, 0 warnings, 0 informations`, vulture still, pytest `tests/test_measurement_scripts.py tests/test_admin_ui_contract.py tests/test_phase33_audit.py tests/test_phase34_audit.py` `852 passed, 107 skipped`.
+
+### Gegenprobe nach dem Fix
+
+Plan 45-20 Task 1, 2026-11-23 ab 10:39 UTC, Repo-Kopf 42ed3b23. Instanz findling-59 (Nextcloud 35.0.3, Port 8091, Volume findling-59-html) aus 45-17, Worktree `<scratchpad>/wt-165` (v1.6.5, 06a0d7c8), Speicher `<scratchpad>/state-59/storage`. Docker seriell, vor dem Start `test -z "$(docker ps -q)"` leer, dann `docker compose -p findling-59 start`. Das Host-Backend startet `<scratchpad>/start59.sh` mit dem gespeicherten Secret und der bestehenden Registrierung neu (`uv run --no-sync python -m findling.main`), beendet wird es mit `<scratchpad>/stop59.sh`. Secrets und Passwörter ausgelassen. Abweichungen vom Standard per Umgebung: `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1` (Standard 24) und `FINDLING_RECONCILE_HOUR=<Ortsstunde des Host-Prozesses>` (Standard 3), bei jedem Neustart nachgezogen.
+
+#### Quellen vorab (45-20)
+
+Abgerufen am 2026-11-23 per `gh api repos/nextcloud/<repo>/contents/<pfad>?ref=<tag>` (Accept raw), abgelegt unter `<scratchpad>/src20/`, Stand der Instanz: server v35.0.3, app_api v35.0.0. files_accesscontrol am installierbaren Tag v6.0.1 ist in `### Quellen am Tag` schon belegt (CacheWrapper.php Z. 30-34 Maske, Z. 38-56 `formatCacheEntry()` mit `checkFileAccess(..., 0)`, StorageWrapper.php Z. 103-110 `isReadable()`, Z. 241-253 `fopen()` mit `PERMISSION_READ`, Operation.php Z. 118); hier nur die Ergänzungen für Schritt C (c):
+
+- Operation.php v6.0.1 Z. 89-119: passt eine Regel, setzt `deny` (Z. 94-97) die Sperre unabhängig von `requiredPermissions`; eine Rechte-Operation liefert ihre Bits (Z. 107) und wirft nur, wenn `($computedPermissions & $requiredPermissions) !== $requiredPermissions` (Z. 110). CacheWrapper.php Z. 49-50 nimmt die gelieferten Bits aber in den Cache-Eintrag (`$entry['permissions'] &= $permissions`). Eine Rechte-Operation ohne READ nimmt das READ-Bit also schon bei der Auflösung; sie unterscheidet Auflösung und Öffnen nicht. Der Unterschied muss aus der Bedingung kommen, nicht aus der Operation.
+- workflowengine `apps/workflowengine/lib/Check/UserGroupMembership.php` v35.0.3 Z. 43-52: `executeCheck()` liest `$this->userSession->getUser()`; mit Person `($operator === 'is') === in_array($value, $groupIds, true)` (Z. 48), ohne Person `return $operator !== 'is';` (Z. 50). Die Bedingung "Gruppe ist nicht Mitglied von X" (`!is`) ist damit ohne aktive Person wahr und für ein Mitglied von X falsch. Gewählte Regel für (c): Operation `deny`, Bedingungen Systemtag `fac59-open` UND Benutzergruppe `!is` `fac-open` (Gruppe nur mit alice). Bei der Auflösung in actAs(alice) (CacheWrapper, aktive Person alice) ist die Gruppenbedingung falsch, das READ-Bit bleibt; beim fopen ohne aktive Person (StorageWrapper Z. 253) ist sie wahr, `deny` wirft `ForbiddenException('Access denied by access control', false)` (Operation.php Z. 118).
+- admin_audit v35.0.3: `lib/AppInfo/Application.php` Z. 197-202 hört auf `BeforeNodeReadEvent` und ruft `Files::read()`; `lib/Actions/Files.php` Z. 32-50 schreibt `File with id "%s" accessed: "%s"` mit Datei-ID und `$node->getPath()`; die Identität steht im Feld `user` der Logzeile, `lib/private/Log/LogDetails.php` Z. 40 `$user = \OC_User::getUser() ?: '--';`, also die aktive Person des Requests (ohne aktive Person `--`). Ausgelöst wird das Ereignis aus `lib/private/Files/Node/HookConnector.php` Z. 198-203 (`read`-Hook der View beim fopen). Folge: ein Lesen außerhalb von actAs erscheint mit `"user":"--"`. Die Annahme, ein Lesen in actAs(bob) erscheine mit `"user":"bob"`, war falsch: `ReaderContext::actAs` setzt nur `IUserSession::setVolatileActiveUser`, `\OC_User::getUser()` (lib/private/legacy/OC_User.php v35.0.3 Z. 299-305) liest aber den Sitzungswert `user_id`; auch ein Lesen in actAs erscheint mit `"user":"--"` (echt belegt unten, Befund U-45-20-02). Öffentliche API für eine eigene Zeile: `OCP\Log\Audit\CriticalActionPerformedEvent` (lib/public/Log/Audit/CriticalActionPerformedEvent.php, `@since 22.0.0`, in v33.0.0 und v34.0.0 byte-gleich, v35.0.3 eine Leerzeile mehr), admin_audit registriert dafür `CriticalActionPerformedEventListener` (lib/AppInfo/Application.php v33.0.0 Z. 87, v34.0.0 Z. 88, v35.0.3 Z. 82), der die Meldung mit ihren Parametern über `Action::log` schreibt (lib/Listener/CriticalActionPerformedEventListener.php v35.0.3 Z. 20-30).
+- Weg einer 403 mit eigenem Kopf durch die OCS-Hülle: GatewayController ist ein `OCSController` (php/lib/Controller/GatewayController.php Z. 25) mit `#[ExAppRequired]` und `#[ApiRoute]` (Z. 88-90) und gibt bei policy `new DataResponse([...], Http::STATUS_FORBIDDEN)` mit `addHeader(self::REFUSAL_HEADER, self::REFUSAL_POLICY)` zurück (Z. 231-232). `lib/private/AppFramework/Http/Dispatcher.php` v35.0.3 Z. 216-221 baut eine DataResponse noch in `executeController()` über `$controller->buildResponse()` in eine OCS-Antwort um, also vor `afterController` (Z. 129); `lib/private/AppFramework/OCS/BaseResponse.php` Z. 40-41 übernimmt Köpfe und Status der DataResponse (`setHeaders($dataResponse->getHeaders())`, `setStatus(...)`). `lib/private/AppFramework/Middleware/OCSMiddleware.php` Z. 62-81 ersetzt eine 403 nur, wenn die Antwort keine `BaseResponse` ist; die umgebaute Antwort bleibt also mit Kopf. AppAPI v35.0.0 `lib/Middleware/AppAPIAuthMiddleware.php` hat nur `beforeController` (Z. 40) und `afterException` (Z. 64), kein `afterController`; die ExApp ruft die Route direkt per HTTP, kein Proxy dazwischen. Erwartung: der Kopf `X-Findling-Refusal: policy` kommt mit 403 beim Backend an (echt geprüft in M3 unten).
+
+#### Stand vor Schritt 0 (I-45-17-05)
+
+Gelesen am 2026-11-23 um 10:39 UTC bei beendetem Backend-Prozess (kein `findling.main` auf dem Host, Instanz gerade gestartet). Container-Seite: `(wt-165/backend) uv run --no-sync python -I <scratchpad>/attempts.py <state-59>/storage/state.db <ids>` (nur SELECT, Verbindung `mode=ro`); Nextcloud-Seite: `php /tmp/sql59.php "SELECT ..."` im Container (`PRAGMA query_only = ON`).
+
+```
+file_id=130 | state=failed | reason=gateway_error | attempts=4 | etag=7390432979f1b94f2d06a19465fe5bfb | deleted_at=None
+file_id=133 | state=failed | reason=gateway_error | attempts=4 | etag=30b960be0859588e9f1e6076797d5587 | deleted_at=None
+file_id=134 | state=failed | reason=gateway_error | attempts=3 | etag=f33a6f8b7758fce87a4a7961ee13ae23 | deleted_at=None
+file_id=135 | state=indexed | reason=None | attempts=3 | etag=aab8f5f9fe4383065c88796e0999e84e | deleted_at=None
+file_id=136 | state=indexed | reason=None | attempts=4 | etag=8011b3c9c02f76ae5c3329355affaca3 | deleted_at=None
+file_id=137 | state=indexed | reason=None | attempts=2 | etag=8e765fe9e3e9366430c5d5bdbc69c016 | deleted_at=None
+file_id=141 | state=failed | reason=gateway_error | attempts=4 | etag=cb3ba36a001ac81f2762794231cfc3ca | deleted_at=None
+file_id=142 | state=failed | reason=gateway_error | attempts=4 | etag=0023ea50ab9cf1aac9d47c9e83e414a4 | deleted_at=None
+file_id=143 | state=failed | reason=gateway_error | attempts=4 | etag=d05ee6e3ec4760ac39292decc5372396 | deleted_at=None
+file_id=152 | state=indexed | reason=None | attempts=2 | etag=fe9d3461b04a939e88181de2ec952d67 | deleted_at=None
+file_id=153 | state=indexed | reason=None | attempts=2 | etag=e40b704b979501e145698aec73366777 | deleted_at=None
+-- oc_findling_file_state
+file_id=134 | state=failed | reason=gateway_error | updated_at=2026-11-22 11:40:56
+-- oc_findling_queue
+file_id=130 | storage_id=3 | locked_at=2026-11-22 11:37:35 | retries=2 | kind=content
+file_id=133 | storage_id=3 | locked_at=2026-11-22 11:37:35 | retries=2 | kind=content
+file_id=141 | storage_id=4 | locked_at=2026-11-22 11:37:35 | retries=2 | kind=content
+file_id=142 | storage_id=4 | locked_at=2026-11-22 11:37:35 | retries=2 | kind=content
+file_id=143 | storage_id=4 | locked_at=2026-11-22 11:37:35 | retries=2 | kind=content
+```
+
+| fileId | Zustand | Grund | attempts | Abgleiche bis 4 | Erwartung Schritt 0 |
+|---|---|---|---|---|---|
+| 130, 133 (bob), 141, 142, 143 (dave) | failed | gateway_error | 4 | 0 | direkt Gegenkontrolle; sie liegen aber noch belastet in der Warteschlange (`retries=2`, Sperre seit 2026-11-22 11:52:35 abgelaufen) und werden beim Start erneut beansprucht, unabhängig vom Abgleich |
+| 134 (bob) | failed | gateway_error | 3 | 1 | ein Abgleich übergibt 134, attempts 4, danach Gegenkontrolle |
+| 135, 136, 137, 152, 153 | indexed | | 3, 4, 2, 2, 2 | entfällt | bleiben indexed (in M1 lesbar) |
+
+#### Schritt 0 Serie auf v1.6.5
+
+Entscheid d1: echt abgewartet, je Zyklus die Stunde nachgezogen, beide Hälften aus dem Worktree `wt-165` (v1.6.5), M1 (shareDisabledDownload) aktiv. Kein Eingriff in state.db.
+
+Zyklus 1: Backend um 10:40:15 UTC gestartet (`FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 FINDLING_RECONCILE_HOUR=11`, Ortsstunde CET; letzter fertiger Zyklus 2026-11-22 11:40 UTC, also fällig). Log `state-59/exapp-s0-zyklus1.log`, wörtlich (Heartbeat-Zeilen ausgelassen):
+
+```
+INFO:findling.worker.doc_keys:doc key verify, checked=60 corrected=0
+INFO:findling.worker.reconcile:reconcile round walked, mounts=7 slices=7 seen=60 stale=1 missing=0 given_up=0
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 141
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 142
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 143
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 130
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 133
+WARNING:findling.worker.poller:content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage
+WARNING:findling.worker.poller:indexing pass stopped, the content gateway is unavailable, 1 rows handed back, 5 charged
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 134
+INFO:findling.worker.poller:pass finished, claimed=1 indexed=0 skipped=0 failed=1 unchanged=0 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+```
+
+Der Abgleich übergab genau eine Datei (`stale=1`, 134). Die fünf Zeilen 130, 133, 141, 142, 143 kamen nicht vom Abgleich, sondern lagen seit 45-17 belastet in der Warteschlange (Sperre abgelaufen) und wurden beim Start erneut beansprucht; sie lösten auf 1.6.5 wieder die Ausfall-Eskalation aus (Befund I-45-17-01, Gegenkontrolle für den Abschnitt `Keine Ausfall-Eskalation` unten) und wurden mit `retries=3` erneut 900 s gesperrt. Nach Ablauf (10:55:21) schrieb die Nextcloud-Seite sie um 10:56:23 als `failed(repeatedly_stuck)` ab, die Warteschlange war danach leer. Stand 10:41 UTC:
+
+```
+file_id=130 | state=failed | reason=gateway_error | attempts=5
+file_id=133 | state=failed | reason=gateway_error | attempts=5
+file_id=134 | state=failed | reason=gateway_error | attempts=4
+file_id=141 | state=failed | reason=gateway_error | attempts=5
+file_id=142 | state=failed | reason=gateway_error | attempts=5
+file_id=143 | state=failed | reason=gateway_error | attempts=5
+-- oc_findling_file_state
+file_id=134 | state=failed | reason=gateway_error | updated_at=2026-11-23 10:40:37
+-- oc_findling_queue (10:41)
+file_id=130 | storage_id=3 | locked_at=2026-11-23 10:40:21 | retries=3
+(133, 141, 142, 143 gleich)
+```
+
+Zyklus 2, Gegenkontrolle: Backend um 11:41:14 UTC neu gestartet (`FINDLING_RECONCILE_HOUR=12`, Ortsstunde; Zyklus 1 lag eine Stunde zurück). Log `state-59/exapp-s0b.log`:
+
+```
+INFO:findling.worker.doc_keys:doc key verify, checked=60 corrected=0
+INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+INFO:findling.worker.reconcile:reconcile round walked, mounts=7 slices=7 seen=60 stale=0 missing=0 given_up=0
+```
+
+Stand 11:42 UTC (state.db und Nextcloud-Seite), keine Gateway-Anfrage, keine refused-Zeile, Warteschlange `n=0`:
+
+```
+file_id=130 | state=failed | reason=gateway_error | attempts=5
+file_id=133 | state=failed | reason=gateway_error | attempts=5
+file_id=134 | state=failed | reason=gateway_error | attempts=4
+file_id=141 | state=failed | reason=gateway_error | attempts=5
+file_id=142 | state=failed | reason=gateway_error | attempts=5
+file_id=143 | state=failed | reason=gateway_error | attempts=5
+-- oc_findling_file_state
+file_id=130 | state=failed | reason=repeatedly_stuck | updated_at=2026-11-23 10:56:23
+file_id=133 | state=failed | reason=repeatedly_stuck | updated_at=2026-11-23 10:56:23
+file_id=134 | state=failed | reason=gateway_error | updated_at=2026-11-23 10:40:37
+file_id=141 | state=failed | reason=repeatedly_stuck | updated_at=2026-11-23 10:56:23
+file_id=142 | state=failed | reason=repeatedly_stuck | updated_at=2026-11-23 10:56:23
+file_id=143 | state=failed | reason=repeatedly_stuck | updated_at=2026-11-23 10:56:23
+```
+
+Ergebnis Schritt 0: die Serie ist auf v1.6.5 ausgeschöpft, 134 mit attempts 4 nach genau einer Übergabe durch den Abgleich, die übrigen fünf mit attempts 5 (die fünfte Ablehnung kam aus der Warteschlange, nicht aus dem Abgleich). Der nächste Abgleich übergibt keine dieser Dateien mehr (`stale=0`, attempts unverändert). Urteile der Nextcloud-Seite: 134 `failed(gateway_error)`, 130, 133, 141, 142, 143 `failed(repeatedly_stuck)`. Abweichung von der Erwartung: attempts steht bei fünf Dateien auf 5 statt 4, weil die belasteten Warteschlangenzeilen aus 45-17 erneut beansprucht wurden; für die Serie des Abgleichs ohne Wirkung (er übergibt ab attempts über 3 nicht mehr), kein Befund.
+
+#### Schritt A: neuer Container vor der Begleit-App 1.6.5
+
+11:42:57 UTC: Backend 1.6.5 beendet, `FINDLING_PORT=8091 FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 FINDLING_RECONCILE_HOUR=13 sh <scratchpad>/register20.sh` (Kopie von scripts/dev/register-exapp.sh mit `REPO_ROOT` = Hauptarbeitsbaum, Backend per `uv run --no-sync`), php/ bleibt der Worktree `wt-165`:
+
+```
+registering version 1.7.0 with 6 routes from backend/appinfo/info.xml
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+$ occ app_api:app:list
+findling_backend (Findling Backend): 1.7.0 [enabled]
+```
+
+Backend-Log `state-59/exapp.log` beim Start, wörtlich:
+
+```
+INFO:findling.store.repo:refusal streaks renewed once after the update, rows=6 mark=refusal_streaks_1_7_0
+INFO:findling.worker.doc_keys:doc key verify, checked=60 corrected=0
+INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+```
+
+Profil, wie das Backend es liest (`<scratchpad>/gw20.sh admin /ocs/v2.php/apps/findling/profile?format=json 1.7.0`, AppAPI-Kopf mit dem Secret der Registrierung, nicht ausgegeben):
+
+```
+HTTP/1.1 200 OK
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"profile":"economy","precision":"int8","confirmed":null,"verdicts":3,"paused":false}}}
+```
+
+Generation 3: die Begleit-App 1.6.5 meldet `verdicts` 3. Abgleich nach einer echt abgewarteten Stunde (12:43:5x UTC, Ortsstunde 13), Log wörtlich:
+
+```
+INFO:findling.worker.reconcile:reconcile round walked, mounts=7 slices=7 seen=60 stale=6 missing=0 given_up=0
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 130
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 133
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 134
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 141
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 142
+WARNING:findling.worker.poller:content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage
+WARNING:findling.worker.poller:indexing pass stopped, the content gateway is unavailable, 1 rows handed back, 5 charged
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 143
+INFO:findling.worker.poller:pass finished, claimed=1 indexed=0 skipped=0 failed=1 unchanged=0 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+```
+
+Der Abgleich übergibt die sechs Dateien (`stale=6`, durch die Erneuerung wieder Kandidaten). Die Begleit-App 1.6.5 antwortet weiter 500, mit derselben Secure-View-Ausnahme wie vorher (`php /tmp/nclog20.php nextcloud.log 2026-11-23T11:42:00`, gekürzt):
+
+```
+2026-11-23T12:45:27+00:00 level=3 user=-- app=findling GET /ocs/v2.php/apps/findling/files/130?userId=alice message=Findling: unknown error reading a file | Exception=OCP\Files\ForbiddenException Message=Download blocked due the secure view policy File=SecureViewWrapper.php Line=97
+(133, 134, 141, 142 um 12:45:27, 143 um 12:47:28 gleich)
+```
+
+Quittung ohne 400: die Zugriffsprotokolle des Containers seit 12:40 UTC (`docker logs --since`, Pfad ohne Query) zeigen für die Begleit-App nur 200 außer den sechs Gateway-Antworten 500:
+
+```
+      1 "DELETE /ocs/v2.php/apps/findling/queues/documents HTTP/1.1" 200
+      6 "GET /ocs/v2.php/apps/findling/files/<130|133|134|141|142|143> HTTP/1.1" 500
+      7 "GET /ocs/v2.php/apps/findling/files/slice HTTP/1.1" 200
+      1 "GET /ocs/v2.php/apps/findling/mounts HTTP/1.1" 200
+     35 "GET /ocs/v2.php/apps/findling/profile HTTP/1.1" 200
+      5 "GET /ocs/v2.php/apps/findling/queues/documents HTTP/1.1" 200
+      8 "GET /ocs/v2.php/apps/findling/queues/documents/stats HTTP/1.1" 200
+      2 "POST /ocs/v2.php/apps/findling/queues/documents/requeue HTTP/1.1" 200
+      3 "POST /ocs/v2.php/apps/findling/queues/documents/topup HTTP/1.1" 200
+      1 "POST /ocs/v2.php/apps/findling/queues/documents/unlock HTTP/1.1" 200
+```
+
+Die Quittung (`DELETE /queues/documents`) für 143 antwortet 200, `oc_findling_file_state` danach `file_id=143 | state=failed | reason=gateway_error | updated_at=2026-11-23 12:47:28`. nextcloud.log seit 11:42 hat außer den sechs Secure-View-Zeilen nur vier Zeilen von 11:43:07 (`Invalid signature for ExApp: findling_backend and user: null`, `ExApp findling_backend request to NC validation failed`): das neue Backend fragte während der Neuregistrierung mit dem neuen Secret, bevor AppAPI es kannte; danach keine mehr. Im Backend-Log steht keine 4xx-Antwort außer `PUT /enabled?enabled=0 401` (die Abmeldung der alten Registrierung mit dem alten Secret). Container-Urteile nach dem Pass: 130, 133, 134, 141, 142 `failed(gateway_error)` attempts 2, 143 attempts 1.
+
+Grenze dieser Kombination: `policy_blocked -> gateway_error` ist hier nicht erreichbar, weil die Begleit-App 1.6.5 den Kopf `X-Findling-Refusal` nie sendet (sie antwortet 500). Belegt per pytest am Kopf 42ed3b23: `tests/test_queue_client.py::test_policy_blocked_reaches_only_a_companion_of_generation_4[profile0-gateway_error]` bis `[profile2-gateway_error]` und `[profile3-policy_blocked]`, `test_the_failed_fallback_per_generation` (5 passed).
+
+Die fünf beim Ausfall belasteten Zeilen (130, 133, 134, 141, 142, `retries=1`, gesperrt ab 12:45:27) blieben bis zu ihrer Abschreibung durch die Warteschlange bei der Begleit-App 1.6.5, damit die Dateien in Schritt B über den Abgleich und nicht über eine alte Warteschlangenzeile kommen (Stand vor Schritt B unten).
+
+#### Befund U-45-20-01 und Fix (Erneuerung erst ab Generation 4)
+
+| ID | Schwere | Befund | Beleg | Entscheid |
+|---|---|---|---|---|
+| U-45-20-01 | MEDIUM | Die einmalige Erneuerung `refusal_streaks_1_7_0` lief beim Start des Containers 1.7.0 auch vor einer Begleit-App 1.6.5 (Generation 3). Der Abgleich gab die erneuerten Dateien dieser Begleit-App, die sie weiter mit 500 ablehnte; mit fünf Dateien auf zwei Speichern eskalierte der Pass, und drei Belastungen einer Eskalation hätten die Serie vor dem Update der Begleit-App verbraucht (poller.py `_mark_the_charged`: "after three charges Nextcloud writes it off as failed(repeatedly_stuck) … the charges count as that streak"). In der empfohlenen Reihenfolge (Container zuerst) wären die Dateien danach ohne `--restart` nie mehr gelesen worden; ohne Eskalation nach drei Nächten ebenso | Schritt A erster Lauf oben: `rows=6`, `stale=6`, `5 charged`, attempts 2, fünf Warteschlangenzeilen `retries=1` | Owner "Ok wie empfohlen" (2026-11-23 12:58 UTC): f1, MEDIUM, Fix per TDD, Schritte A und B neu, keine CHANGELOG-Zeile |
+
+Fix (Kopf 151dca7b): `Store.renew_refusal_streaks(companion_generation=...)` führt die Marke `refusal_streaks_1_7_0` nur bei einer Generation ab `RENEW_1_7_0_MIN_GENERATION` (4) aus, die Marke von 1.6.3 unverändert bei jedem Öffnen; der Poller fragt sie einmal je Prozess im ersten Pass, der auf der Profilantwort Generation 4 liest, vor dem Claim. Die Aufrufe beim Öffnen (Poller `_open_store`, Abgleich) erneuern nur noch unter der Marke von 1.6.3. Was vor der alten Begleit-App aufläuft (attempts aus Ablehnungen und Belastungen), setzt die spätere Erneuerung zurück; die Abschreibung `repeatedly_stuck` auf der Nextcloud-Seite und Warteschlangenzeilen hindern den Abgleich nicht (Quelle: reconcile.py `_compare` liest nur den Zustand des Containers, "whatever the Nextcloud side carries for it"; echt belegt im Neulauf unten). Die zweite Variante (Ablehnungen vor Generation 4 verbrauchen die Serie nicht) ist deshalb nicht nötig.
+
+RED (Commit aec5edcf, vor der Änderung, `pytest -k "renewal or renews or generation_4 or updated_later or no_trace"`):
+
+```
+FAILED tests/test_poller.py::test_the_renewal_of_1_7_0_runs_in_the_first_pass_that_reads_generation_4[4-True]
+FAILED tests/test_poller.py::test_a_companion_updated_later_still_gets_the_renewal
+FAILED tests/test_store_repo.py::test_the_renewal_of_1_7_0_waits_for_a_companion_of_generation_4[None]
+FAILED tests/test_store_repo.py::test_the_renewal_of_1_7_0_waits_for_a_companion_of_generation_4[2]
+FAILED tests/test_store_repo.py::test_the_renewal_of_1_7_0_waits_for_a_companion_of_generation_4[3]
+FAILED tests/test_store_repo.py::test_a_later_generation_renews_as_well - Typ...
+FAILED tests/test_store_repo.py::test_refusals_under_a_companion_of_generation_3_leave_no_trace_after_the_renewal
+7 failed, 8 passed, 386 deselected in 1.28s
+```
+
+GREEN (Commit 151dca7b): `tests/test_poller.py tests/test_store_repo.py tests/test_reconcile.py` 521 passed, 1 skipped; volle Suite 7395 passed, 305 skipped; ruff check, ruff format --check, pyright (latest, 0 errors), vulture grün; `bash scripts/dev/php_gates_docker.sh all` exit 0 (Psalm taint findings 0, zizmor und actionlint grün). Drei bestehende Tests rufen die Erneuerung jetzt mit `companion_generation=4` (test_store_repo.py zwei Tests zur Marke 1.7.0, test_reconcile.py `test_a_spent_refusal_of_1_6_is_work_again_after_the_renewal_of_1_7_0`).
+
+Mutationen (je eine, danach `cmp` gegen die gesicherte Datei, Original wieder 18 passed):
+
+| Mutation | Ergebnis |
+|---|---|
+| M1 Bedingung in repo.py durch `if True:` ersetzt (immer erneuern) | 4 failed, 14 passed |
+| M2 `RENEW_1_7_0_MIN_GENERATION = 3` | 4 failed, 14 passed |
+| M3 Aufruf im Pass des Pollers entfernt | 2 failed, 16 passed |
+| M4 Generation nicht weitergereicht (`renew_refusal_streaks()`) | 2 failed, 16 passed |
+
+Baumhash des Pakets (test_measurement_scripts.py): efc966a5... mit Rezept und mit find, sort, sed, sha256sum gleich, Positivkontrolle über git archive von 42ed3b23 d45bc1d3... (der alte Wert).
+
+Rückkehr der Instanz für den Neulauf (13:27 UTC, Backend beendet): die Probe braucht eine Datenbank, in der die Erneuerung von 1.7.0 noch nicht gelaufen ist, und Spuren von Ablehnungen vor Generation 4. Deshalb nur die Marke entfernt (`(backend) uv run --no-sync python -I <scratchpad>/restore20.py <state-59>/storage/state.db`, Ausgabe `state-59/restore20.txt`); die Spuren aus dem ersten Lauf von A bleiben bewusst stehen, weil genau sie die Spurfreiheit belegen:
+
+```
+-- vorher
+meta refusal_streaks_1_6_3=done
+meta refusal_streaks_1_7_0=done
+file_id=130 | state=failed | reason=gateway_error | attempts=2
+(133, 134, 141, 142, 143 gleich, attempts 2)
+DELETE FROM meta WHERE key = 'refusal_streaks_1_7_0' -> 1 Zeile
+-- nachher
+meta refusal_streaks_1_6_3=done
+(Dateien unverändert, attempts 2)
+-- oc_findling_queue
+file_id=130 | locked_at=2026-11-23 12:45:27 | retries=1
+(133, 134, 141, 142 gleich)
+-- oc_findling_file_state
+130, 133, 141, 142 failed(repeatedly_stuck) 10:56:23; 134 failed(gateway_error) 10:40:37; 143 failed(gateway_error) 12:47:28
+```
+
+Der Zustand vor dem ersten Lauf von A (attempts 5 bzw. 4, ohne Marke 1.7.0) ist in Schritt 0 belegt; der Neulauf beginnt mit kürzeren Serien, damit Ablehnungen vor Generation 4 überhaupt Spuren hinterlassen können.
+
+#### Schritt A nach dem Fix (Neulauf)
+
+13:27:40 UTC: `FINDLING_PORT=8091 FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 FINDLING_RECONCILE_HOUR=14 sh <scratchpad>/register20.sh` (Container am Kopf 151dca7b, php/ weiter Worktree `wt-165`, Begleit-App 1.6.5). `registering version 1.7.0`, `ExApp findling_backend successfully registered.` Profil wie oben `"verdicts":3`. Backend-Log `state-59/exapp.log` beim Start: keine Zeile `refusal streaks renewed`, die Marke fehlt weiter (`meta.py`: nur `refusal_streaks_1_6_3=done`). Die fünf Warteschlangenzeilen aus dem ersten Lauf (Sperre abgelaufen) holte der Poller sofort und die Begleit-App 1.6.5 lehnte sie ab, ebenso um 13:44 nach Ablauf der neuen Sperre, wörtlich (zweimal):
+
+```
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 130
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 133
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 134
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 141
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 142
+WARNING:findling.worker.poller:content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage
+WARNING:findling.worker.poller:indexing pass stopped, the content gateway is unavailable, 0 rows handed back, 5 charged
+```
+
+Abgleich nach einer echt abgewarteten Stunde (13:48 UTC, Ortsstunde 14), wörtlich:
+
+```
+INFO:findling.worker.reconcile:reconcile round walked, mounts=7 slices=7 seen=60 stale=1 missing=0 given_up=0
+WARNING:findling.worker.poller:content gateway refused one file, http status 500 for file id 143
+INFO:findling.worker.poller:pass finished, claimed=1 indexed=0 skipped=0 failed=1 unchanged=0 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+```
+
+Stand danach (state.db): 130, 133, 134, 141, 142 `failed(gateway_error)` attempts 4 (über der Grenze, der Abgleich gibt sie nicht mehr), 143 attempts 3; keine Marke `refusal_streaks_1_7_0`. Das ist die Lage, die der Befund beschreibt: vor der Begleit-App der Generation 3 ist die Serie verbraucht. Mit dem Fix ist sie das nur bis zur Erneuerung, die erst vor Generation 4 läuft (Schritt B).
+
+#### Suche direkt nach dem Update (45-26)
+
+Vor dem Bind-Mount (14:00:08 UTC, Backend 1.7.0 am Kopf 151dca7b läuft, Begleit-App noch 1.6.5): `backend_app_version` in oc_appconfig leer (die Admin-Seite war seit 45-17 nicht offen), deshalb `occ config:app:set findling backend_app_version --value=1.6.5` (`Config value 'backend_app_version' for app 'findling' is now set to '1.6.5'`). Dann `docker compose -f <scratchpad>/compose-59b.yaml -p findling-59 up -d` (php/ des Hauptarbeitsbaums als Bind-Mount, sonst gleich compose-59.yaml), `occ upgrade`:
+
+```
+Updating <findling> ...
+Updated <findling> to 1.7.0
+Update successful
+The database schema does not match what is expected for the installed version:
+  - oc_job_classes_registry: missing index 'class_index'
+  - oc_federated_invites: missing index 'UNIQ_A2C17D5A5F37A13B'
+```
+
+(Die zwei fehlenden Indizes gehören zum Nextcloud-Kern, nicht zu Findling, und standen vor dem Update schon so; ohne Bezug zur Probe.) Direkt danach (14:00:28 UTC), vor jedem Aufruf der Admin-Seite, der Überblick- oder Status-Route und vor dem ersten Abgleich mit der neuen Begleit-App (`<scratchpad>/stepB1.sh`, Ausgabe `state-59/stepB1.txt`):
+
+Vorher backend_app_version: 1.6.5 (per occ gesetzt, Zustand einer Instanz, deren Admin-Seite zuletzt vor dem Update offen war)
+Nachher backend_app_version: (leer)
+oc_migrations: 001700Date20261123000000
+OCS direkt nach dem Update: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-offen.odt","subline":"Positivkontrolle59 Dieser Text ist lang genug, damit er ohne OCR als Klartext gelesen","resourceUrl":"\/f\/135","icon":"icon-search","rounded":false,"attributes":{"fileId":"135","highlights":"[[0,18]]"}}],"cursor":null}}
+Suche direkt nach dem Update: 1 Treffer für Positivkontrolle59 als bob, vor jedem Aufruf der Admin-Seite
+Drift-Zeilen nextcloud.log: 0 vorher, 0 nachher
+
+Weiter: `occ app:list` `findling: 1.7.0`, `app_api: 35.0.0`, `richdocuments: 12.0.2`, `groupfolders: 23.0.1`; SHA-256 von `lib/Service/GatewayReader.php` im Container 5f92e444... gleich der Datei im Repo und `git show HEAD:php/lib/Service/GatewayReader.php`. Profil `"verdicts":4` (Generation 4). Im Backend-Log danach, im ersten Pass mit Generation 4:
+
+```
+INFO:findling.store.repo:refusal streaks renewed once after the update, rows=6 mark=refusal_streaks_1_7_0
+```
+
+state.db danach: 130, 133, 134, 141, 142, 143 `failed(gateway_error)` attempts 1. Die Spuren der Zeit vor Generation 4 (attempts 4, `failed(repeatedly_stuck)` auf der Nextcloud-Seite seit 13:59:51, Warteschlange abgeschrieben) stehen der Serie nicht mehr im Weg.
+
+#### Schritt B: neue Begleit-App, M1 über den Abgleich
+
+Abgleich mit der Begleit-App 1.7.0: Backend am Kopf 151dca7b um 14:49:06 UTC neu gestartet (`FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1 FINDLING_RECONCILE_HOUR=15`; der letzte fertige Zyklus von 13:48 lag eine Stunde zurück), kein `--restart`. Backend-Log `state-59/exapp-b.log`, wörtlich:
+
+```
+INFO:findling.worker.reconcile:reconcile round walked, mounts=28 slices=28 seen=67 stale=6 missing=0 given_up=0
+INFO:findling.index.writer:committed 6 documents
+INFO:findling.worker.poller:pass finished, claimed=6 indexed=6 skipped=0 failed=0 unchanged=0 requeued=0 embedded=0 committed=6 slots=1 throttled=0
+```
+
+(mounts=28 und seen=67: die Saat für M3 und TF-zwanzig mit u01 bis u20 lag zu diesem Zeitpunkt schon an, siehe unten.) Messung (`<scratchpad>/meas20.sh`, Ausgabe `state-59/meas20-B-M1.txt`), wörtlich:
+
+```
+-- Gateway-Anfragen laut Zugriffsprotokoll seit 2026-11-23T14:49:00Z (Datei-ID, Leser, Status)
+      1 GET /ocs/v2.php/apps/findling/files/130?userId=bob 200
+      1 GET /ocs/v2.php/apps/findling/files/133?userId=bob 200
+      1 GET /ocs/v2.php/apps/findling/files/134?userId=bob 200
+      1 GET /ocs/v2.php/apps/findling/files/141?userId=dave 200
+      1 GET /ocs/v2.php/apps/findling/files/142?userId=dave 200
+      1 GET /ocs/v2.php/apps/findling/files/143?userId=dave 200
+-- Backend-Zeilen seit Beginn (gefiltert, ohne Secrets)
+      1 INFO:findling.worker.poller:pass finished, claimed=6 indexed=6 skipped=0 failed=0 unchanged=0 requeued=0 embedded=0 committed=6 slots=1 throttled=0
+-- state.db
+file_id=130 | state=indexed | reason=None | attempts=2 | etag=7390432979f1b94f2d06a19465fe5bfb | deleted_at=None
+file_id=133 | state=indexed | reason=None | attempts=2 | etag=30b960be0859588e9f1e6076797d5587 | deleted_at=None
+file_id=134 | state=indexed | reason=None | attempts=2 | etag=f33a6f8b7758fce87a4a7961ee13ae23 | deleted_at=None
+file_id=135 | state=indexed | reason=None | attempts=3 | etag=aab8f5f9fe4383065c88796e0999e84e | deleted_at=None
+file_id=136 | state=indexed | reason=None | attempts=4 | etag=8011b3c9c02f76ae5c3329355affaca3 | deleted_at=None
+file_id=137 | state=indexed | reason=None | attempts=2 | etag=8e765fe9e3e9366430c5d5bdbc69c016 | deleted_at=None
+file_id=141 | state=indexed | reason=None | attempts=2 | etag=cb3ba36a001ac81f2762794231cfc3ca | deleted_at=None
+file_id=142 | state=indexed | reason=None | attempts=2 | etag=0023ea50ab9cf1aac9d47c9e83e414a4 | deleted_at=None
+file_id=143 | state=indexed | reason=None | attempts=2 | etag=d05ee6e3ec4760ac39292decc5372396 | deleted_at=None
+file_id=152 | state=indexed | reason=None | attempts=2 | etag=fe9d3461b04a939e88181de2ec952d67 | deleted_at=None
+file_id=153 | state=indexed | reason=None | attempts=2 | etag=e40b704b979501e145698aec73366777 | deleted_at=None
+-- Unified Search (OCS, Provider findling): Treffer je Wort und Nutzer
+Wasserzeichenprobe59a bob=1 alice=1 carol=0
+Wasserzeichenprobe59b bob=1 alice=1 carol=0
+Wasserzeichenprobe59c bob=1 alice=1 carol=0
+Wasserzeichenprobe59d dave=1 alice=1 carol=0
+Wasserzeichenprobe59e dave=1 alice=1 carol=0
+Wasserzeichenprobe59f dave=1 alice=1 carol=0
+Positivkontrolle59 bob=1 alice=1 carol=0
+Eigenprobe59 bob=1 alice=0 carol=0
+Leseprobe59 bob=1 alice=1 carol=0
+Teamordnerprobe59a bob=1 alice=1 carol=1
+Teamordnerprobe59b bob=1 alice=1 carol=0
+```
+
+Die sechs gesperrten Dateien sind über den Abgleich ohne `occ findling:index --restart` indexiert, gelesen vom Besitzer (bob bzw. dave), jeweils mit einem einzigen Öffnen ohne aktive Person (der Home-Mount des Besitzers trägt keine Freigabe, shareDisabledDownload greift dort nicht, kein Secure-View-Eintrag in nextcloud.log seit 14:49). Eine indexierte Datei hat in `oc_findling_file_state` keine Zeile (die Nextcloud-Seite schreibt nur Fehlurteile). Unified Search: Besitzer und alice finden jedes Wort, carol keins außer der Positivkontrolle `Teamordnerprobe59a` aus TF-lesen, in dem sie Mitglied ist.
+
+#### Pfad folgt dem Besitzer (I-45-17-06)
+
+Datei 130 (`wz59-b1.odt` von bob, an alice ohne Download freigegeben, M1). In 1.6.5 las alice (`userId=alice`, Vorher-Tabelle), im Abgleich von Schritt B liest der Besitzer: `GET /ocs/v2.php/apps/findling/files/130?userId=bob 200` (14:49 UTC). Damit sich die Pfade beider Personen unterscheiden, hat bob die Datei danach per WebDAV in seinen Ordner `Ablage` verschoben (`MKCOL 201`, `MOVE 201`, 14:50:35 UTC); alice sieht die Freigabe weiter unter `/wz59-b1.odt`. Belege nach dem Lauf der Metadaten-Zeile (`<scratchpad>/pfad20.sh`, Ausgabe `state-59/pfad20.txt`):
+
+(1) Auftrag und Zustand: `oc_findling_queue` führt keinen Pfad (Spalten `id, file_id, storage_id, root_id, is_update, size, locked_at, retries, dirty, claim_token, kind`), während des Laufs stand dort `file_id=130 | storage_id=3 | retries=0`; `oc_filecache` `fileid=130 | storage=3 | path=files/Ablage/wz59-b1.odt` (bobs Speicher); state.db `path=Ablage/wz59-b1.odt`, `state=indexed` (relativ zu bobs Ordner, gewollt: QueueServiceReaderTest `testTheOwnerIsTheReaderBeforeAnAlphabeticallyEarlierRecipient`); `oc_findling_file_state` hat für eine indexierte Datei keine Zeile.
+
+(2) Admin-Seite, Einzelabfrage als admin (`GET /apps/findling/admin/diagnose?ref=130`):
+
+```
+{"found":true,"fileId":130,"path":"Ablage\/wz59-b1.odt","reference":"bob\/files\/Ablage\/wz59-b1.odt","uid":"bob","trashed":false,"shares":1,"state":"indexed","reason":"","label":"Indexed","remedy":"The content of this file is searchable.","errorClass":"","checkedAt":1795445472,"backendReachable":true,"note":""}
+```
+
+Die Admin-Seite zeigt den Pfad des Besitzers samt Referenz `bob/files/...`; sie ist nur für Admins erreichbar und zeigte diesen Pfad schon in 1.6.5 (die Einzelabfrage löst über den Besitzer auf), alice sieht sie nicht.
+
+(3) admin_audit (vor dem Abgleich von Schritt B aktiviert), `audit.log` über `php /tmp/nclog20.php`:
+
+```
+2026-11-23T14:49:25+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/130?userId=bob message=File with id "130" accessed: "/bob/files/wz59-b1.odt"
+2026-11-23T14:50:35+00:00 level=1 user=bob app=admin_audit MOVE /remote.php/dav/files/bob/wz59-b1.odt message=File renamed with id "130" from "/bob/files/wz59-b1.odt" to "/bob/files/Ablage/wz59-b1.odt"
+```
+
+Das Gateway-Lesen steht mit dem Pfad in bobs Ordner und `user=--` (das erste Öffnen ohne aktive Person gelang, weil bobs Home-Mount keine Freigabe trägt und shareDisabledDownload dort nicht greift; kein erneutes Öffnen in actAs).
+
+(4) Unified Search über OCS (`Wasserzeichenprobe59a`), nach dem Verschieben:
+
+OCS alice: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"wz59-b1.odt","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130"}}],"cursor":null}}}
+OCS bob: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"Wasserzeichenprobe59a Dieser Text ist lang genug, damit er ohne OCR als Klartext gelesen","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130","highlights":"[[0,21]]"}}],"cursor":null}}}
+
+
+alice bekommt Titel `wz59-b1.odt`, als `subline` ihren eigenen Pfad `wz59-b1.odt` (ohne Ausschnitt nach E3) und den Link `/f/130`; bob bekommt den Ausschnitt und denselben Link. `/f/<id>` löst Nextcloud für jede Person in ihrem eigenen Baum auf. Der Pfad aus bobs Ordner (`Ablage/...`) erscheint für alice nirgends.
+
+Urteil I-45-17-06: korrekt, der Besitzer liest und Zustand, Admin-Seite und Prüfspur führen bobs Pfad, während der Treffer jeder Person ihren eigenen Pfad und denselben id-basierten Link zeigt; für alice erscheint kein Pfad aus bobs Ordner.
+
+#### Keine Ausfall-Eskalation (I-45-17-01)
+
+M3 allTags nach dem Fix.
+
+Aufbau: Systemtag 1 (`wz59-tag`, `watermark_allTagsList=1`) an 130, 136 (bob, aus 45-17), an sechs neuen Dateien auf zwei Speichern und an der Datei in TF-zwanzig (`<scratchpad>/seed20.sh`, Ausgabe `state-59/seed20.txt`; Tag per `PUT /remote.php/dav/systemtags-relations/files/<id>/1` je HTTP 201, an 257 als u01 erst mit Schreibrecht, danach wieder nur lesend). Speicher belegt per `oc_filecache` und `oc_storages`:
+
+```
+fileid=162 | storage=3 | path=files/wz20-m3-b1.odt
+fileid=165 | storage=3 | path=files/wz20-m3-b2.odt
+fileid=166 | storage=3 | path=files/wz20-m3-b3.odt
+fileid=167 | storage=4 | path=files/wz20-m3-d1.odt
+fileid=168 | storage=4 | path=files/wz20-m3-d2.odt
+fileid=169 | storage=4 | path=files/wz20-m3-d3.odt
+numeric_id=3 | id=home::bob
+numeric_id=4 | id=home::dave
+```
+
+Wortlaut am Kopf per `grep -n` in backend/src/findling/worker/poller.py bestätigt: Z. 1454 `pass finished, claimed=%d ...`, Z. 2368 `content gateway refused one file, http status %d for file id %d`, Z. 2608-2609 `content gateway refused %d files of this pass with http status %d from %d storages, ` `taken as an outage` (gleich dem Wortlaut von 181f50a1, nur verschobene Zeilen). Warteschlange vorher leer (`SELECT file_id, locked_at, retries FROM oc_findling_queue`: keine Zeile). `<scratchpad>/mode20.sh M3 watermark_allTags=yes` (14:55:01 UTC, `occ findling:index --restart -n`, Ausgabe `state-59/mode20-M3.txt`). Backend-Log dieses Passes, wörtlich:
+
+```
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 167
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 168
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 169
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 257
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 130
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 136
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 162
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 165
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 166
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=9 unchanged=23 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+```
+
+Neun Ablehnungen mit 403 aus drei Speichern (bob 3, dave 4, TF-zwanzig) in einem Pass mit 32 Zeilen (Batchgröße per `claimed=32` belegt); im ganzen Backend-Log seit dem Start dieses Modus keine Zeile `taken as an outage`, keine Zeile `indexing pass stopped`. Zugriffsprotokoll mit Zeit: alle neun 403 um 14:55:51 bis 14:55:52, der nächste Pass liest 153 um 14:55:52 und 152 um 14:55:56 (keine 900-s-Pause). Warteschlange nachher leer, also kein `locked_at` und keine erhöhten `retries`. Urteile: state.db alle neun `failed | policy_blocked | attempts=1`; Nextcloud:
+
+```
+file_id=130 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=136 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=162 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=165 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=166 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=167 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=168 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=169 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+file_id=257 | state=failed | reason=policy_blocked | updated_at=2026-11-23 14:55:52
+```
+
+Die Urteile der übrigen Dateien verfallen nicht (133, 134, 135, 137, 141 bis 143, 152, 153 je 200 und `indexed`). Gegenkontrolle aus dem Nachbau vorher (45-AUDIT.md, Befund I-45-17-01, v1.6.5): `content gateway refused 5 files of this pass with http status 500 from 2 storages, taken as an outage`, auch in Schritt 0 und Schritt A oben mit 500 echt wiederholt.
+
+nextcloud.log (Loglevel info seit Schritt B), je Datei eine warning-Zeile, wörtlich:
+
+```
+2026-11-23T14:55:51+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/167?userId=dave message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"167","asked":"1"}
+2026-11-23T14:55:51+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/257?userId=u01 message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"257","asked":"20"}
+2026-11-23T14:55:51+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/130?userId=bob message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"130","asked":"1"}
+(168, 169, 136, 162, 165, 166 gleich mit "asked":"1")
+```
+
+Kopf und Status echt bis zum Backend (`<scratchpad>/gw20.sh bob '/ocs/v2.php/apps/findling/files/162?userId=bob' 1.7.0`, AppAPI-Kopf wie das Backend):
+
+```
+HTTP/1.1 403 Forbidden
+X-User-Id: bob
+X-Findling-Refusal: policy
+Content-Type: application/json; charset=utf-8
+time_total=0.070468
+{"ocs":{"meta":{"status":"failure","statuscode":403,"message":""},"data":{"error":"Reading this file is blocked by a rule."}}}
+```
+
+Backend-Zeile `http status 403` (oben), Urteil `failed(policy_blocked)` in Container und Nextcloud, Admin-Seite: Einzelabfrage `ref=162` `"reason":"policy_blocked","label":"Blocked by a rule","remedy":"A rule keeps Findling from reading the file as any of the users asked, for example a watermark of Nextcloud Office that applies to the owner as well. The nightly comparison tries it again up to three times, and a change to the file tries it at once."`; Überblick-Route mit `Accept-Language: de`: `"policy_blocked","count":9,"label":"Durch eine Regel blockiert","remedy":"Eine Regel verhindert, dass Findling die Datei als einer der gefragten Nutzer liest, zum Beispiel ein Wasserzeichen von Nextcloud Office, das auch für den Besitzer gilt. ..."` mit Beispiel 257 `TF-zwanzig/wz20-tf20.odt`. Genau ein erneuter Versuch beim Besitzer: `"asked":"1"` je Datei mit Besitzer (erstes Öffnen ohne Person, ein Öffnen in actAs des Besitzers).
+
+Zeitmessung (W6, T-45-61): TF-zwanzig (20 Mitglieder, kein Besitzer, Tag 1) `GET /files/257?userId=u01` direkt am Gateway: `HTTP/1.1 403 Forbidden`, `X-Findling-Refusal: policy`, `time_total=0.207078`, warning-Zeile mit `"asked":"20"`, Urteil policy_blocked; Gegenkontrolle die M3-Datei 136 mit Besitzer bob: `403`, `X-Findling-Refusal: policy`, `time_total=0.064591`, `"asked":"1"`.
+
+#### M2, M4, M5 nach dem Fix
+
+Je `<scratchpad>/mode20.sh <Modus> <schlüssel=yes>` (alle fünf Modus-Schlüssel auf no, dann der eine, `occ findling:index --restart -n`, Jobs, Warten, Messen; Ausgaben `state-59/mode20-M2.txt`, `-M4.txt`, `-M5.txt`). Loglevel info.
+
+M2 shareAll (14:51 bis 14:54 UTC): alle Probedateien 200, Leser laut Claim der Besitzer (130, 133 bis 137, 162 bis 166 `userId=bob`; 141 bis 143, 167 bis 169 `userId=dave`), Team Folder 152, 153 `userId=alice`, 257 `userId=u01`. Je Datei die info-Zeile `Findling: read a file as a reader of it after secure view refused the first open` mit `"asked":"1"` (das erste Öffnen ohne Person lehnte die Secure View ab, das zweite in actAs gelang); keine Zeile `secure view policy` mehr in nextcloud.log (Differenz 0, das Gateway fängt die Ablehnung). state.db alle `indexed`. Treffer Besitzer und alice je 1, carol 0 außer TF-lesen.
+
+Abweichung von der Plan-Erwartung, Entscheid INFO (45-FREIGABEN.md `Entscheid Team Folder unter shareAll 45-20`): erwartet war für Team Folder ohne Besitzer `policy_blocked`, beobachtet `indexed` über das erste Mitglied. Ursache an der Quelle: groupfolders 23.0.1 `lib/Mount/GroupFolderStorage.php` Z. 50-61, `getOwner()` gibt den Mount-Besitzer oder, ohne ihn, die aktive Person zurück; in actAs(alice) ist damit `$ownerId === $userId`, und shareAll (PermissionManager.php Z. 221) greift nicht. WebDAV-Gegenprobe unter M2, wörtlich:
+
+```
+M2 WebDAV GET als alice alice/TF-gemischt/wz59-tf2.odt -> HTTP 200
+M2 WebDAV GET als alice alice/TF-lesen/wz59-tf1.odt -> HTTP 200
+M2 WebDAV GET als u01 u01/TF-zwanzig/wz20-tf20.odt -> HTTP 200
+M2 WebDAV GET als alice alice/wz59-offen.odt -> HTTP 403
+M2 WebDAV GET als bob bob/wz59-eigen.odt -> HTTP 200
+M2 WebDAV GET als carol carol/TF-lesen/wz59-tf1.odt -> HTTP 200
+```
+
+Findling liest im Team Folder also nur, was das Mitglied selbst herunterladen darf; keine Umgehung im Sinn von E2. Unter E3 (S3, shareAll) zeigt eine fremde Datei trotzdem keinen Ausschnitt (zulässige Überunterdrückung).
+
+M4 allGroups (14:58 bis 15:00 UTC, Entscheid G1): alle Probedateien und die neuen Dateien 200, erstes Öffnen ohne Person, keine Ablehnung, alle `indexed`. allGroups greift beim Indexieren nicht (wie in 1.6.5), Mitglieder der Liste sehen nach E3 keinen Ausschnitt.
+
+M5 shareRead (15:01 bis 15:03 UTC), wörtlich aus dem Zugriffsprotokoll und nextcloud.log:
+
+```
+      1 GET /ocs/v2.php/apps/findling/files/130?userId=bob 200      (lesende Freigabe, ebenso 133, 134, 137 bob; 141 bis 143 dave)
+      1 GET /ocs/v2.php/apps/findling/files/152?userId=alice 403
+      1 GET /ocs/v2.php/apps/findling/files/153?userId=alice 200
+      1 GET /ocs/v2.php/apps/findling/files/257?userId=u01 403
+level=2 ... files/152?userId=alice message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"152","asked":"3"}
+level=1 ... files/153?userId=alice message=Findling: read a file as a reader of it after secure view refused the first open data={"app":"findling","fileId":"153","asked":"2"}
+level=2 ... files/257?userId=u01 message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"257","asked":"20"}
+```
+
+state.db: 152 und 257 `failed | policy_blocked`, Nextcloud `file_id=152 | state=failed | reason=policy_blocked`; 153 `indexed` (gelesen über bob, schreibend in TF-gemischt: alice abgelehnt, bob gelesen, asked 2); alle übrigen `indexed`. Damit gilt die Erwartung laut Quelle für alle drei Fälle: lesende Freigabe über den Besitzer, TF-lesen ohne Besitzer und ohne schreibendes Mitglied policy_blocked (alice, bob, carol gefragt), TF-gemischt über bob.
+
+#### asked zählt übersprungene Leser (I-45-17-07)
+
+Datei 257 `TF-zwanzig/wz20-tf20.odt` (Team Folder 3, Gruppe tf-zwanzig mit u01 bis u20, nur lesend, Tag 1, kein Besitzer), Modus allTags. Mount-Cache vor der Probe (`php /tmp/mounts59.php 257`, `IUserMountCache::getMountsForFileId`, öffnet nichts; jede der 20 Personen hatte per PROPFIND einmal ihr Dateisystem aufgebaut), dedupliziert und alphabetisch wie `ReaderCandidates::forFile()`:
+
+Mount-Cache TF-zwanzig: 20 Personen: u01, u02, u03, u04, u05, u06, u07, u08, u09, u10, u11, u12, u13, u14, u15, u16, u17, u18, u19, u20
+Erwartung asked I-45-17-07: 20
+
+Kein admin und keine weitere Person steht vor u01; die ersten 20 der Liste sind u01 bis u20.
+
+u05: übersprungen, Position 5 der Liste; per erweiterter Berechtigung `occ groupfolders:permissions 3 wz20-tf20.odt --user u05 -- -read` gesperrt (Tabelle `wz20-tf20.odt | user: u05 (u05) | -read`), PROPFIND als u05 auf `TF-zwanzig/wz20-tf20.odt` antwortet `File with name /TF-zwanzig/wz20-tf20.odt could not be located`, als u06 `<oc:permissions>MG</oc:permissions>` mit 200; u05 löst die Datei also nicht lesbar auf, bleibt im Mount-Cache und wird mitgezählt.
+
+Probe wie das Backend (`AUTH_USER` leer, also ohne angemeldete Person; `<scratchpad>/gw20.sh - '/ocs/v2.php/apps/findling/files/257?userId=u01' 1.7.0`), 15:04:31 UTC:
+
+```
+HTTP/1.1 403 Forbidden
+X-Findling-Refusal: policy
+time_total=0.209506
+2026-11-23T15:04:31+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/257?userId=u01 message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"257","asked":"20"}
+```
+
+Zahl der Secure-View-Zeilen für 257 in nextcloud.log seit 15:04:07: 0 (das Gateway fängt jede Ablehnung der Secure View und schreibt nur die warning-Zeile). admin_audit für 257 in dieser Probe:
+
+```
+2026-11-23T15:04:30+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/257?userId=u01 message=File with id "257" accessed: "/u01/files/TF-zwanzig/wz20-tf20.odt"
+2026-11-23T15:04:30+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/257?userId=u01 message=File with id "257" accessed: "/u01/files/TF-zwanzig/wz20-tf20.odt"
+```
+
+Zwei Zeilen eines versuchten Öffnens (beide mit dem Pfad von u01, der benannten Person: das erste Öffnen außerhalb von actAs und das erneute in actAs(u01)), keine Zeile `Findling read the file ...` (die schreibt das Gateway seit dem Fix U-45-20-02 nur nach einem gelungenen Lesen). Dauer: 0,2095 s gegen 0,0613 s für die M3-Datei 136 mit Besitzer (Zeitmessung oben), also rund 0,15 s für 19 weitere Leser; die doppelte Frage an u01 kostet darüber hinaus nichts Messbares. Erste Probe verworfen: sie trug die Person im AppAPI-Kopf (AppAPI meldet sie dann an, `user=u01` im Log), nicht wie das Backend; nur die Werte des korrigierten Laufs stehen hier.
+
+Urteil I-45-17-07: harmlos, asked zählt jeden gefragten Kandidaten einschließlich des übersprungenen u05 und der doppelt gefragten u01 (20 gleich der Erwartung aus dem Mount-Cache), kein Lesen gelang, kein Lesen wurde in der Prüfspur als gelungen eingetragen, und die Mehrdauer liegt in der Zeitmessung von T-45-61; für einen Admin heißt `asked` "gefragte Leser einschließlich übersprungener", so steht es in docs/admin-page.md.
+
+#### files_accesscontrol, Schritt C
+
+files_accesscontrol 6.0.1 aus dem Store (`occ app:install files_accesscontrol`), SHA-256 von StorageWrapper.php, Operation.php und CacheWrapper.php im Container gleich den Kopien vom Tag v6.0.1 (71bdddad..., bf54be47..., dca388ff...); workflowengine 3.0.0, `UserGroupMembership.php`, admin_audit `Actions/Files.php` und `OCSMiddleware.php` im Container gleich v35.0.3 (SHA-256 6a54138f..., b21af0c7..., 884d4b9a...). Systemtags `fac59` (2), `fac59-alle` (3), `fac59-bob` (4), `fac59-open` (5); Gruppen fac-alice (alice), fac-bob (bob), fac-open (alice). Regeln über die OCS-Route von workflowengine (`<scratchpad>/fac20.sh add <regel>.json`, Operation `deny`, Entität Datei). M1 aktiv. Je Fall eine eigene Datei von bob, an alice mit Download freigegeben, Messung mit `<scratchpad>/c20.sh` (Ausgaben `state-59/c-main.txt`, `c-a.txt`, `c-b.txt`). Abweichung vom Wortlaut des Plans: (a) und (b) mit eigenen Tags `fac59-alle` und `fac59-bob` statt `fac59`, damit die Regeln nebeneinander stehen können und kein Fall den anderen sperrt.
+
+Hauptfall, Regel `fac59` UND Gruppe `is fac-alice`, Datei 320 `wz59-fac.odt`, Tag gesetzt, dann bob lädt neu hoch (Ereignis):
+
+```
+PROPFIND alice: <oc:permissions>SDN</oc:permissions> <d:status>HTTP/1.1 200 OK</d:status>
+PROPFIND bob: <oc:permissions>RGDNVW</oc:permissions> <d:status>HTTP/1.1 200 OK</d:status>
+GET /ocs/v2.php/apps/findling/files/320?userId=bob HTTP/1.1" 200
+file_id=320 | state=indexed | reason=None | attempts=1
+alice=0  bob=1  carol=0
+```
+
+alice löst die Datei ohne Leserecht auf (kein `G`), der Claim wählt bob, indexiert, keine info-Zeile `read a file as a reader of it after secure view refused` (nextcloud.log für 320 leer). Gegenkontrolle ohne Tag: `alice=1 bob=1`. Zusatz: die schon indexierte 137 (`wz59-lesen.odt`, an alice) nachträglich mit `fac59` gesperrt: `alice=0 bob=1` (die Endfilterung nimmt das fehlende Leserecht wahr), Tag wieder entfernt: `alice=1`.
+
+(a) Regel nur Tag `fac59-alle` (sperrt alle), Datei 322: keine einzige Gateway-Anfrage für 322, Urteil `skipped(unreadable)` in state.db und `file_id=322 | state=skipped | reason=unreadable` in Nextcloud, Suche alice, bob, carol je 0; das erneute Hochladen durch bob antwortet 403 (die Regel sperrt auch das Schreiben). Nie ein Lesen als andere Person.
+
+(b) Regel Tag `fac59-bob` UND Gruppe `is fac-bob` (nur gegen den Besitzer), Datei 323: einzige Gateway-Anfrage `23/Nov/2026:16:16:08 /ocs/v2.php/apps/findling/files/323?userId=alice 200`, kein Versuch als bob, `indexed`, Suche alice 1, bob 0 (bob gesperrt), carol 0; PROPFIND alice `SGDN`, bob `R`.
+
+#### files_accesscontrol beim Öffnen (I-45-17-03)
+
+Regel (Ableitung im Quellenteil oben): Operation `deny`, Bedingungen Systemtag `fac59-open` UND Benutzergruppe `!is fac-open` (nur alice in fac-open). UserGroupMembership.php v35.0.3 Z. 43-52: mit alice als aktiver Person falsch (sie ist Mitglied), ohne aktive Person wahr (`return $operator !== 'is';`). Bei der Auflösung in actAs(alice) (CacheWrapper.php Z. 38-56, `checkFileAccess(..., 0)`) greift die Regel also nicht, beim fopen ohne aktive Person (StorageWrapper.php Z. 241-253, `PERMISSION_READ`) greift sie. Datei 324 `wz59-fac-open.odt` von bob, an alice mit Download (permissions 3), vor der Regel indexiert, dann Regel angelegt, M1 aktiv.
+
+Vorprobe PROPFIND als alice (alice löst die Datei lesbar auf, `G` = lesen), wörtlich:
+
+```
+<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:response><d:href>/remote.php/dav/files/alice/wz59-fac-open.odt</d:href><d:propstat><d:prop><oc:permissions>SGDNVW</oc:permissions></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>
+```
+
+Quelle des Wurfs, files_accesscontrol v6.0.1 lib/Operation.php Z. 115-118 wörtlich:
+
+```
+			$e = new \RuntimeException('Access denied for path ' . $path . ' that is ' . ($isDir ? '' : 'not ') . 'a directory and matches rules: ' . (string)json_encode($match));
+			$this->logger->debug($e->getMessage(), ['exception' => $e]);
+			// All Checks of one operation matched: prevent access
+			throw new ForbiddenException('Access denied by access control', false);
+```
+
+Plan-Abweichung (Entscheid c2, 45-FREIGABEN.md `Entscheid Schritt C(c) 45-20`): die Erwartung "nextcloud.log zeigt die ForbiddenException mit `Access denied by access control`" war falsch. Das Gateway fängt jede andere ForbiddenException absichtlich und schreibt nur seine warning-Zeile; der Text der Ausnahme steht in nextcloud.log 0-mal (`grep -c` über die ganze Datei). Belegt wird der Wurf deshalb durch drei Zeilen: die Quellzeilen oben, die debug-Zeile von files_accesscontrol unmittelbar vor dem Wurf (Z. 116, Loglevel kurz auf debug, 16:17:54 UTC) und die warning-Zeile mit der Herkunft (Fix U-45-20-03).
+
+Debug-Zeile der Probe (gekürzt auf 600 Zeichen), wörtlich:
+
+```
+2026-11-23T16:17:54+00:00 level=0 user=-- app=files_accesscontrol GET /ocs/v2.php/apps/findling/files/324?userId=alice message=Access denied for path  that is not a directory and matches rules: [{"id":4,"class":"OCA\\FilesAccessControl\\Operation","name":"fac59-open","checks":"[6,7]","operation":"deny","entity":"OCA\\WorkflowEngine\\Entity\\File","events":"[]","scope_type":0,"scope_actor_id":""}] | Exception=RuntimeException Message=Access denied for path  that is not a directory and matches rules: [{"id":4,"class":"OCA\\FilesAccessControl\\Operation","name":"fac59-open","checks":"[6,7]","oper
+```
+
+Probe wie das Backend nach dem Fix (`gw20.sh - '/ocs/v2.php/apps/findling/files/324?userId=alice'`, 16:33:14 UTC), wörtlich:
+
+```
+HTTP/1.1 403 Forbidden
+X-Findling-Refusal: policy
+time_total=0.237377
+2026-11-23T16:33:14+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/324?userId=alice message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"324","asked":"0","origin":"OCA\\FilesAccessControl\\Operation::checkFileAccess"}
+```
+
+Danach das echte Ereignis: alice lädt die Datei neu hoch (`204`, 16:33:27 UTC), der Claim wählt alice (bob ist bei der Auflösung in actAs(bob) gesperrt, weil bob nicht in fac-open ist):
+
+```
+GET /ocs/v2.php/apps/findling/files/324?userId=alice HTTP/1.1" 403
+2026-11-23T16:33:42+00:00 level=2 user=-- app=findling GET /ocs/v2.php/apps/findling/files/324?userId=alice message=Findling: reading a file was blocked by a rule data={"app":"findling","fileId":"324","asked":"0","origin":"OCA\\FilesAccessControl\\Operation::checkFileAccess"}
+WARNING:findling.worker.poller:content gateway refused one file, http status 403 for file id 324
+file_id=324 | state=failed | reason=policy_blocked | attempts=1
+file_id=324 | state=failed | reason=policy_blocked
+```
+
+Genau ein Öffnen, außerhalb von actAs ohne aktive Person, `asked` 0, kein erneutes Öffnen in actAs(bob), kein anderer Leser, keine info-Zeile `read a file as a reader of it after secure view refused`; Antwort 403 mit `X-Findling-Refusal: policy` (fail-closed); Urteil `failed(policy_blocked)` in Container und Nextcloud. Die Unit-Tests `testTheRightFrameWithAnotherMessageIsPolicyWithoutAnotherOpen`, `testARefusalOfAccessControlIsPolicyWithoutAnotherOpen` (GatewayReaderTest) und `testAnotherForbiddenExceptionAtTheFirstOpenIsA403PolicyWithoutAnotherOpen` (GatewayControllerTest) prüfen dasselbe ohne Instanz.
+
+Gegenkontrolle ohne Regel: HTTP/1.1 200 OK (Regel 4 gelöscht, `gw20.sh` auf 324 mit `userId=alice`, `time_total=0.071463`)
+
+#### E1 Prüfspur, Schritt D
+
+admin_audit aktiv (seit Schritt B). Proben wie das Backend unter shareAll nach dem Fix U-45-20-02 (Kopf 1d191e7e, 16:05 UTC), audit.log wörtlich (`state-59/D-audit.txt`):
+
+```
+2026-11-23T16:05:00+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/133?userId=bob message=File with id "133" accessed: "/bob/files/wz59-b2.pdf"
+2026-11-23T16:05:00+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/133?userId=bob message=File with id "133" accessed: "/bob/files/wz59-b2.pdf"
+2026-11-23T16:05:00+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/133?userId=bob message=Findling read the file with id "133" at "/bob/files/wz59-b2.pdf" as the user "bob" after the secure view of Nextcloud Office refused it without a user
+2026-11-23T16:05:01+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/58?userId=admin message=File with id "58" accessed: "/admin/files/Nextcloud.png"
+2026-11-23T16:05:01+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/152?userId=alice message=File with id "152" accessed: "/alice/files/TF-lesen/wz59-tf1.odt"
+2026-11-23T16:05:01+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/152?userId=alice message=File with id "152" accessed: "/alice/files/TF-lesen/wz59-tf1.odt"
+2026-11-23T16:05:01+00:00 level=1 user=-- app=admin_audit GET /ocs/v2.php/apps/findling/files/152?userId=alice message=Findling read the file with id "152" at "/alice/files/TF-lesen/wz59-tf1.odt" as the user "alice" after the secure view of Nextcloud Office refused it without a user
+```
+
+nextcloud.log dazu: `... files/133?userId=bob message=Findling: read a file as a reader of it after secure view refused the first open data={"app":"findling","fileId":"133","asked":"1","reader":"bob"}` und dieselbe Zeile für 152 mit `"reader":"alice"`. Die M2-Datei von bob (133): die lesende Person bob steht in der Zeile von Findling; die gewöhnliche Datei 58 (PNG, kein Typ von richdocuments, erstes Öffnen ohne Person gelingt): eine Zeile von admin_audit wie in 1.6.5 (derselbe Weg wie vorher, `user=--`), keine Findling-Zeile. Vor dem Fix (Kopf 151dca7b, 15:04:49 UTC) standen für 133 nur die zwei `accessed`-Zeilen mit `user=--`: Befund U-45-20-02.
+
+#### E3 Ausschnitte unter M1 (45-22)
+
+M1 (nur shareDisabledDownload), Rückfall auf S3. Neue Dateien: 318 `wz59-e3-dl.odt` von bob an alice mit Download (`id=9 | permissions=1 | attributes=NULL`), 319 `TF-gemischt/wz59-e3-tf.odt` (von bob hochgeladen, alice ist Mitglied über gm-lesen, keine Freigabe). Proben über OCS (`<scratchpad>/e320.sh`, Ausgabe `state-59/e3-M1.txt` und `e3-aus.txt`), wörtlich:
+
+OCS alice Wasserzeichenprobe59a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"wz59-b1.odt","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130"}}],"cursor":null}}}
+OCS alice Ausschnittprobe20a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-e3-dl.odt","subline":"wz59-e3-dl.odt","resourceUrl":"\/f\/318","icon":"icon-search","rounded":false,"attributes":{"fileId":"318"}}],"cursor":null}}}
+OCS alice Ausschnittprobe20b: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-e3-tf.odt","subline":"TF-gemischt\/wz59-e3-tf.odt","resourceUrl":"\/f\/319","icon":"icon-search","rounded":false,"attributes":{"fileId":"319"}}],"cursor":null}}}
+OCS bob Wasserzeichenprobe59a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"Wasserzeichenprobe59a Dieser Text ist lang genug, damit er ohne OCR als Klartext gelesen","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130","highlights":"[[0,21]]"}}],"cursor":null}}}
+OCS bob Ausschnittprobe20a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-e3-dl.odt","subline":"Ausschnittprobe20a Dieser Text ist lang genug, damit er ohne OCR als Klartext gelesen","resourceUrl":"\/f\/318","icon":"icon-search","rounded":false,"attributes":{"fileId":"318","highlights":"[[0,18]]"}}],"cursor":null}}}
+OCS alice Ausschnittprobe20a (Wasserzeichen aus): {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-e3-dl.odt","subline":"Ausschnittprobe20a Dieser Text ist lang genug, damit er ohne OCR als Klartext gelesen","resourceUrl":"\/f\/318","icon":"icon-search","rounded":false,"attributes":{"fileId":"318","highlights":"[[0,18]]"}}],"cursor":null}}}
+
+E3 alice Freigabe ohne Download: Ausschnitt keiner
+E3 alice Freigabe mit Download: Ausschnitt keiner
+E3 alice Team Folder: Ausschnitt keiner
+E3 bob Besitzer: Ausschnitt ja
+E3 Positivkontrolle alice Freigabe mit Download: Wasserzeichen aus, Ausschnitt ja
+
+Die zweite und dritte Zeile sind die von E3 zugelassene Überunterdrückung, kein Befund. Danach Endkonfiguration M1 wiederhergestellt.
+
+#### Altbestand (I-45-17-02)
+
+Datei 130 (`Wasserzeichenprobe59a`, bob, an alice ohne Download), indexiert vor dem Wasserzeichen-Modus allTags, dann unter allTags (Tag 1) mit `mode20.sh M3b watermark_allTags=yes` neu geurteilt: state.db `file_id=130 | state=failed | reason=policy_blocked | attempts=1`; der früher indexierte Inhalt bleibt im Index. Suche 15 s nach dem Umstellen (`state-59/altbestand2.txt`), wörtlich:
+
+OCS alice Wasserzeichenprobe59a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"wz59-b1.odt","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130"}}],"cursor":null}}}
+OCS bob Wasserzeichenprobe59a: {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"wz59-b1.odt","subline":"Ablage\/wz59-b1.odt","resourceUrl":"\/f\/130","icon":"icon-search","rounded":false,"attributes":{"fileId":"130"}}],"cursor":null}}}
+
+alice findet die Datei über den alten Inhalt, ohne Ausschnitt (subline ist ihr Pfad), wie `Entscheid Altbestand 45-22` (A1) es festlegt; bob ebenso ohne Ausschnitt (allTags trifft auch den Besitzer).
+
+Messhinweis: eine erste Altbestand-Abfrage an 152 unter shareRead kam 1 bis 2 s nach `occ config:app:set` und zeigte noch einen Ausschnitt. Gemessen (Schleife 16:07:35 bis 16:09:50 UTC, alle 10 s): eine per CLI geänderte Einstellung wirkt im Webserver nach höchstens etwa 10 s, weil der Webserver die App-Konfiguration in seinem eigenen APCu hält; richdocuments liest dieselben Werte im selben Prozess. Kein Befund; alle Abfragen oben laufen mit mindestens 15 s Abstand zur letzten Umstellung.
+
+Ergebnis Altbestand: Entscheid A1, Treffer ja, Ausschnitt keiner
+
+#### Befunde dieser Gegenprobe
+
+| ID | Schwere | Befund | Entscheid und Stand |
+|---|---|---|---|
+| U-45-20-01 | MEDIUM | Erneuerung `refusal_streaks_1_7_0` lief vor einer Begleit-App der Generation 3 und wurde dort verbraucht (Abschnitt oben) | Owner f1, behoben aec5edcf/151dca7b, Schritt A und B neu gefahren |
+| U-45-20-02 | MEDIUM | admin_audit nennt für ein Lesen in actAs die lesende Person nicht (`user=--`, `\OC_User::getUser()` liest die Sitzung, actAs setzt nur die flüchtige Person); Text 4 ("audit logs name that user for such a read") wäre unwahr gewesen | Owner a4, behoben f3290689/1d191e7e: `CriticalActionPerformedEvent` nur nach einem Lesen in actAs (id, Pfad, uid, nie Inhalt), info-Zeile mit `reader`; RED 2 Errors und 1 Failure, Mutationen (kein Event, falsche Person, Event außerhalb actAs, info ohne Person) rot, live belegt (E1 oben) |
+| U-45-20-03 | LOW | Die warning-Zeile einer anderen ForbiddenException nannte keine Herkunft; ein Admin sah nicht, welche Regel ablehnte | Entscheid c2, behoben 3550b2b3/c9dc3270: `origin` = Klasse::Funktion des ersten Frames, nie Meldung, Pfad oder Argumente; RED 5 Failures, Mutationen (Herkunft fehlt, Meldung geloggt, Argument geloggt) rot, live belegt |
+| I-45-20-04 | INFO | Team Folder unter shareAll: indexiert über das Mitglied statt policy_blocked (groupfolders `getOwner()`), Mitglied darf selbst herunterladen | Entscheid INFO, Doku in docs/privacy.md |
+| I-45-20-05 | INFO | Zwei Erwartungen des Plans an Logformate trafen nicht zu: die Literalzeile `Access denied by access control` (siehe oben) und `"asked":20` (nextcloud.log schreibt Kontextwerte als Zeichenkette, `"asked":"20"`); verify prüft die Zahl jetzt mit optionalen Anführungszeichen | dokumentiert, keine Codeänderung |
+
+Keine LOW-Befunde offen für R-45-21.
+
+Abschluss: Backend beendet (heartbeat 000), `docker compose -f compose-59b.yaml -p findling-59 down -v` (`Volume findling-59-html Removed`), `git worktree remove <scratchpad>/wt-165` (Registrierung entfernt; der Ordner scheiterte an zu langen Pfaden der venv und wurde per PowerShell mit `\\?\`-Pfad gelöscht), Logs vorher nach `state-59/nextcloud-ende.log` und `audit-ende.log` gesichert.
+
+### Modus x Leser -> Ergebnis nachher
+
+Spalten wie vorher: Datei (ID), Leser laut Claim (`userId` der Gateway-URL), Antwort des Gateways, Urteil in state.db (Nextcloud-Seite, soweit geschrieben), Treffer Besitzer/alice/carol. Stand 1.7.0 am Kopf (Begleit-App und Backend), echter Update-Weg aus 1.6.5.
+
+| Modus und Fall | Datei | Leser laut Claim | Antwort | Urteil | Treffer B/a/c |
+|---|---|---|---|---|---|
+| M1 shareDisabledDownload, Freigabe ohne Download | 130, 133, 134 (bob), 141, 142, 143 (dave) | Besitzer bob bzw. dave | 200, ein Öffnen ohne Person | indexed, über den Abgleich ohne --restart | 1/1/0, alice ohne Ausschnitt |
+| M1 Positivkontrolle mit Download | 135 | bob | 200 | indexed | 1/1/0 |
+| M1 eigene Datei ohne Freigabe | 136 | bob | 200 | indexed | 1/0/0 |
+| M1 lesende Freigabe mit Download | 137 | bob | 200 | indexed | 1/1/0 |
+| M1 Team Folder | 152, 153 | alice | 200 | indexed | 152: 1/1/1, 153: 1/1/0 |
+| M2 shareAll, Dateien mit Besitzer | 130 bis 137, 141 bis 143, 162 bis 169 | Besitzer | 200 nach Ablehnung des ersten Öffnens, asked 1 | indexed | 1/1/0 (alice ohne Ausschnitt) |
+| M2 Team Folder (INFO I-45-20-04) | 152, 153, 257 | alice bzw. u01 | 200 nach Ablehnung, asked 1 (Mitglied als Besitzer laut groupfolders) | indexed | 152: 1/1/1, 153: 1/1/0 |
+| M3 allTags, getaggt mit Besitzer | 130, 136, 162, 165, 166 (bob), 167, 168, 169 (dave) | Besitzer | 403, X-Findling-Refusal: policy, asked 1 | failed(policy_blocked) in Container und Nextcloud | 130: 1/1/0 (Altbestand A1, ohne Ausschnitt) |
+| M3 getaggt im Team Folder ohne Besitzer | 257 | u01 | 403 policy, asked 20 | failed(policy_blocked) | entfällt |
+| M3 ohne Tag (Gegenkontrolle) | 133, 134, 135, 137, 141 bis 143, 152, 153 | Besitzer bzw. alice | 200 | indexed | wie M1 |
+| M4 allGroups (G1) | alle Probedateien und die neuen | Besitzer bzw. alice, u01 | 200 ohne Ablehnung | indexed | wie M1 |
+| M5 shareRead, lesende Freigabe | 130, 133, 134, 137 (bob), 141 bis 143 (dave) | Besitzer | 200 | indexed | 1/1/0 |
+| M5 Team Folder nur lesend für alle (TF-lesen) | 152 | alice | 403 policy, asked 3 | failed(policy_blocked) in Container und Nextcloud | 1/1/1 (Altbestand, ohne Ausschnitt) |
+| M5 Team Folder mit schreibendem Mitglied (TF-gemischt) | 153 | alice, gelesen als bob | 200 nach Ablehnung, asked 2 | indexed | 1/1/0 |
+
+carol findet in keinem Modus eine Datei außer TF-lesen, in dem sie Mitglied ist. Erst mit diesen fünf Modi und ihren Fällen sagt dieses Audit "alle Modi".
