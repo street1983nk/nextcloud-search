@@ -68,6 +68,32 @@ final class SecureViewRefusal {
 	}
 
 	/**
+	 * A refusal whose message and whose first frame carry a path: the message
+	 * and the arguments of the frame must never reach a log line (plan 45-20,
+	 * c2). The arguments are there as zend.exception_ignore_args = Off keeps them.
+	 */
+	public static function withAPathInMessageAndArguments(string $path): ForbiddenException {
+		$frame = self::frame('OCA\\FilesAccessControl\\Operation', 'checkFileAccess', 118);
+		$frame['args'] = [$path, ['path' => $path]];
+
+		return self::forbidden('Access denied for ' . $path, [$frame]);
+	}
+
+	/**
+	 * A first frame without a class, a plain function.
+	 */
+	public static function fromAFunction(): ForbiddenException {
+		return self::forbidden('Denied', [['file' => 'x.php', 'line' => 3, 'function' => 'deny_it']]);
+	}
+
+	/**
+	 * No frame at all.
+	 */
+	public static function withoutAFrame(): ForbiddenException {
+		return self::forbidden('Denied', []);
+	}
+
+	/**
 	 * @param list<array<string, mixed>> $trace
 	 */
 	private static function forbidden(string $message, array $trace): ForbiddenException {

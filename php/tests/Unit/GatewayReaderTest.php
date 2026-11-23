@@ -286,6 +286,15 @@ final class GatewayReaderTest extends TestCase {
 		self::assertSame([], $this->events);
 	}
 
+	public function testAnotherForbiddenExceptionCarriesOnlyTheOriginOfItsFirstFrame(): void {
+		$this->mounts([['alice', '/alice/files/a.odt/', self::SHARING], ['bob', '/bob/', self::LOCAL_HOME]]);
+		$this->sees('alice', SecureViewRefusal::withAPathInMessageAndArguments('/alice/files/Geheim.odt'));
+
+		$opened = $this->reader()->open(self::FILE_ID, 'alice');
+
+		self::assertSame(['outcome' => GatewayReader::OUTCOME_POLICY, 'asked' => 0, 'origin' => 'OCA\\FilesAccessControl\\Operation::checkFileAccess'], $opened);
+	}
+
 	public function testAnOpenThatSucceedsOutsideActAsIsNotRepeated(): void {
 		$this->mounts([['alice', '/alice/files/a.odt/', self::SHARING], ['bob', '/bob/', self::LOCAL_HOME]]);
 		$this->sees('alice', self::stream('alice'));

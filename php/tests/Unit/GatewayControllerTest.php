@@ -638,6 +638,62 @@ final class GatewayControllerTest extends TestCase {
 		self::assertSame([['alice', null]], $steps);
 	}
 
+	/**
+	 * The context of the one warning line of a refusal, opened by alice.
+	 *
+	 * @return array<array-key, mixed>
+	 */
+	private function warningContextFor(\Throwable $refusal): array {
+		$this->sharedByBob();
+		$steps = [];
+		$this->filesOpeningAs([
+			'alice' => static fn () => throw $refusal,
+			'bob' => static fn () => 'never',
+		], $steps);
+		$context = null;
+		$this->logger->expects(self::once())->method('warning')->willReturnCallback(
+			function (string $message, array $given) use (&$context): void {
+				self::assertSame('Findling: reading a file was blocked by a rule', $message);
+				$context = $given;
+			},
+		);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertSame([['alice', null]], $steps);
+		self::assertIsArray($context);
+
+		return $context;
+	}
+
+	public function testAnotherForbiddenExceptionNamesItsOriginInTheWarning(): void {
+		// c2 (plan 45-20): an admin sees which rule or wrapper refused.
+		self::assertSame(
+			['fileId' => 11, 'asked' => 0, 'origin' => 'OCA\FilesAccessControl\Operation::checkFileAccess'],
+			$this->warningContextFor(SecureViewRefusal::accessControl()),
+		);
+	}
+
+	public function testTheOriginNeverCarriesTheMessageOrAnArgument(): void {
+		$context = $this->warningContextFor(SecureViewRefusal::withAPathInMessageAndArguments('/alice/files/Geheim/Vertrag.odt'));
+
+		self::assertSame('OCA\FilesAccessControl\Operation::checkFileAccess', $context['origin'] ?? null);
+		$logged = json_encode($context, JSON_THROW_ON_ERROR);
+		self::assertStringNotContainsString('Geheim', $logged);
+		self::assertStringNotContainsString('Vertrag', $logged);
+		self::assertStringNotContainsString('Access denied', $logged);
+	}
+
+	public function testAFrameWithoutAClassGivesTheFunctionAlone(): void {
+		self::assertSame('deny_it', $this->warningContextFor(SecureViewRefusal::fromAFunction())['origin'] ?? null);
+	}
+
+	public function testNoFrameGivesUnknown(): void {
+		self::assertSame('unknown', $this->warningContextFor(SecureViewRefusal::withoutAFrame())['origin'] ?? null);
+	}
+
 	public function testTheRefusalOfAForeignExAppCarriesNoRefusalHeader(): void {
 		$response = $this->controller('some_other_backend')->getFileContents(11, 'alice');
 
