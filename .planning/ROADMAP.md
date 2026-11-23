@@ -212,7 +212,7 @@ Plans:
 - [x] 45-23-PLAN.md: #25 F1 Owner-Checkpoint Texte und Entscheide für 45-23 und 45-24, Marker-Lock: eine Nachzählung ist kein unfertiger Crawl, Mindestabstand der Nachzählung, Doku, CHANGELOG (IDX-09, REL-07)
 - [x] 45-24-PLAN.md: #25 F2 Rückhalt: der Abgleich läuft nach zweimal seinem Intervall trotz langer Warteschlange, nie neben einem Crawl, Zeitpunkt im Zustandsspeicher, Warnzeile, Hinweis in 18 Katalogen, Doku, CHANGELOG (IDX-10, REL-07)
 - [x] 45-25-PLAN.md: Dateisperren, die Hintergrundjobs nicht trennen, nach `Entscheid Locking 45-23` (l1: Hinweis auf der Admin-Seite für APCu oder ArrayCache als Locking-Cache, Noop mit Verweis auf die Einrichtungsprüfung von Nextcloud, Doku; l2: Doku; l3: Vermerk), früher 45-24 Task 4; dazu Task 2: Platzhalter des Ordnerfelds der Regeln aus dem Katalog, I-45-19-01 (IDX-09, REL-07)
-- [ ] 45-26-PLAN.md: Release-Blocker: Migration des Minor-Schritts 1.7 (Version001700... löscht backend_app_version, sonst sucht 1.7.0 nach dem Update leer, bis die Einstellungsseite offen war), ohne Klasse der App; I-45-23-07 nach Owner-Entscheid m1|m2; I-45-26-01 (Update aus 1.3.x über Version001500); Probe im Job "Store update in one process (issue 51)" mit Kontrolle 2 (REL-07, IDX-09)
+- [x] 45-26-PLAN.md: Release-Blocker: Migration des Minor-Schritts 1.7 (Version001700... löscht backend_app_version, sonst sucht 1.7.0 nach dem Update leer, bis die Einstellungsseite offen war), ohne Klasse der App; I-45-23-07 nach Owner-Entscheid m1|m2; I-45-26-01 (Update aus 1.3.x über Version001500); Probe im Job "Store update in one process (issue 51)" mit Kontrolle 2 (REL-07, IDX-09)
 - [ ] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, Live-Proben #25 (F1, F2), CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07, IDX-09, IDX-10)
 - [ ] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit inklusive #25, neuer audited_head (COMP-05, REL-07, IDX-09, IDX-10)
   Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-23, 45-24, 45-25, 45-26, 45-20, 45-21, dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-23 depends_on [45-22], wave 13; 45-24 depends_on [45-23], wave 14; 45-25 depends_on [45-24], wave 15; 45-26 depends_on [45-25], wave 16; 45-20 depends_on [45-26], wave 17; 45-10 depends_on [45-21], wave 19; 45-14 depends_on [45-16])
@@ -230,7 +230,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 16/26 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 17/26 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
