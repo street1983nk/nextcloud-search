@@ -139,8 +139,38 @@ final class ScanRecountJobTest extends TestCase {
 		$this->runJob($this->job($jobList, $storageService));
 	}
 
+	public function testAMarkWithinTheMinimumIntervalPlansNothing(): void {
+		// Issue #25: a marked instance waits the minimum interval after the
+		// start of the last round, instead of a round every 15 minutes.
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 60;
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturn([]);
+		$jobList->expects($this->never())->method('add');
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getMounts');
+
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->expects($this->never())->method('info');
+
+		$this->runJob(new ScanRecountJob(
+			$this->time,
+			$jobList,
+			$storageService,
+			new SettingsService($this->appConfig, $this->createMock(LoggerInterface::class), $this->time),
+			$logger,
+		));
+
+		// No beginRecount: the mark stays and the time of the last round too.
+		self::assertSame(self::NOW - 30, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+		self::assertSame(self::NOW - 60, $this->values[SettingsService::KEY_SCAN_RECOUNTED_AT]);
+	}
+
 	public function testAMarkPlansOneRecountChainPerMount(): void {
-		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 3600;
+		// The last round started exactly the minimum interval ago (issue #25).
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - SettingsService::RECOUNT_MIN_INTERVAL_SECONDS;
 		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 60;
 
 		$added = [];

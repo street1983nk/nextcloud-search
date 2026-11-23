@@ -38,6 +38,10 @@ dans [CHANGELOG.md](CHANGELOG.md).
 - La page d'administration fonctionne avec une locale en trois parties
   comme zh_Hant_TW, y compris lorsqu'elle se rabat sur la langue de la
   page (#57).
+- Un recomptage de la couverture ne fait plus attendre la comparaison ; sur
+  une instance active, il la retenait la plus grande partie de la journée. Le
+  recomptage a lieu au plus toutes les six heures, et des règles enregistrées
+  le lancent toujours en moins de 15 minutes (#25).
 
 ## [1.6.5] - 2026-11-16
 

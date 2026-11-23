@@ -33,6 +33,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 - The admin page works under a three part locale such as zh_Hant_TW, also
   when it falls back to the language of the page (#57).
+- A recount of the coverage figure no longer keeps the comparison run
+  waiting; on a busy instance it held the run back for most of the day. The
+  recount now runs at most every six hours, and saved rules still start it
+  within 15 minutes (#25).
 
 ## [1.6.5] - 2026-11-16
 

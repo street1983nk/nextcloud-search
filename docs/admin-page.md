@@ -91,10 +91,19 @@ Nenner blieb für die Lebenszeit der Instanz auf dem Stand des ersten Crawls
 stehen. Auf dem Harness stand am 29.09.2026 "607 von 587 indexierbaren Dateien
 sind durchsuchbar" bei 100 Prozent.
 
-Seit Quick-Task 260929-kii zählt `ScanRecountJob` den Nenner nach. Der Job läuft
-alle 15 Minuten und prüft, ob eine Nachzählung fällig ist: nach Dateiereignissen
-auf einem indexierten Mount oder nach gespeicherten Regeln (Cap, Schalter,
-Ausschlüsse), und sonst spätestens nach 24 Stunden. Fällig heißt: er startet je
+Seit Quick-Task 260929-kii zählt `ScanRecountJob` den Nenner nach. Der Job
+prüft alle 15 Minuten, ob eine Nachzählung fällig ist. Nach Dateiereignissen auf
+einem indexierten Mount ist sie das seit 1.7 höchstens alle sechs Stunden, nach
+gespeicherten geänderten Regeln (Cap, Schalter, Ausschlüsse) weiterhin binnen 15
+Minuten, und sonst spätestens nach 24 Stunden. Der Abstand von sechs Stunden
+zählt ab dem Start der letzten Runde und ist keine Pause zwischen zwei Runden:
+läuft eine Runde länger als sechs Stunden (große Instanz, viele Mounts), folgt
+die nächste fast ohne Pause. Grund für den Abstand (Issue #25): jede Scheibe
+einer Nachzählung belegt denselben Slice-Lock wie der Crawl, und auf einer
+belebten Instanz lief die Nachzählung bei der Auslösung im 15-Minuten-Takt fast
+ununterbrochen. Seit 1.7 hält eine laufende Nachzählung den Abgleich des
+Containers auch nicht mehr auf; als unfertiger Crawl zählt nur noch eine
+Crawl-Scheibe. Fällig heißt: er startet je
 Mount eine Kette von `StorageCrawlJob` im Zählmodus. Diese Kette blättert
 dieselbe Abfrage wie der Crawl, entscheidet jede Datei mit derselben Regel
 (Ausschluss vor Cap), stellt nichts in die Warteschlange und schreibt kein
@@ -182,7 +191,8 @@ Dateien.
 ### Wenn der Zähler über dem Nenner steht
 
 Zwischen einer Änderung und der nächsten Nachzählung liegt ein Zeitfenster
-(höchstens 15 Minuten plus die Laufzeit). Darin kann `indexed` größer sein als
+(höchstens sechs Stunden plus die Laufzeit, nach gespeicherten Regeln höchstens
+15 Minuten plus die Laufzeit). Darin kann `indexed` größer sein als
 die indexierbare Menge. Die Seite zeigt dann keine Prozentzahl, keinen Balken
 und keinen Bruch, sondern den Satz:
 

@@ -341,11 +341,73 @@ final class SettingsServiceTest extends TestCase {
 		self::assertFalse($this->settings()->scanRecountDue(self::NOW));
 	}
 
-	public function testAMarkMakesTheRecountDue(): void {
-		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 60;
+	public function testAMarkMakesTheRecountDueOnceTheMinimumIntervalHasPassed(): void {
+		// Since issue #25 a mark alone no longer starts a round every 15
+		// minutes; it does once the last round started the minimum interval
+		// ago, well inside the floor of a quiet instance.
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - SettingsService::RECOUNT_MIN_INTERVAL_SECONDS - 3600;
 		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
 
 		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	/**
+	 * Issue #25, F1: on a busy instance every file event sets the mark, and a
+	 * recount round started every 15 minutes, its slices on the slice lock the
+	 * crawl waits on. A marked instance now waits the minimum interval after
+	 * the start of the last round.
+	 */
+	public function testAMarkWithinTheMinimumIntervalIsNotDue(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - (SettingsService::RECOUNT_MIN_INTERVAL_SECONDS - 60);
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+
+		self::assertFalse($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testAMarkAfterTheMinimumIntervalIsDue(): void {
+		// The bound itself belongs to "due".
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - SettingsService::RECOUNT_MIN_INTERVAL_SECONDS;
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testARecountStampInTheFutureIsDue(): void {
+		// A clock set back: without this the count would stand still until
+		// the stamp is reached, with the mark as well as without it.
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW + 3600;
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testTheMinimumIntervalLiesBelowTheFloor(): void {
+		// Owner decision of 45-23: six hours.
+		self::assertSame(6 * 3600, SettingsService::RECOUNT_MIN_INTERVAL_SECONDS);
+		self::assertGreaterThan(0, SettingsService::RECOUNT_MIN_INTERVAL_SECONDS);
+		self::assertLessThan(SettingsService::RECOUNT_FLOOR_SECONDS, SettingsService::RECOUNT_MIN_INTERVAL_SECONDS);
+	}
+
+	/**
+	 * Owner decision r1 of 45-23: saved rules still start the recount within
+	 * 15 minutes, because the rule hint of the page (ANZE-02) stands until the
+	 * first round after the save.
+	 */
+	public function testSavedRulesStartTheRecountWithinTheMinimumInterval(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 60;
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+		$this->values[SettingsService::KEY_RULES_CHANGED_AT] = self::NOW - 30;
+
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testRulesSavedBeforeTheLastRecountWaitForTheMinimumInterval(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 60;
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+		$this->values[SettingsService::KEY_RULES_CHANGED_AT] = self::NOW - 120;
+
+		self::assertFalse($this->settings()->scanRecountDue(self::NOW));
 	}
 
 	public function testADayOldRecountIsDueWithoutAMark(): void {

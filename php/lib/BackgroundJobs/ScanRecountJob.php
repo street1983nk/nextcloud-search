@@ -39,10 +39,23 @@ use Psr\Log\LoggerInterface;
  * Why a TimedJob every 15 minutes and a floor of 24 hours. A recount is one
  * metadata walk per mount without a single write per file, on a large
  * instance with a million files some 500 pages of 2000 entries, the same query
- * the nightly reconcile of the container pages through anyway. After an event
- * the next run of this job starts it, so the window in which the page cannot
- * show a share is 15 minutes plus the walk; on a quiet instance nothing starts
- * more than once a day, which still catches the changes no event announced.
+ * the nightly reconcile of the container pages through anyway. On a quiet
+ * instance nothing starts more than once a day, which still catches the
+ * changes no event announced.
+ *
+ * The minimum interval (issue #25). Until 1.7 the next run after an event
+ * started a round, and on a busy instance, where every file event sets the
+ * mark, a round started every 15 minutes: the recount ran almost without
+ * pause, each of its slices on the slice lock the crawl waits on. Since then a
+ * marked instance waits SettingsService::RECOUNT_MIN_INTERVAL_SECONDS (six
+ * hours) after the start of the last round, so the window in which the page
+ * cannot show a share is at most six hours plus the walk. The 15 minutes of
+ * this job still hold for the first round and for a changed set of rules
+ * saved after the last round started (owner decision r1 of plan 45-23). The
+ * interval is measured from the start of the last round and is no pause: a
+ * round that runs longer than six hours (a large instance, many mounts,
+ * slices waiting on the slice lock) is followed by the next one almost
+ * without a pause, as soon as this job sees no StorageCrawlJob row any more.
  *
  * Why it never runs next to a crawl. A crawl row of a mount without a
  * finished_at is the truth being built, and a recount that replaced it would

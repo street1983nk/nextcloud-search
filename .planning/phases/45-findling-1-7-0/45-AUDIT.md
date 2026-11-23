@@ -1122,3 +1122,54 @@ Je einzeln, danach die Quellen byte-gleich zurück (`restored_identical=yes` je 
 Baumhash php/ nach Task 2: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `41a8dc1f...` mit 143 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 6227bdff` -> `ff141406...` mit 143 (gleich dem bisherigen PHP_TREE_HASH_TODAY).
 
 Gates Task 2 (verify-Zeile wörtlich aus `<scratchpad>/v23_t2.sh`, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: `STATIC_OK`, PHPUnit voll `OK (1396 tests, 8796 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; keine Meldung zu `is_a($e, 'RedisException')`; php-cs-fixer ohne Verstoß; zizmor und actionlint grün, Proben gesehen), pytest `tests/test_php_static_gates.py tests/test_reconcile.py tests/test_measurement_scripts.py` `748 passed`.
+
+#### Mindestabstand
+
+Umsetzung nach `Entscheid Mindestabstand 45-23` (6h) und `Entscheid Regeln Nachzählung 45-23` (r1): `SettingsService::RECOUNT_MIN_INTERVAL_SECONDS = 6 * 3600` mit Docblock (a) bis (c), gemessen ab dem Start der letzten Runde (KEY_SCAN_RECOUNTED_AT). `scanRecountDue()` liest `$last` einmal; `$last > $now` -> fällig; Marke gesetzt -> fällig genau dann, wenn `$now - $last >= RECOUNT_MIN_INTERVAL_SECONDS` oder `rulesChangedAt() > $last` (r1, dieselbe Vergleichsrichtung wie `AdminViewService::rulesPending`, `$recountedAt < $rulesChangedAt`); ohne Marke wie bisher die 24 h. Docblocks von KEY_SCAN_STALE_SINCE, scanRecountDue() und ScanRecountJob ("Why a TimedJob every 15 minutes and a floor of 24 hours" plus neuer Absatz "The minimum interval", mit I4) nachgezogen; run() von ScanRecountJob unverändert.
+
+Tests: SettingsServiceTest `testAMarkWithinTheMinimumIntervalIsNotDue`, `testAMarkAfterTheMinimumIntervalIsDue`, `testARecountStampInTheFutureIsDue` (mit und ohne Marke), `testTheMinimumIntervalLiesBelowTheFloor` (Wert 6 * 3600), `testSavedRulesStartTheRecountWithinTheMinimumInterval`, `testRulesSavedBeforeTheLastRecountWaitForTheMinimumInterval`; `testAMarkMakesTheRecountDue` heißt jetzt `testAMarkMakesTheRecountDueOnceTheMinimumIntervalHasPassed` (letzte Runde vor dem Mindestabstand plus eine Stunde). ScanRecountJobTest `testAMarkWithinTheMinimumIntervalPlansNothing` (kein add, kein getMounts, kein info-Log, Marke und Zeitstempel unverändert). Angepasst: `testAMarkPlansOneRecountChainPerMount` stand mit einer Runde vor einer Stunde auf der alten Regel; die letzte Runde liegt dort jetzt genau RECOUNT_MIN_INTERVAL_SECONDS zurück, die Aussage (eine Kette je Mount, Marke gelöscht, Zeit gemerkt) bleibt.
+
+RED (nicht committet): `bash scripts/dev/phpunit_docker.sh --filter 'SettingsServiceTest|ScanRecountJobTest'` -> `Tests: 90, Assertions: 207, Errors: 5, Failures: 3.`, wörtlich:
+
+```
+1) OCA\Findling\Tests\Unit\ScanRecountJobTest::testAMarkPlansOneRecountChainPerMount
+Error: Undefined constant OCA\Findling\Service\SettingsService::RECOUNT_MIN_INTERVAL_SECONDS
+2) OCA\Findling\Tests\Unit\SettingsServiceTest::testAMarkMakesTheRecountDueOnceTheMinimumIntervalHasPassed
+Error: Undefined constant OCA\Findling\Service\SettingsService::RECOUNT_MIN_INTERVAL_SECONDS
+3) OCA\Findling\Tests\Unit\SettingsServiceTest::testAMarkWithinTheMinimumIntervalIsNotDue
+Error: Undefined constant OCA\Findling\Service\SettingsService::RECOUNT_MIN_INTERVAL_SECONDS
+4) OCA\Findling\Tests\Unit\SettingsServiceTest::testAMarkAfterTheMinimumIntervalIsDue
+Error: Undefined constant OCA\Findling\Service\SettingsService::RECOUNT_MIN_INTERVAL_SECONDS
+5) OCA\Findling\Tests\Unit\SettingsServiceTest::testTheMinimumIntervalLiesBelowTheFloor
+Error: Undefined constant OCA\Findling\Service\SettingsService::RECOUNT_MIN_INTERVAL_SECONDS
+
+1) OCA\Findling\Tests\Unit\ScanRecountJobTest::testAMarkWithinTheMinimumIntervalPlansNothing
+OCA\Findling\Service\StorageService::getMounts(): iterable was not expected to be called.
+2) OCA\Findling\Tests\Unit\SettingsServiceTest::testARecountStampInTheFutureIsDue
+Failed asserting that false is true.
+3) OCA\Findling\Tests\Unit\SettingsServiceTest::testRulesSavedBeforeTheLastRecountWaitForTheMinimumInterval
+Failed asserting that true is false.
+```
+
+Vor dem Fix schon grün und deshalb kein RED-Zeuge: `testSavedRulesStartTheRecountWithinTheMinimumInterval` (bisher machte jede Marke fällig); M8 belegt, dass er den Regelzweig bewacht.
+
+GREEN gefiltert: derselbe Aufruf -> `OK (90 tests, 222 assertions)`.
+
+#### Mindestabstand Mutationen
+
+Je einzeln mit denselben Skripten (`<scratchpad>/mutate23.py`, `<scratchpad>/mut23.sh`), gefiltertes PHPUnit `SettingsServiceTest|ScanRecountJobTest`, danach byte-gleich zurück (`restored_identical=yes`).
+
+(M6) Mindestabstand entfernt (Marke gesetzt -> immer fällig) -> rot: `testAMarkWithinTheMinimumIntervalIsNotDue`, dazu `testAMarkWithinTheMinimumIntervalPlansNothing`, `testRulesSavedBeforeTheLastRecountWaitForTheMinimumInterval` (`Failures: 3`)
+(M7) `>` statt `>=` an der Grenze -> rot: `testAMarkAfterTheMinimumIntervalIsDue`, dazu `testAMarkPlansOneRecountChainPerMount` (`Failures: 2`)
+(M8) bei r1 Regelausnahme entfernt (`|| $this->rulesChangedAt() > $last` gestrichen) -> rot: `testSavedRulesStartTheRecountWithinTheMinimumInterval` (`Failures: 1`)
+(M9) Zukunftsfall entfernt -> rot: `testARecountStampInTheFutureIsDue` (`Failures: 1`)
+
+Doku: docs/admin-page.md Absatz "Wie der Nenner aktuell bleibt" (Z. ~94: geprüft alle 15 Minuten, nach Dateiereignissen höchstens alle sechs Stunden, nach gespeicherten geänderten Regeln binnen 15 Minuten, sonst spätestens nach 24 Stunden; Abstand ab dem Start der letzten Runde, keine Pause, I4; Grund #25), "Wenn der Zähler über dem Nenner steht" (höchstens sechs Stunden plus die Laufzeit, nach gespeicherten Regeln höchstens 15 Minuten plus die Laufzeit). `grep -rn "15 Minuten\|15 minutes\|15 Min" docs/*.md README*.md` danach: admin-page.md Z. 95 (der Prüftakt des Jobs, stimmt), Z. 195 (das Fenster nach gespeicherten Regeln, r1), Z. 991 ("gespeicherte Regeln machen sie fällig, und ScanRecountJob prüft das alle 15 Minuten", bei r1 unverändert wahr), store-listing.md Z. 3867 (Wartezeit des App Stores, keine Nachzählung). Alle bewusst. README*.md ohne Treffer.
+
+CHANGELOG: Text 1 wörtlich nach dem Entwurf im Plan (unter `Freigabe Texte #25 45-23` steht keine Wortlautzeile, r1) in [1.7.0] unter "### Fixed", "### Behoben", "### Corrigé", Umbruch bei etwa 76 Zeichen mit zwei Leerzeichen Einzug wie die Nachbarzeilen, kein close/fix/resolve-Wort vor #25.
+
+I-45-23-07 (INFO, neu, kein Fix in 45-23): Die Migration Version001500Date20261012000000 setzt bei einem Update von einer Version vor 1.5 die Marke, damit der Nenner unter der Allowlist von 1.5 neu gezählt wird; ihr Docblock sagt "ScanRecountJob sees the mark within its interval". Mit dem Mindestabstand startet diese Runde bei einem Sprung von vor 1.5 direkt auf 1.7.0 erst sechs Stunden nach dem Start der letzten Runde (frühestens). In diesem Fenster zeigt die Seite den Satz "Seit der letzten Zählung sind Dateien dazugekommen" bzw. den alten Nenner. Kein Datenverlust, die 24 h gelten weiter als Obergrenze; Owner-Frage, ob eine Marke aus einer Migration wie gespeicherte Regeln sofort zählen soll (eigener Schlüssel) oder hingenommen und nur im Docblock nachgezogen wird.
+
+Baumhash php/ nach Task 3: Rezept und unabhängige Pipeline `976184c1...` mit 143 Dateien; Positivkontrolle Rezept und Pipeline über `git archive 104bf781` -> `41a8dc1f...` mit 143 (gleich dem Wert nach Task 2).
+
+Gates Task 3 (verify-Zeile wörtlich aus `<scratchpad>/v23_t3.sh`, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: `STATIC_OK` (Mindestabstand aus der Entscheidzeile 6, r1, Text 1 EN/DE/FR wörtlich unter Fixed/Behoben/Corrigé, keine Gedankenstriche), PHPUnit voll `OK (1403 tests, 8810 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33.0.9, v34.0.6, v35.0.3, Probe 3; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `260 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest `tests/test_changelog_translations.py tests/test_store_metadata.py tests/test_php_static_gates.py tests/test_measurement_scripts.py` `808 passed`.

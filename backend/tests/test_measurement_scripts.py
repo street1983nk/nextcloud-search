@@ -1449,8 +1449,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # find, sort, sed and sha256sum over the same tree gave 41a8dc1f as well; the recipe and the
 # pipeline over git archive of 6227bdff, the last commit before this change, gave ff141406 with
 # 143 files (positive control).
+# Moved on 2026-11-23 by plan 45-23, task 3 (issue #25): lib/Service/SettingsService.php gives a
+# marked instance a minimum interval of six hours between the starts of two recount rounds
+# (RECOUNT_MIN_INTERVAL_SECONDS), saved rules aside, and treats a stamp in the future as due;
+# lib/BackgroundJobs/ScanRecountJob.php says so in its docblock; tests/Unit/SettingsServiceTest.php
+# and ScanRecountJobTest.php hold the cases. No file came or went, so PHP_FILES_TODAY stays at 143.
+# The recipe gave 976184c1; the independent pipeline of find, sort, sed and sha256sum over the same
+# tree gave 976184c1 as well; the recipe and the pipeline over git archive of 104bf781, the last
+# commit before this change, gave 41a8dc1f with 143 files (positive control).
 PHP_FILES_TODAY = 143
-PHP_TREE_HASH_TODAY = "41a8dc1f2dc140ffb2a1568d583fb803853c5244004e51153411a9983658df72"
+PHP_TREE_HASH_TODAY = "976184c1dabb6d4fdbcd86aad5d42198a6a875c3e9a4e35d0e7c03706ce068f6"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

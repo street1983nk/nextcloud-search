@@ -227,7 +227,9 @@ final class SettingsService {
 	 * ScanRecountJob. A mark and not a counter on purpose: the listener cannot
 	 * tell reliably what an event does to the denominator (the docblock of
 	 * ScanRecountJob lists why), so it only says "something changed" and the
-	 * recount measures what.
+	 * recount measures what. Since issue #25 the mark makes a recount due only
+	 * once RECOUNT_MIN_INTERVAL_SECONDS have passed since the start of the last
+	 * round, saved rules aside (scanRecountDue()).
 	 */
 	public const KEY_SCAN_STALE_SINCE = 'scan_stale_since';
 
@@ -296,6 +298,30 @@ final class SettingsService {
 	public const RECOUNT_FLOOR_SECONDS = 86400;
 
 	/**
+	 * The shortest time between the starts of two recount rounds on an
+	 * instance that is marked as changed, six hours (issue #25, F1; owner
+	 * decision of plan 45-23).
+	 *
+	 * (a) A round takes the slice lock with every slice, and crawl slices wait
+	 * on that lock. On the instance of the report every file event set the
+	 * mark, the round started every 15 minutes and the recount ran almost
+	 * without pause; with six hours it runs at most four times a day.
+	 * (b) The floor of RECOUNT_FLOOR_SECONDS for a quiet instance stays; six
+	 * hours lie below it and below the daily reconcile of the container, so the
+	 * denominator is still fresher than the reconcile.
+	 * (c) The coverage figure of the page lags the files by at most six hours
+	 * plus the run of a round; in that window the page shows the sentence
+	 * "files have been added since the last count" and never a share above a
+	 * hundred per cent (docs/admin-page.md).
+	 *
+	 * Measured from the start of the last round (KEY_SCAN_RECOUNTED_AT, set by
+	 * beginRecount()). A round that runs longer than this is followed by the
+	 * next one almost without a pause: the interval bounds when a round may
+	 * begin, it is no pause between two rounds.
+	 */
+	public const RECOUNT_MIN_INTERVAL_SECONDS = 6 * 3600;
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -352,15 +378,25 @@ final class SettingsService {
 	}
 
 	/**
-	 * Whether a recount is due: something changed since the last one, or the
-	 * last one is a day old (or there never was one).
+	 * Whether a recount is due.
+	 *
+	 * Something changed since the last round (the mark) and that round started
+	 * at least RECOUNT_MIN_INTERVAL_SECONDS ago, or a changed set of rules was
+	 * saved after it started (owner decision r1 of plan 45-23: the rule hint of
+	 * the page stands until the first round after the save, so the save still
+	 * starts one within 15 minutes); or the last round is a day old, or there
+	 * never was one. A stamp in the future (a clock set back) is due as well,
+	 * or the count would stand still until that time.
 	 */
 	public function scanRecountDue(int $now): bool {
-		if ($this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0) !== 0) {
+		$last = $this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, 0);
+		if ($last > $now) {
 			return true;
 		}
 
-		$last = $this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, 0);
+		if ($this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0) !== 0) {
+			return $now - $last >= self::RECOUNT_MIN_INTERVAL_SECONDS || $this->rulesChangedAt() > $last;
+		}
 
 		return $now - $last >= self::RECOUNT_FLOOR_SECONDS;
 	}

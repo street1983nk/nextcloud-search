@@ -35,6 +35,10 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 - Die Verwaltungsseite funktioniert unter einer dreiteiligen Locale wie
   zh_Hant_TW, auch wenn sie auf die Sprache der Seite zurückfällt (#57).
+- Eine Nachzählung der Abdeckung lässt den Abgleich nicht mehr warten; auf
+  einer belebten Instanz hielt sie ihn bisher den größten Teil des Tages auf.
+  Die Nachzählung läuft jetzt höchstens alle sechs Stunden, gespeicherte
+  Regeln stoßen sie weiterhin innerhalb von 15 Minuten an (#25).
 
 ## [1.6.5] - 2026-11-16
 
