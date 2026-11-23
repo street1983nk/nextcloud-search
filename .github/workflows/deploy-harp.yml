@@ -111,9 +111,14 @@ env:
   # migration that only sets an app config flag, and meta keys in state.db
   # for the storage sweep, the doc key backfill and the one time renewal of
   # refusal streaks (plan 43-20); "Store upgrade 5" demands them in 14 to 18.
-  # Release 1.7.0 keeps the start on v1.5.0 (plan 45-08): 1.7.0 adds no
-  # migration and no schema change; the exclusion of single external storages
-  # is one app config key that reads as an empty list when it is missing.
+  # Release 1.7.0 keeps the start on v1.5.0 (plan 45-08): no schema change;
+  # the exclusion of single external storages is one app config key that
+  # reads as an empty list when it is missing. 1.7.0 adds one migration,
+  # Version001700Date20261123000000 (plan 45-26), which drops the recorded
+  # version again. The jump from v1.5.0 runs Version001600Date20261028000000
+  # too, so this proof cannot tell whether the migration of 1.7 exists; the
+  # step 1.6.5 -> 1.7.0 is held by the probe of
+  # scripts/ci/update_in_process_proof.sh with its control 2 (php.yml).
   # Every assurance that names the
   # behaviour of the start was derived anew for 1.5.0 in
   # .planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md,
@@ -5670,8 +5675,9 @@ jobs:
           # The recorded container version before the upgrade, for part 4 of
           # assurance 12 (plan 40-03): the overview calls of "Store upgrade 3"
           # put it on record on the released installation
-          # (ExAppService::lockstep), the migration of this commit
-          # (Version001600Date20261028000000) drops it inside occ upgrade, and
+          # (ExAppService::lockstep), the migrations of this commit
+          # (Version001600Date20261028000000, Version001700Date20261123000000)
+          # drop it inside occ upgrade, and
           # the first overview call after the upgrade writes it anew. Both
           # readings are recorded here, judged in "Store upgrade 5".
           backend_before_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
@@ -5733,8 +5739,8 @@ jobs:
           # whenever the versions differ: it demands that the instance really performed the
           # app update. A silent "nothing happened" with a newer version on disk
           # would be a store update that leaves a user on the old migrations,
-          # and the migration of the minor jump (Version001600Date20261028000000,
-          # which drops the recorded container version, as
+          # and the migrations of the minor jump (Version001600Date20261028000000
+          # and Version001700Date20261123000000, which drop the recorded container version, as
           # Version001400Date20261006000000 did for the jump to 1.4) is exactly
           # what would then never run. That is the ERROR_UP_TO_DATE trap of
           # plan 11-11, and it is a red run here and never a pass: exit code 3
@@ -6862,6 +6868,15 @@ jobs:
             fail=1
           else
             echo "oc_migrations carries the row of Version001603Date20261108000000"
+          fi
+          echo "--- 14b, the migration of 1.7.0 ran (plan 45-26) ---"
+          migrated_1700=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_migrations WHERE app = 'findling' AND version = '001700Date20261123000000';")
+          if [ "${migrated_1700}" != "1" ]; then
+            echo "::error::oc_migrations carries ${migrated_1700} row(s) for Version001700Date20261123000000 instead of one"
+            fail=1
+          else
+            echo "oc_migrations carries the row of Version001700Date20261123000000"
           fi
 
           echo "--- 15, the hint is pending after occ upgrade (plan 43-06) ---"

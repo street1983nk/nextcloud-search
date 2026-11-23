@@ -17,10 +17,25 @@
 #              This MUST fail with "Undefined constant". It is the positive
 #              control of the harness: a proof that cannot see the bug of
 #              1.6.3 proves nothing about the candidate.
+#   control 2  the released companion of the newest tag in FROM_TAGS is
+#              updated to php/ of this checkout WITHOUT the migrations of its
+#              own release (every lib/Migration/Version*.php that the archive
+#              of that tag does not carry). On a minor step this MUST fail
+#              with "survived the minor step": the driver plants the recorded
+#              container version before the swap and demands it gone after a
+#              minor step (plan 45-26), and only the migration of the step
+#              drops it. Skipped on a patch step, which may keep the value.
 #   candidate  for every tag in FROM_TAGS, the released companion of that tag
 #              is updated to the php/ tree of this checkout. This MUST pass,
-#              every migration of the candidate applied and installed_version
-#              at the version of the candidate.
+#              every migration of the candidate applied, installed_version
+#              at the version of the candidate and, after a minor step, the
+#              planted recorded version gone.
+#
+# FROM_TAGS holds the last release of every minor line from 1.3 on and every
+# 1.6 tag from v1.6.2 on: v1.3.2 has neither markScanStale() nor
+# scan_recounted_at and holds I-45-26-01, v1.4.3 is the way of I-45-23-07,
+# v1.5.1 closes the line 1.5, and the newest tag is the release before the
+# candidate (backend/tests/test_update_in_process_proof.py holds that).
 #
 # The old releases are the signed archives of the GitHub releases, the bytes
 # the store hands out. The driver is scripts/ci/update_in_process_driver.php.
@@ -31,25 +46,29 @@
 #
 # Environment:
 #
-#     FROM_TAGS   releases the candidate is updated from (default "v1.6.2 v1.6.3 v1.6.4 v1.6.5")
+#     FROM_TAGS   releases the candidate is updated from (default "v1.3.2
+#                 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5"); the last word is
+#                 the start of control 2
 #     NC_IMAGE    the Nextcloud image (default nextcloud:33-apache, the lower
 #                 bound of the window in php/appinfo/info.xml)
 #     REPO_SLUG   owner/name of the repository with the releases
 #
 # Needs docker and curl. Touches only containers whose name starts with
-# findling-update-proof- and removes them again. Exit code 0 only when the
-# control failed the way it has to and every candidate run passed.
+# findling-update-proof- and removes them again. Exit code 0 only when both
+# controls failed the way they have to (control 2 skipped on a patch step)
+# and every candidate run passed.
 set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "${SCRIPT_DIR}/../.." && pwd)
 
-FROM_TAGS="${FROM_TAGS:-v1.6.2 v1.6.3 v1.6.4 v1.6.5}"
+FROM_TAGS="${FROM_TAGS:-v1.3.2 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5}"
 NC_IMAGE="${NC_IMAGE:-nextcloud:33-apache}"
 REPO_SLUG="${REPO_SLUG:-${GITHUB_REPOSITORY:-street1983nk/nextcloud-search}}"
 CONTROL_FROM="v1.6.2"
 CONTROL_TO="v1.6.3"
 CONTROL_MESSAGE="Undefined constant"
+CONTROL2_MESSAGE="survived the minor step"
 APP_ID="findling"
 PREFIX="findling-update-proof"
 
@@ -145,6 +164,54 @@ else
 fi
 dk rm -f "${PREFIX}-control" >/dev/null
 
+# Control 2: the newest tag updated to the candidate without the migrations
+# of its own release. Major and minor of both are compared; only a minor step
+# has to drop the recorded version.
+read -r -a from_list <<< "${FROM_TAGS}"
+newest_tag="${from_list[${#from_list[@]}-1]}"
+candidate_version=$(grep -m1 -oE '<version>[0-9]+\.[0-9]+\.[0-9]+</version>' "${REPO_ROOT}/php/appinfo/info.xml" | sed 's/<[^>]*>//g')
+control2_ran=0
+if [ "$(printf '%s' "${newest_tag#v}" | cut -d. -f1,2)" = "$(printf '%s' "${candidate_version}" | cut -d. -f1,2)" ]; then
+	echo "control 2 skipped: ${newest_tag} and the candidate ${candidate_version} share major and minor, a patch step may keep the recorded version"
+else
+	echo "== control 2: released ${newest_tag} to php/ of this checkout without the migrations of ${candidate_version}, has to fail with '${CONTROL2_MESSAGE}'"
+	control2_dir="${WORK}/php-control2"
+	rm -rf "${control2_dir}"
+	cp -R "${REPO_ROOT}/php" "${control2_dir}"
+	# The paths of the archive, normalised: a leading ./ goes, and only the
+	# file name under <app id>/lib/Migration/ is compared. Without this an
+	# archive packed as ./findling/... would match nothing.
+	in_tag=$(tar -tzf "$(release_archive "${newest_tag}")" | sed 's#^\./##' | sed -n "s#^${APP_ID}/lib/Migration/\\(Version[^/]*\\.php\\)\$#\\1#p" | LC_ALL=C sort)
+	removed=()
+	for file in "${control2_dir}"/lib/Migration/Version*.php; do
+		base=$(basename "${file}")
+		if ! grep -qxF "${base}" <<< "${in_tag}"; then
+			rm -f "${file}"
+			removed+=("${base}")
+		fi
+	done
+	echo "control 2 removes: ${removed[*]}"
+	if [ "${#removed[@]}" -eq 0 ]; then
+		echo "CONTROL 2 BROKEN: no migration of the candidate is missing from ${newest_tag}"
+		failures=$((failures + 1))
+	else
+		start_instance "${PREFIX}-control2" "${newest_tag}"
+		set +e
+		control2_out=$(run_update "${PREFIX}-control2" "${control2_dir}" 2>&1)
+		control2_rc=$?
+		set -e
+		printf '%s\n' "${control2_out}"
+		if [ "${control2_rc}" -eq 0 ] || ! printf '%s\n' "${control2_out}" | grep -q "UPDATE-PROOF failed .*${CONTROL2_MESSAGE}"; then
+			echo "CONTROL 2 BROKEN: the candidate without the migrations of ${candidate_version} passed the probe, so the probe cannot vouch for the migration of the minor step"
+			failures=$((failures + 1))
+		else
+			echo "control 2 ok: without the migrations of ${candidate_version} the recorded version survives ${newest_tag} -> ${candidate_version}, and the probe sees it"
+			control2_ran=1
+		fi
+		dk rm -f "${PREFIX}-control2" >/dev/null
+	fi
+fi
+
 for tag in ${FROM_TAGS}; do
 	echo "== candidate: released ${tag} to php/ of this checkout, has to pass"
 	name="${PREFIX}-from-${tag//./-}"
@@ -169,4 +236,8 @@ if [ "${failures}" -ne 0 ]; then
 	echo "update proof: ${failures} failure(s)"
 	exit 1
 fi
-echo "update proof: control reproduced, every candidate run passed"
+if [ "${control2_ran}" -eq 1 ]; then
+	echo "update proof: both controls reproduced, every candidate run passed"
+else
+	echo "update proof: control 1 reproduced, control 2 skipped (patch step), every candidate run passed"
+fi

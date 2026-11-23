@@ -619,9 +619,10 @@ jobs:
   update-in-process:
     name: Store update in one process (issue 51)
     runs-on: ubuntu-24.04
-    # Measured locally on 12.11.2026: three throwaway instances, a little under
-    # four minutes with the image already pulled. Fifteen minutes is the
-    # deadline for the same reason the jobs above have one.
+    # Measured locally in plan 45-26: 3 minutes for both controls and seven
+    # candidates, nine throwaway instances, the image already pulled (137
+    # seconds). The rule: over 10 minutes locally the deadline is 25, else 15;
+    # fifteen minutes for the same reason the jobs above have one.
     timeout-minutes: 15
 
     # What this job is for, in one paragraph, because the next reader will ask
@@ -641,6 +642,14 @@ jobs:
     # The script carries its own positive control: the released 1.6.2 updated to
     # the released 1.6.3 has to fail with exactly that message, or the run is
     # red, because a harness that cannot see the bug vouches for nothing.
+    #
+    # The probe of plan 45-26: the driver plants the recorded container
+    # version before the swap and demands it gone after every minor step,
+    # because a value that survives makes the search answer no hits until the
+    # settings page is opened. Control 2 updates the newest FROM_TAG to this
+    # checkout without the migrations of its own release and has to fail with
+    # "survived the minor step"; so a missing migration of a minor step turns
+    # this job red, and store-submit.yml does not submit the tag.
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

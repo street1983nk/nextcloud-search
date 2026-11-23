@@ -18,6 +18,14 @@ declare(strict_types=1);
  * autoloader, so a migration that needs a symbol of its own release fails for
  * certain and not by chance.
  *
+ * The probe of plan 45-26: before the swap the driver plants the recorded
+ * container version (backend_app_version) at the old release, the state the
+ * settings page leaves, and after a minor step it demands the value gone. A
+ * value that survives makes SearchService answer no hits until somebody opens
+ * the settings page, so every minor step needs a migration that drops it.
+ * Control 2 of the proof script runs the candidate without the migrations of
+ * its own release and has to fail on exactly this message.
+ *
  * Usage, as the web server user, inside a Nextcloud container:
  *
  *     php update_in_process_driver.php <app id> <directory with the new app>
@@ -113,6 +121,17 @@ if ($loaded < 10) {
 }
 echo "UPDATE-PROOF installed {$appId} {$oldVersion}, {$loaded} classes of it loaded, {$notLoadable} not loadable, " . count($before) . " migrations applied\n";
 
+// ExAppService::KEY_BACKEND_VERSION, as a literal; backend/tests/
+// test_update_in_process_proof.py holds both the same. The driver names no
+// class of the app, for the same reason the migrations do not (issue #51).
+$recordKey = 'backend_app_version';
+// The state the settings page leaves on an instance whose two halves both run
+// the old release: ExAppService::lockstep() records the version of the
+// container. Exactly this state empties every search after a minor step that
+// has no migration to drop it (plan 45-26), so it is planted before the swap.
+Server::get(IAppConfig::class)->setValueString($appId, $recordKey, $oldVersion);
+echo "UPDATE-PROOF planted {$recordKey} {$oldVersion}\n";
+
 // The swap of the files, as Installer::updateAppstoreApp() does it.
 if (!is_file($newDir . '/appinfo/info.xml')) {
 	proofFail("{$newDir} holds no appinfo/info.xml");
@@ -155,5 +174,20 @@ $installed = $appConfig->getValueString($appId, 'installed_version', '');
 if ($installed !== $newVersion) {
 	proofFail("installed_version is {$installed} and not {$newVersion}");
 }
+// The probe of plan 45-26: after a minor step the planted version has to be
+// gone, dropped by the migration of that step. SearchService compares major
+// and minor of the recorded version with this half and answers nothing while
+// they differ. A patch step may keep the value, so it is only reported.
+$recorded = $appConfig->getValueString($appId, $recordKey, '');
+$oldMinor = preg_match('/^(\d+)\.(\d+)\./', $oldVersion, $o) === 1 ? $o[1] . '.' . $o[2] : '';
+$newMinor = preg_match('/^(\d+)\.(\d+)\./', $newVersion, $n) === 1 ? $n[1] . '.' . $n[2] : '';
+if ($oldMinor === '' || $newMinor === '') {
+	proofFail("the versions {$oldVersion} and {$newVersion} carry no major and minor");
+}
+$minorStep = $oldMinor !== $newMinor;
+if ($minorStep && $recorded !== '') {
+	proofFail("the recorded backend version {$recorded} survived the minor step {$oldVersion} -> {$newVersion}, so the search answers no hits until the settings page is opened");
+}
+$recordState = $recorded === '' ? 'dropped' : 'kept';
 $new = array_values(array_diff($after, $before));
-echo "UPDATE-PROOF ok {$appId} {$oldVersion} -> {$newVersion}, migrations applied in this run: " . ($new === [] ? 'none' : implode(', ', $new)) . "\n";
+echo "UPDATE-PROOF ok {$appId} {$oldVersion} -> {$newVersion}, migrations applied in this run: " . ($new === [] ? 'none' : implode(', ', $new)) . ", recorded backend version {$oldVersion} {$recordState}\n";
