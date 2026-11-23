@@ -68,3 +68,16 @@ Hinweis: Uhrzeit ungefähr (etwa 17:00 UTC, vom Koordinator übergeben; die gena
 Entscheid V-02-Regel 45-19: "Go mit den Empfehlungen" (2026-11-22 18:37, Claude-Code-Chat) Entscheid: c
 
 Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Die Antwort des Owners bezieht sich auf die im Chat vorgelegten Empfehlungen, hier auf Option c aus 45-19 Task 0: eine Regel nur nach dem Einhängepunkt, gleich welcher Typ, gesetzt in ExternalMountService und gelesen von Liste und Bestätigung (Beispiel /Share mit SMB/CIFS ID 5, SFTP ID 8, SMB/CIFS ID 17: Liste "SMB/CIFS ID 5", "SFTP ID 8", "SMB/CIFS ID 17", Bestätigung "/Share (ID 5), /Share (ID 8), /Share (ID 17)"). Kein Push, kein Tag, kein Kommentar.
+
+Entscheid E3-Weg 45-22: "Go" (2026-11-23 02:42, Claude-Code-Chat) Entscheid: S3
+Hinweis: S3 mit S1 (genaue Prüfung der Freigabe-Attribute) für shareDisabledDownload, wie vom Koordinator im Chat vorgelegt; Ergänzungen (a)+(b) unter shareRead, Schutz vor unbekannten Modi über getKeys('files'), fail-closed
+Freigabe CHANGELOG E3 45-22: "Go" (2026-11-23 02:42, Claude-Code-Chat) Entscheid: ja
+Entscheid Altbestand 45-22: "Go" (2026-11-23 02:42, Claude-Code-Chat) Entscheid: A1
+
+Freigegebener Wortlaut CHANGELOG E3 (Abschnitt [1.7.0] Fixed):
+
+- EN: "Search results of a file that a user may only see under the watermark of Nextcloud Office show no text excerpt to that user."
+- DE: "Suchtreffer einer Datei, die eine Person nur unter dem Wasserzeichen von Nextcloud Office sehen darf, zeigen dieser Person keinen Textausschnitt."
+- FR: "Les résultats de recherche d'un fichier qu'un utilisateur ne peut voir que sous le filigrane de Nextcloud Office n'affichent aucun extrait de texte à cet utilisateur."
+
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben; das Zitat ist die Antwort des Owners auf die Empfehlung des Koordinators im Chat. Im Einzelnen: unter shareAll, shareRead, allGroups und allTags gilt S3 wie im Audit (`### E3 Erkennung an der Quelle`): shareAll kein Ausschnitt für fremde Dateien; shareRead fremde Dateien und eigene ohne UPDATE nach (a) Rohrechten aus getByFileIds und (b) isUpdateable() am Knoten aus SearchService::readableFile; allGroups nur für Mitglieder der Liste; allTags über getTagIdsForObjects. Ein unbekannter `watermark_*`-Modus auf yes heißt gar kein Ausschnitt (getKeys('files')); wirft die Erkennung, gibt es keinen Ausschnitt. Unter shareDisabledDownload gilt die genaue Prüfung wie richdocuments PermissionManager Z. 230 bis 232: kein Ausschnitt genau dann, wenn die suchende Person die Datei über eine Freigabe mit download=false sieht, nur mit öffentlichen OCP-APIs; lässt sich nicht sauber an der Quelle belegen, dass dabei die Freigabe des Mounts geprüft wird, oder geht es nicht mit öffentlichen APIs, gilt auch dort reines S3, und der Grund steht im Audit. Sind mehrere Modi an, gilt die Vereinigung aller Unterdrückungen. Altbestand A1: Treffer bleiben, ohne Ausschnitt. Kein neuer Oberflächensatz, keine Textfreigabe nötig. Weil S3 allGroups abdeckt, entfällt die erneute G1/G2-Frage. Kein Push, kein Tag, kein Kommentar.
