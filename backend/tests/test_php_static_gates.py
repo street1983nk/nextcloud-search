@@ -982,3 +982,133 @@ def test_a_second_snippet_call_is_reported() -> None:
 def test_an_expression_as_the_ids_of_the_snippet_call_is_reported() -> None:
     source = _CLEAN_SNIPPET_BLOCK.replace("\t\t\t\t$allowed,\n", "\t\t\t\tarray_merge($allowed, $fileIds),\n")
     assert len(scan_snippet_calls(source)) >= 1
+
+
+# The integration run of issue #59 (M-45-59, plan 45-20): a file under the
+# watermark of Nextcloud Office, with richdocuments at a pinned version. The
+# gate keeps the job and its proofs in place; each check below is one way the
+# run could stay green while it proves nothing.
+
+INTEGRATION_WORKFLOW = GITHUB_DIR / "workflows" / "integration.yml"
+WATERMARK_JOB = "watermark-59"
+_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+# Each proof: what the run text of the M-45-59 steps has to carry, and why.
+_WATERMARK_PROOFS: tuple[tuple[str, str], ...] = (
+    ("sha256sum -c", "the richdocuments archive is not checked against its checksum"),
+    ("app:list --output=json", "the richdocuments version is not checked after the install"),
+    ("watermark_shareDisabledDownload --value=yes", "M1 (shareDisabledDownload) is never switched on"),
+    ('"key":"download","value":false', "no share without download is created"),
+    ('[ "${v}" = "indexed()" ]', "the file shared without download is not required to be indexed"),
+    ("outsider59", "the outsider is never asked"),
+    ("length == 0", "nothing requires the outsider to find nothing"),
+    ("contains($m) | not", "nothing requires the reader to see no excerpt (E3)"),
+    ("watermark_enabled --value=no", "the excerpt control with the watermark off is missing"),
+    ("watermark_allTags --value=yes", "M3 (allTags) is never switched on"),
+    ('[ "${v}" = "failed(policy_blocked)" ]', "the container verdict policy_blocked is not required"),
+    ("reason code +policy_blocked", "the Nextcloud verdict policy_blocked is not required"),
+)
+
+
+def scan_watermark_job(text: str) -> list[str]:
+    """Findings about the job watermark-59 of integration.yml (M-45-59)."""
+    jobs = _mapping(_load_workflow(text).get("jobs"))
+    if WATERMARK_JOB not in jobs:
+        return [f"integration.yml has no job {WATERMARK_JOB}"]
+    job = _mapping(jobs[WATERMARK_JOB])
+    findings: list[str] = []
+    if _defused(job):
+        findings.append(f"job {WATERMARK_JOB} has continue-on-error")
+    env = _mapping(job.get("env"))
+    if not _VERSION.match(str(env.get("RICHDOCUMENTS_VERSION", ""))):
+        findings.append("RICHDOCUMENTS_VERSION is not pinned to <major>.<minor>.<patch>")
+    if not _SHA256.match(str(env.get("RICHDOCUMENTS_SHA256", ""))):
+        findings.append("RICHDOCUMENTS_SHA256 is not a sha256 digest")
+    raw_steps = job.get("steps")
+    steps = [_mapping(step) for step in raw_steps] if isinstance(raw_steps, list) else []
+    proof_steps = [step for step in steps if str(step.get("name", "")).startswith("M-45-59:")]
+    if not proof_steps:
+        findings.append(f"job {WATERMARK_JOB} has no M-45-59 step")
+    runs = []
+    for step in proof_steps:
+        run = str(step.get("run", ""))
+        runs.append(run)
+        name = step.get("name")
+        if _defused(step):
+            findings.append(f"step {name!r} has continue-on-error")
+        if "${{" in run:
+            findings.append(f"step {name!r} expands an expression inside its run block")
+        if any(defuser in run for defuser in DEFUSERS):
+            findings.append(f"step {name!r} swallows a failure")
+    joined = "\n".join(runs)
+    findings.extend(reason for needle, reason in _WATERMARK_PROOFS if needle not in joined)
+    return findings
+
+
+def test_the_integration_run_proves_files_under_the_watermark() -> None:
+    assert scan_watermark_job(INTEGRATION_WORKFLOW.read_text(encoding="utf-8")) == []
+
+
+def _watermark_sample() -> str:
+    """The job of integration.yml as it stands, wrapped as a workflow of its own."""
+    jobs = _mapping(_load_workflow(INTEGRATION_WORKFLOW.read_text(encoding="utf-8")).get("jobs"))
+    return yaml.safe_dump({"jobs": {WATERMARK_JOB: jobs[WATERMARK_JOB]}}, sort_keys=False)
+
+
+def _without_step(prefix: str) -> str:
+    workflow = _load_workflow(_watermark_sample())
+    job = workflow["jobs"][WATERMARK_JOB]
+    job["steps"] = [step for step in job["steps"] if not str(step.get("name", "")).startswith(prefix)]
+    return yaml.safe_dump(workflow, sort_keys=False)
+
+
+def test_the_sample_of_the_watermark_job_is_clean() -> None:
+    assert scan_watermark_job(_watermark_sample()) == []
+
+
+def test_a_missing_watermark_job_is_reported() -> None:
+    assert scan_watermark_job("jobs:\n  other:\n    steps: []\n") == [f"integration.yml has no job {WATERMARK_JOB}"]
+
+
+def test_a_watermark_job_without_the_m1_step_is_reported() -> None:
+    findings = scan_watermark_job(_without_step("M-45-59: M1"))
+    assert "nothing requires the reader to see no excerpt (E3)" in findings
+    assert "the file shared without download is not required to be indexed" in findings
+
+
+def test_a_watermark_job_without_the_checksum_is_reported() -> None:
+    source = _watermark_sample().replace("sha256sum -c -", "true")
+    assert scan_watermark_job(source) == ["the richdocuments archive is not checked against its checksum"]
+
+
+def test_a_watermark_job_without_the_m3_step_is_reported() -> None:
+    findings = scan_watermark_job(_without_step("M-45-59: M3"))
+    assert "the container verdict policy_blocked is not required" in findings
+    assert "the Nextcloud verdict policy_blocked is not required" in findings
+
+
+def test_an_unpinned_richdocuments_is_reported() -> None:
+    workflow = _load_workflow(_watermark_sample())
+    workflow["jobs"][WATERMARK_JOB]["env"]["RICHDOCUMENTS_VERSION"] = "latest"
+    assert scan_watermark_job(yaml.safe_dump(workflow, sort_keys=False)) == [
+        "RICHDOCUMENTS_VERSION is not pinned to <major>.<minor>.<patch>"
+    ]
+
+
+def test_an_expression_in_a_watermark_run_block_is_reported() -> None:
+    workflow = _load_workflow(_watermark_sample())
+    step = next(s for s in workflow["jobs"][WATERMARK_JOB]["steps"] if str(s.get("name", "")).startswith("M-45-59: M1"))
+    step["run"] = "echo ${{ github.event.pull_request.title }}\n" + step["run"]
+    findings = scan_watermark_job(yaml.safe_dump(workflow, sort_keys=False))
+    assert len(findings) == 1
+    assert "expands an expression" in findings[0]
+
+
+def test_a_defused_watermark_step_is_reported() -> None:
+    workflow = _load_workflow(_watermark_sample())
+    step = next(s for s in workflow["jobs"][WATERMARK_JOB]["steps"] if str(s.get("name", "")).startswith("M-45-59: M3"))
+    step["continue-on-error"] = True
+    findings = scan_watermark_job(yaml.safe_dump(workflow, sort_keys=False))
+    assert len(findings) == 1
+    assert "continue-on-error" in findings[0]
