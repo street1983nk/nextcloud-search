@@ -27,17 +27,19 @@ PHP and the browser pick (section 4, with the dated addendum for `zh_TW` at the 
 Counted on 15.11.2026 with `json.load` over `php/l10n/de.json` and `php/l10n/zh_TW.json`, and counted
 again the same way on 22.11.2026 after plans 45-04 and 45-05 (fifteen keys added, one removed) and after
 plan 45-18 (three keys added, one removed: the reason policy_blocked of issue #59 and the remedy of
-unreadable that names the owner first) and after plan 45-19 (one key added: the example path of the lookup):
+unreadable that names the owner first) and after plan 45-19 (one key added: the example path of the lookup),
+and again on 23.11.2026 after plan 45-24 (one key added: the note that a long queue holds the comparison run
+back, issue #25, F2; the Chinese wording is a machine draft under the reservation of this document):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **383** |
-| Keys in `zh_TW.json`, in the same order | **383** |
+| Keys in `de.json` | **384** |
+| Keys in `zh_TW.json`, in the same order | **384** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **383** |
+| rows in the table below | **384** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -208,6 +210,7 @@ this table cannot break on a wording.
 | `Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.` | Derzeit ist nichts bewusst ausgelassen. Hier stünden Dateien, die zu groß sind, von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen, und sie zählen nicht im Nenner darüber. | 目前沒有刻意略過的檔案。過大、屬於 Findling 不讀取的類型或被規則排除的檔案會計入此處，且不計入上方的分母。 |
 | `The exclusion rules were changed. The search applies them at once, the counters on this page follow once they have been worked out again.` | Die Ausschlussregeln wurden geändert. Die Suche wendet sie sofort an, die Zähler auf dieser Seite folgen, sobald sie neu ermittelt sind. | 排除規則已變更。搜尋會立即套用，本頁的計數則會在重新計算後跟上。 |
 | `The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.` | Das Content-Gateway hat beim letzten Indexierungslauf nicht geantwortet. Die betroffenen Dateien bleiben in der Warteschlange und werden erneut versucht; die Suche antwortet weiter. | 上一輪索引時內容閘道沒有回應。受影響的檔案會留在佇列中並再次嘗試；搜尋仍會繼續回應。 |
+| `A long queue has held the comparison run back for longer than its interval. It runs anyway once it has waited twice as long, and this note stays until it has been through all files; until then, files that only this run finds, for example new files on external storages, may be missing from the search.` | Eine lange Warteschlange hält den Abgleichlauf schon länger als sein Intervall auf. Er läuft trotzdem, sobald er doppelt so lange gewartet hat, und dieser Hinweis bleibt, bis er alle Dateien durchgesehen hat; bis dahin können Dateien in der Suche fehlen, die nur er findet, zum Beispiel neue Dateien auf externen Speichern. | 佇列過長，比對作業被延後的時間已超過其間隔。等待時間達到兩倍後仍會執行，而此提示會保留到它檢查完所有檔案為止；在此之前，只有這項作業才會找到的檔案（例如外部儲存空間上的新檔案）可能不會出現在搜尋結果中。 |
 | `Pause indexing` | Indexierung pausieren | 暫停索引 |
 | `Resume indexing` | Indexierung fortsetzen | 繼續索引 |
 | `Indexing is paused for a backup. Search keeps working.` | Die Indexierung ist für ein Backup pausiert. Die Suche läuft weiter. | 索引已為備份而暫停。搜尋仍正常運作。 |

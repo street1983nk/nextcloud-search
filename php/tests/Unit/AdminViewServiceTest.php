@@ -1044,7 +1044,7 @@ final class AdminViewServiceTest extends TestCase {
 		return [
 			'runState' => $runState,
 			'estimate' => ['files' => 100, 'secondsLeft' => 3600, 'startupValues' => false, 'firstIndexDone' => false],
-			'backend' => ['indexed' => 40, 'gatewayUnavailableSince' => 1_799_999_000],
+			'backend' => ['indexed' => 40, 'gatewayUnavailableSince' => 1_799_999_000, 'reconcileHeldSince' => 1_799_900_000],
 			'scheduled' => 12,
 			'coverage' => ['indexed' => 40, 'indexable' => 100],
 		];
@@ -1072,6 +1072,9 @@ final class AdminViewServiceTest extends TestCase {
 
 			self::assertNull($quiet['estimate']['secondsLeft']);
 			self::assertNull($quiet['backend']['gatewayUnavailableSince']);
+			// The wait of the comparison run (issue #25, F2): a backup pause
+			// holds the run on purpose, so the note would blame the queue.
+			self::assertNull($quiet['backend']['reconcileHeldSince']);
 			self::assertSame(AdminViewService::RUN_PAUSED, $quiet['runState']);
 			// The figures of the Nextcloud side and of the crawl stay as they were.
 			self::assertSame(100, $quiet['estimate']['files']);

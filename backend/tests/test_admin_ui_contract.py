@@ -2883,6 +2883,90 @@ def test_a_silent_content_gateway_has_a_sentence_on_the_page() -> None:
     assert str(catalogue_of(L10N_JSON)[GATEWAY_UNAVAILABLE_SENTENCE]).startswith("Das Content-Gateway hat")
 
 
+# Plan 45-24 (issue #25, F2): a long queue holds the comparison run back, and
+# from one interval on the page says so. Text 3 of 45-23-PLAN.md, approved by
+# the owner on 2026-11-22 18:37 ("Go mit den Empfehlungen", 45-FREIGABEN.md);
+# DE and FR are the approved wordings, the six other languages are drafts after
+# their documents.
+RECONCILE_HELD_SENTENCE = (
+    "A long queue has held the comparison run back for longer than its interval. It runs anyway once it has "
+    "waited twice as long, and this note stays until it has been through all files; until then, files that only "
+    "this run finds, for example new files on external storages, may be missing from the search."
+)
+APPROVED_25_HELD = {
+    "de": (
+        "Eine lange Warteschlange hält den Abgleichlauf schon länger als sein Intervall auf. Er läuft trotzdem, "
+        "sobald er doppelt so lange gewartet hat, und dieser Hinweis bleibt, bis er alle Dateien durchgesehen hat; "
+        "bis dahin können Dateien in der Suche fehlen, die nur er findet, zum Beispiel neue Dateien auf externen "
+        "Speichern."
+    ),
+    "fr": (
+        "Une longue file d'attente retient le passage de comparaison depuis plus longtemps que son intervalle. Il "
+        "a lieu malgré tout dès qu'il a attendu deux fois plus longtemps, et ce message reste affiché jusqu'à ce "
+        "qu'il ait parcouru tous les fichiers ; d'ici là, des fichiers que lui seul trouve, par exemple de nouveaux "
+        "fichiers sur des stockages externes, peuvent manquer dans la recherche."
+    ),
+}
+
+
+def catalogues_without(sentence: str, catalogues: Mapping[str, Mapping[str, object]]) -> list[str]:
+    """The names of the catalogues that do not carry ``sentence`` as a key with a wording."""
+    return [name for name, values in catalogues.items() if not str(values.get(sentence) or "").strip()]
+
+
+def test_a_held_reconcile_has_a_sentence_on_the_page() -> None:
+    """F2 of issue #25: the page names the wait of the comparison run.
+
+    The container sends reconcileHeldSince, the epoch second the quiet mark
+    began to hold a due walk, from one interval on, or null; the service hands
+    it through as an optional counter, the template renders the one static
+    sentence hidden while it is null, and the script writes it through t() and
+    textContent and toggles it on every poll, the figure in the fingerprint.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert template.count('id="findling-reconcile-held"') == 1
+    assert (
+        '<p class="settings-hint" id="findling-reconcile-held"<?php if (!$reconcileHeld) { ?> hidden<?php } ?>>'
+        in template
+    )
+    assert f"<?php p($l->t('{RECONCILE_HELD_SENTENCE}')); ?>" in template
+    assert (
+        "$reconcileHeld = is_int($backend['reconcileHeldSince'] ?? null) && $backend['reconcileHeldSince'] > 0;"
+        in template
+    )
+    # Directly behind the sentence of the silent gateway.
+    assert template.index('id="findling-gateway-unavailable"') < template.index('id="findling-reconcile-held"')
+
+    line = script[script.index("function reconcileLine (backend)") :]
+    line = line[: line.index("\n  }\n")]
+    assert f"text('findling-reconcile-held', t('findling', '{RECONCILE_HELD_SENTENCE}'))" in line
+    assert "shown('findling-reconcile-held', held)" in line
+    assert "innerHTML" not in line
+    assert "reconcileLine(view.backend || {})" in script
+    assert "(view.backend || {}).reconcileHeldSince," in script
+
+    assert view.count("'reconcileHeldSince' => ") == 1
+    assert "'reconcileHeldSince' => $this->optionalCounter($answer, 'reconcileHeldSince')," in view
+
+    assert len(L10N_CATALOGUES) == 18
+    catalogues = {catalogue.name: catalogue_of(catalogue) for catalogue in L10N_CATALOGUES}
+    assert catalogues_without(RECONCILE_HELD_SENTENCE, catalogues) == []
+    for catalogue in (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS):
+        assert catalogues[catalogue.name][RECONCILE_HELD_SENTENCE] == APPROVED_25_HELD["de"], catalogue.name
+    for catalogue in (L10N_FR_JSON, L10N_FR_JS):
+        assert catalogues[catalogue.name][RECONCILE_HELD_SENTENCE] == APPROVED_25_HELD["fr"], catalogue.name
+    for document, _ in LANGUAGE_TABLES:
+        assert RECONCILE_HELD_SENTENCE in language_table(document), document.name
+
+    # The failing sample: a catalogue without the sentence is named, and only it.
+    lacking = dict(catalogues)
+    lacking["es.json"] = {key: value for key, value in lacking["es.json"].items() if key != RECONCILE_HELD_SENTENCE}
+    assert catalogues_without(RECONCILE_HELD_SENTENCE, lacking) == ["es.json"]
+
+
 #: The remedy of gateway_error since plan 41-01 (E-40-07-05, post audit
 #: F-40N-02). "The next run tries again." was not true for this reason: a
 #: failed(gateway_error) on an unchanged etag was never tried again. Now the
@@ -4351,7 +4435,14 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     the template as fixed German text with a spelled out umlaut. All eighteen
     files moved together with the wordings the owner approved on 2026-11-22
     (text 6 of plan 45-17), and the six language documents carry the row.
-    Whoever moves it next writes the next paragraph.
+
+    It stands at 384 since 2026-11-23, plan 45-24 (issue #25, F2): one more,
+    the note that a long queue has held the comparison run back for longer
+    than its interval, shown from reconcileHeldSince. All eighteen files moved
+    together, the six language documents carry the row; the German and French
+    wording is text 3 of plan 45-23, approved by the owner on 2026-11-22 18:37,
+    the six other languages are drafts under the same dated reservation as the
+    rest. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4411,8 +4502,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # old key of no_wildcard, whose sentence changed its key, D-45-09); nine of
     # plan 45-05 (the storage selection and its confirmation line, EXCL-04);
     # two of plan 45-18 (label and remedy of policy_blocked, #59; the remedy of
-    # unreadable changed its key and so moved nothing)
-    assert len(keys_of["de.json"]) == 383
+    # unreadable changed its key and so moved nothing); one of plan 45-19 (the
+    # example path of the lookup); one of plan 45-24 (the note of the held
+    # comparison run, issue #25, F2)
+    assert len(keys_of["de.json"]) == 384
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

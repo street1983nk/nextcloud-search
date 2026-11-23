@@ -56,6 +56,7 @@ from tantivy import Document, Index
 from conftest import APP_VERSION, CONSTITUENTS, Corpus
 from findling import guard, lane, memory_guard, precision, probe
 from findling.api import resources
+from findling.api import status as status_module
 from findling.api.resources import ReadSide
 from findling.api.status import NO_VECTORS_YET, PROFILE_VALUE_KEYS, STATE_UNREADABLE, VECTORS_UNREADABLE, report
 from findling.config import EXTRACT_ADDRESS_SPACE_BYTES, MAX_CELLS, MAX_FILE_BYTES, settings
@@ -71,7 +72,7 @@ from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, word
 from findling.main import APP
 from findling.profile import Profile, ProfileValues, note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
-from findling.store.repo import EMBEDDING_BACKLOG_MARK, FileMeta, open_store
+from findling.store.repo import EMBEDDING_BACKLOG_MARK, QUIET_HELD_MARK, FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
 from findling.worker import pause as pause_module
 from findling.worker import poller as poller_module
@@ -141,6 +142,9 @@ FIELDS = {
     # Befund D of issue #36 (plan 40-06): since when the content gateway has
     # not answered, the first aborted pass of the streak, null while it answers.
     "gatewayUnavailableSince",
+    # F2 of issue #25 (plan 45-24): since when a long queue holds the reconcile
+    # back, sent from one interval on, null otherwise and while it is off.
+    "reconcileHeldSince",
     # Kandidat F of issue #19 (plan 40-06): the epoch second the fill level in
     # languagesFilled was measured at, null while it never was. The fill level
     # comes out of a cache that a background refresh keeps.
@@ -1792,6 +1796,57 @@ def test_an_outage_of_the_gateway_is_reported_with_its_first_moment(
     poller_module._note_gateway_outage(1_800_000_000.5)
 
     assert _answer(client, sign, request, branch)["gatewayUnavailableSince"] == 1_800_000_000
+
+
+HELD_NOW = 1_800_000_000
+DAY = 24 * 3600
+
+
+@pytest.mark.parametrize(
+    ("branch", "stamp", "enabled", "expected"),
+    [
+        # Exactly one interval (24 h by default) old: the page names the wait.
+        ("indexed_volume", str(HELD_NOW - DAY), "true", HELD_NOW - DAY),
+        # One second younger: not yet.
+        ("indexed_volume", str(HELD_NOW - DAY + 1), "true", None),
+        # Cleared after a whole cycle, or never written.
+        ("indexed_volume", "", "true", None),
+        ("indexed_volume", None, "true", None),
+        # A stamp nobody could have written.
+        ("indexed_volume", "abc", "true", None),
+        # The reconcile switched off: its loop does not run, the page says nothing.
+        ("indexed_volume", str(HELD_NOW - 3 * DAY), "false", None),
+        # No state database at all.
+        ("volume", None, "true", None),
+    ],
+)
+def test_reconcile_held_since_is_sent_only_after_one_interval(
+    client: TestClient,
+    sign: Sign,
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+    stamp: str | None,
+    enabled: str,
+    expected: int | None,
+) -> None:
+    # Issue #25, F2 (plan 45-24): the reconcile walks anyway after twice its
+    # interval behind the quiet mark, and the admin page names the wait from one
+    # interval on. The field is a whole number and nothing else.
+    request.getfixturevalue(branch)
+    monkeypatch.setenv("FINDLING_RECONCILE_ENABLED", enabled)
+    settings.cache_clear()
+    monkeypatch.setattr(status_module, "_now", lambda: float(HELD_NOW))
+    if stamp is not None:
+        store = open_store(settings().state_db)
+        try:
+            store.write_meta(QUIET_HELD_MARK, stamp)
+        finally:
+            store.close()
+
+    answer = _answer(client, sign, request, branch)
+
+    assert answer["reconcileHeldSince"] == expected
 
 
 class _ASlowDictionary:

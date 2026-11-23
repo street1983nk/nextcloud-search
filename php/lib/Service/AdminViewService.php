@@ -980,6 +980,9 @@ final class AdminViewService {
 		}
 		if (is_array($overview['backend'] ?? null)) {
 			$overview['backend']['gatewayUnavailableSince'] = null;
+			// The wait of the comparison run (issue #25, F2): a backup pause
+			// holds that run on purpose, so the note would blame the queue.
+			$overview['backend']['reconcileHeldSince'] = null;
 		}
 		$runState = $overview['runState'] ?? null;
 		if ($runState === self::RUN_RUNNING || $runState === self::RUN_STALLED) {
@@ -3480,6 +3483,11 @@ final class AdminViewService {
 			// 1.6.0 leaves the key out, a gateway that answers sends null, and
 			// both are a hidden sentence on the page, never a date of nought.
 			'gatewayUnavailableSince' => $this->optionalCounter($answer, 'gatewayUnavailableSince'),
+			// Since when a long queue holds the comparison run back, epoch
+			// seconds, sent by the container from one interval on, or null
+			// (issue #25, F2, plan 45-24). An optional counter: a container
+			// before 1.7.0 leaves the key out, and both are a hidden sentence.
+			'reconcileHeldSince' => $this->optionalCounter($answer, 'reconcileHeldSince'),
 			'note' => $this->text($answer, 'note'),
 		];
 	}

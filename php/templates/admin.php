@@ -316,6 +316,9 @@ $slotsLine = $l->t('OCR slots: %1$s of %2$s, memory tight', [$count($slotsInForc
 // The content gateway that does not answer (issue #36, Befund D, plan 40-06):
 // a moment of the first aborted pass, or null while it answers.
 $gatewayDown = is_int($backend['gatewayUnavailableSince'] ?? null) && $backend['gatewayUnavailableSince'] > 0;
+// The comparison run a long queue holds back (issue #25, F2, plan 45-24): a
+// moment the container sends from one interval of waiting on, or null.
+$reconcileHeld = is_int($backend['reconcileHeldSince'] ?? null) && $backend['reconcileHeldSince'] > 0;
 
 // The backup pause of issue #37 (plan 41-06). The state is a word of the closed
 // set AdminViewService hands over, and the sentence is chosen here out of the
@@ -624,6 +627,17 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
  */
 ?>
 	<p class="settings-hint" id="findling-gateway-unavailable"<?php if (!$gatewayDown) { ?> hidden<?php } ?>><?php p($l->t('The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.')); ?></p>
+
+	<?php
+/*
+ * The comparison run a long queue holds back (issue #25, F2, plan 45-24),
+ * next to the silent gateway for the same reason: it says why something
+ * does not move. Shown from one interval of waiting on; the run walks anyway
+ * after two, and the note stays until it has been through all files. One
+ * static catalogue sentence, flipped by the script on every poll.
+ */
+?>
+	<p class="settings-hint" id="findling-reconcile-held"<?php if (!$reconcileHeld) { ?> hidden<?php } ?>><?php p($l->t('A long queue has held the comparison run back for longer than its interval. It runs anyway once it has waited twice as long, and this note stays until it has been through all files; until then, files that only this run finds, for example new files on external storages, may be missing from the search.')); ?></p>
 
 	<?php
 /*

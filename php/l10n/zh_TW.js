@@ -20,6 +20,7 @@ OC.L10N.register(
     "Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.": "目前沒有刻意略過的檔案。過大、屬於 Findling 不讀取的類型或被規則排除的檔案會計入此處，且不計入上方的分母。",
     "The exclusion rules were changed. The search applies them at once, the counters on this page follow once they have been worked out again.": "排除規則已變更。搜尋會立即套用，本頁的計數則會在重新計算後跟上。",
     "The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.": "上一輪索引時內容閘道沒有回應。受影響的檔案會留在佇列中並再次嘗試；搜尋仍會繼續回應。",
+    "A long queue has held the comparison run back for longer than its interval. It runs anyway once it has waited twice as long, and this note stays until it has been through all files; until then, files that only this run finds, for example new files on external storages, may be missing from the search.": "佇列過長，比對作業被延後的時間已超過其間隔。等待時間達到兩倍後仍會執行，而此提示會保留到它檢查完所有檔案為止；在此之前，只有這項作業才會找到的檔案（例如外部儲存空間上的新檔案）可能不會出現在搜尋結果中。",
     "Pause indexing": "暫停索引",
     "Resume indexing": "繼續索引",
     "Indexing is paused for a backup. Search keeps working.": "索引已為備份而暫停。搜尋仍正常運作。",

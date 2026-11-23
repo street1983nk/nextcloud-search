@@ -81,7 +81,12 @@ final class SettingsControllerTest extends TestCase {
 		$this->logLines = [];
 	}
 
-	private function controller(): SettingsController {
+	/**
+	 * The answer of adminGet('/status', ...), null (as before) for a backend that does not answer.
+	 *
+	 * @param array<string,mixed>|null $statusAnswer
+	 */
+	private function controller(?array $statusAnswer = null): SettingsController {
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueInt')->willReturnCallback(
 			fn (string $app, string $key, int $default = 0): int => is_int($this->values[$key] ?? null) ? $this->values[$key] : $default,
@@ -136,6 +141,11 @@ final class SettingsControllerTest extends TestCase {
 		// back [] and the overview would read a key that is not there.
 		$exApp = $this->createMock(ExAppService::class);
 		$exApp->method('adminSend')->willReturn(['kind' => ExAppService::ADMIN_UNREACHABLE, 'body' => null]);
+		// The status answer of the container, null unless a test hands one in
+		// (plan 45-24); every other path answers null as before.
+		$exApp->method('adminGet')->willReturnCallback(
+			fn (string $path, string $userId, array $params): ?array => $path === '/status' ? $statusAnswer : null,
+		);
 
 		$view = new AdminViewService(
 			$this->createMock(FileStateService::class),
@@ -782,5 +792,47 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
 		self::assertArrayHasKey('parallelSearch', $body);
 		self::assertFalse($body['parallelSearch']);
+	}
+
+	/** @return array<string, array{array<string,mixed>, ?int}> */
+	public static function reconcileHeldSinceAnswers(): array {
+		return [
+			'a moment' => [['reconcileHeldSince' => 1_799_900_000], 1_799_900_000],
+			'negative' => [['reconcileHeldSince' => -5], null],
+			'text' => [['reconcileHeldSince' => '1799900000'], null],
+			'missing' => [[], null],
+		];
+	}
+
+	/**
+	 * Issue #25, F2 (plan 45-24): the container sends reconcileHeldSince, the
+	 * moment a long queue began to hold the comparison run back, and the
+	 * overview hands it through as an optional counter. An integer of nought
+	 * or more comes through unchanged, everything else is null, and a
+	 * container without the field (before 1.7.0) is null as well.
+	 */
+	#[DataProvider('reconcileHeldSinceAnswers')]
+	public function testTheOverviewCarriesReconcileHeldSinceAsAnOptionalCounter(array $sent, ?int $expected): void {
+		$answer = ['indexed' => 3] + $sent;
+
+		$response = $this->controller($answer)->overview();
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
+		self::assertIsArray($body['backend']);
+		self::assertSame(3, $body['backend']['indexed'], 'the answer of the double reached the overview');
+		self::assertArrayHasKey('reconcileHeldSince', $body['backend']);
+		self::assertSame($expected, $body['backend']['reconcileHeldSince']);
+	}
+
+	public function testTheOverviewCarriesReconcileHeldSinceAsNullWithoutABackend(): void {
+		// adminGet() answers null: the backend cannot be reached.
+		$response = $this->controller()->overview();
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
+		self::assertIsArray($body['backend']);
+		self::assertArrayHasKey('reconcileHeldSince', $body['backend']);
+		self::assertNull($body['backend']['reconcileHeldSince']);
 	}
 }

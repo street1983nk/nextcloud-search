@@ -98,7 +98,14 @@ from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import rebuild_blocked_bytes, rebuild_progress
 from findling.instance import volume_is_shared
 from findling.profile import snapshot
-from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, embedded_in_storages, index_bytes, open_read_only
+from findling.store.repo import (
+    EMBEDDING_BACKLOG_MARK,
+    QUIET_HELD_MARK,
+    Store,
+    embedded_in_storages,
+    index_bytes,
+    open_read_only,
+)
 from findling.store.vectors import VectorStoreError, open_vectors
 from findling.worker import pause, poller
 
@@ -454,6 +461,14 @@ class StatusResponse(BaseModel):
     # the guard, out of findling.worker.poller, so the state database knows
     # nothing of it. The admin page names the state with one sentence.
     gatewayUnavailableSince: int | None = None
+    # Since when a long queue holds the reconcile back (issue #25, F2, plan
+    # 45-24): the epoch second out of the meta key reconcile_quiet_held_since,
+    # sent only once it is at least one minimum interval old, so the page names
+    # the wait one interval before the backstop opens and until the cycle is
+    # through. Null without a state database, without a stamp, with a stamp
+    # nobody could have written, and while the reconcile is switched off. A
+    # whole number and nothing else; the sentence comes out of the catalogue.
+    reconcileHeldSince: int | None = None
     # The two counters of plan 39-01 (Weg C of 35-DEDUP-NOTIZ), and the only two
     # fields of this answer that can be absent. They exist only for a caller that
     # names storages in leaveOut: how many living indexed documents those
@@ -722,6 +737,33 @@ def _embedded() -> tuple[int, int, str]:
         vectors.close()
 
 
+def _now() -> float:
+    """The wall clock, one name so a test can hold it still."""
+    return time.time()
+
+
+def _reconcile_held_since(raw: str | None) -> int | None:
+    """The moment the quiet mark began to hold the reconcile, once it is an interval old.
+
+    Issue #25, F2: the reconcile walks anyway after BACKSTOP_FACTOR intervals
+    behind the quiet mark; the admin page names the wait from one interval on.
+    Null while the reconcile is switched off (its regular loop does not run, so
+    a stamp from before stays without meaning for the page), for an empty or
+    unreadable stamp, and for one younger than the interval, a stamp in the
+    future included.
+    """
+    resolved = settings()
+    if not resolved.reconcile_enabled or not raw:
+        return None
+    try:
+        since = int(raw)
+    except ValueError:
+        return None
+    if since <= 0 or _now() - since < resolved.reconcile_min_interval_hours * 3600:
+        return None
+    return since
+
+
 def _of(store: Store, volume: StatusResponse) -> StatusResponse:
     """Read every number out of one open state database.
 
@@ -799,6 +841,9 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         probe=volume.probe,
         # Carried over like the probe, for the same Pitfall 2.
         gatewayUnavailableSince=volume.gatewayUnavailableSince,
+        # The one value of the reconcile this answer carries, out of the meta
+        # table like the redelivery above (issue #25, F2).
+        reconcileHeldSince=_reconcile_held_since(marks.get(QUIET_HELD_MARK)),
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,

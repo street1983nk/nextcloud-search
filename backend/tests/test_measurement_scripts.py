@@ -1457,8 +1457,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # The recipe gave 976184c1; the independent pipeline of find, sort, sed and sha256sum over the same
 # tree gave 976184c1 as well; the recipe and the pipeline over git archive of 104bf781, the last
 # commit before this change, gave 41a8dc1f with 143 files (positive control).
+# Moved on 2026-11-23 by plan 45-24, task 2 (issue #25): lib/Service/AdminViewService.php hands
+# reconcileHeldSince of the container through as an optional counter and clears it in a pause;
+# templates/admin.php renders the note of the held comparison run, hidden while it is null;
+# tests/Unit/AdminViewServiceTest.php and SettingsControllerTest.php hold the cases. No file came
+# or went, so PHP_FILES_TODAY stays at 143. The recipe gave 05797073; the independent pipeline of
+# find, sort, sed and sha256sum over the same tree gave 05797073 as well; the recipe and the
+# pipeline over git archive of 0fc40005, the last commit before this change, gave 976184c1 with
+# 143 files (positive control).
 PHP_FILES_TODAY = 143
-PHP_TREE_HASH_TODAY = "976184c1dabb6d4fdbcd86aad5d42198a6a875c3e9a4e35d0e7c03706ce068f6"
+PHP_TREE_HASH_TODAY = "05797073dd712321f2d32c844d0415f30dfcdd69843d6fd4d6646a2c36affa63"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2952,8 +2960,17 @@ PHP_TREE_HASH_TODAY = "976184c1dabb6d4fdbcd86aad5d42198a6a875c3e9a4e35d0e7c03706
 # the CRLF normalised tree: 6de76760... both ways, and the recipe and the same
 # pipeline over git archive of 3d18b701 before the step gave 9fa6c443...
 # (positive control).
+#
+# Moved on 2026-11-23 by plan 45-24, task 2 (issue #25): api/status.py
+# sends reconcileHeldSince, the moment the quiet mark began to hold the
+# reconcile, from one interval on and null while the reconcile is off. No
+# file came or went, so PACKAGE_FILES_TODAY stays at 83; the PHP pair moves as
+# well, see above. Recomputed independently with find, sort, sed and sha256sum
+# over the CRLF normalised tree: d45bc1d3... both ways, and the recipe and
+# the same pipeline over git archive of 0fc40005 before the step gave
+# 6de76760... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "6de7676051bd3371786acdea763944ebaba369c7f2250eef6a13badea24b714a"
+PACKAGE_TREE_HASH_TODAY = "d45bc1d3bf1a5b232d49419568b5addf121e55713b57e2c52384b5dbf6a2a462"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

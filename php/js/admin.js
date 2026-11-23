@@ -385,6 +385,9 @@
       // The outage of the content gateway (issue #36, Befund D): the passes
       // stop while it lasts, so nothing else in this line moves either.
       (view.backend || {}).gatewayUnavailableSince,
+      // The wait of the comparison run (issue #25, F2): it can begin or end
+      // while no counter of this line moves.
+      (view.backend || {}).reconcileHeldSince,
       // The backup pause (issue #37): pausing turns into paused while no
       // counter moves, and the wish changes with a press of the switch.
       view.pause, view.pauseWished,
@@ -499,6 +502,7 @@
     semanticBlock(coverage, hasDenominator, (view.backend || {}).engineState)
     modelLine(coverage, hasDenominator, view.backend || {})
     gatewayLine(view.backend || {})
+    reconcileLine(view.backend || {})
   }
 
   /**
@@ -513,6 +517,20 @@
       text('findling-gateway-unavailable', t('findling', 'The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.'))
     }
     shown('findling-gateway-unavailable', down)
+  }
+
+  /**
+   * The note for a comparison run a long queue holds back (issue #25, F2,
+   * plan 45-24). The container sends the moment the wait began once it is
+   * one interval old, or null; the page says the state in one catalogue
+   * sentence and never shows a value of the container as text.
+   */
+  function reconcileLine (backend) {
+    const held = Number.isInteger(backend.reconcileHeldSince) && backend.reconcileHeldSince > 0
+    if (held) {
+      text('findling-reconcile-held', t('findling', 'A long queue has held the comparison run back for longer than its interval. It runs anyway once it has waited twice as long, and this note stays until it has been through all files; until then, files that only this run finds, for example new files on external storages, may be missing from the search.'))
+    }
+    shown('findling-reconcile-held', held)
   }
 
   /**
