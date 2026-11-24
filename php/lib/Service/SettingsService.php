@@ -1030,7 +1030,18 @@ final class SettingsService {
 		if (is_array($mounts)) {
 			$ids = array_values(array_unique($mounts));
 			sort($ids);
-			$this->appConfig->setValueArray(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS, $ids);
+			try {
+				$this->appConfig->setValueArray(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS, $ids);
+			} catch (AppConfigTypeConflictException) {
+				// occ can store the key under another type, which the read
+				// already takes as an empty list; AppConfig refuses to write an
+				// array over it (R-45-21-15), and the save of every rule would
+				// fail with it. The admin wrote this list just now, so it
+				// replaces the foreign value. The exception stays out of the
+				// log, its trace carries the arguments (H-33-02).
+				$this->appConfig->deleteKey(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS);
+				$this->appConfig->setValueArray(Application::APP_ID, self::KEY_EXCLUDED_EXTERNAL_MOUNTS, $ids);
+			}
 			$this->excludedMounts = null;
 		}
 
