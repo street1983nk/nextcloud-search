@@ -126,3 +126,14 @@ Hinweis: Zeit in UTC, beim Eintrag per `date -u` genommen, weil der Koordinator 
 
 Entscheid Schritt C(c) 45-20: "Soviel Aufwand wie nötig Hauptsache beste Qualität" (2026-11-23 15:47, Claude-Code-Chat) Entscheid: c2, LOW
 Hinweis: Zeit in UTC; das Zitat ist die Owner-Vorgabe vom zweiten Checkpoint (Zeit wie oben), der Koordinator hat daraus am 2026-11-23 16:23 UTC c2 abgeleitet; keine neuen Nutzertexte, deshalb keine Textfreigabe. Inhalt: die warning-Zeile des Gateways für eine andere ForbiddenException nennt zusätzlich `origin` (Klasse::Funktion des ersten Frames, ohne Klasse nur die Funktion, ohne Frame `unknown`), nie die Meldung, nie Pfade, nie Argumente; TDD mit roten Mutationen (Herkunft fehlt, Meldung geloggt, Argument geloggt); Probe (c) live neu. Die Plan-Erwartung "nextcloud.log zeigt 'Access denied by access control'" war falsch, weil das Gateway die Ausnahme absichtlich fängt; verify von Task 1 prüft deshalb statt der Literalzeile drei Belege: die Quellzeile `throw new ForbiddenException('Access denied by access control', false);` (Operation.php v6.0.1 Z. 118, mit Z. 115-117 wörtlich im Audit), die debug-Zeile von files_accesscontrol "Access denied for path ... matches rules" als Beleg des Wurfs und die warning-Zeile mit `origin`; ohne einen dieser Belege bleibt verify rot. Kein Push, kein Tag, kein Kommentar.
+
+Entscheid Review R-45-21-01 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-02 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-03 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-04 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-05 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-12 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-13 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-14 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Entscheid Review R-45-21-15 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Das "Ok" des Owners antwortet auf die Empfehlung des Koordinators "alle 8 beheben, jeweils mit Test vorab": R-45-21-01 bis -04 aus dem Review dieses Executors, dazu die vier Befunde des zweiten Prüfers (R-45-21-12 MEDIUM, R-45-21-13 bis -15 LOW). R-45-21-05 ist U-45-20-03 aus der Gegenprobe 45-20 und schon behoben (c9dc3270, 0f6afac7), die Zeile bestätigt das nur. Für R-45-21-12 gilt die Semantik der Empfehlung: ein ausgeschlossener Speicher bleibt ausgeschlossen, auch wenn Teile davon geteilt sind. Neue nutzersichtbare Texte (UI oder CHANGELOG) aus diesen Fixes gehen nur über einen eigenen Checkpoint mit Entwurf EN, DE und FR. Kein Push, kein Tag, kein Kommentar.
