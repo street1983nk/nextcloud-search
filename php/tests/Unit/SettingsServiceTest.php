@@ -87,6 +87,11 @@ final class SettingsServiceTest extends TestCase {
 		);
 		$this->appConfig->method('setValueArray')->willReturnCallback(
 			function (string $app, string $key, array $value): bool {
+				// As AppConfig: a stored key of another type is not overwritten
+				// with an array (AppConfig.php stable34 l. 914-926).
+				if (array_key_exists($key, $this->values) && !is_array($this->values[$key])) {
+					throw new AppConfigTypeConflictException('conflict between new type (array) and old type');
+				}
 				$this->values[$key] = $value;
 
 				return true;
@@ -666,6 +671,32 @@ final class SettingsServiceTest extends TestCase {
 		self::assertCount(1, $this->warnings);
 		foreach ($this->warnings[0][1] as $value) {
 			self::assertIsInt($value, 'a context value that is no counter');
+		}
+	}
+
+	/** @return iterable<string, array{0: mixed}> */
+	public static function foreignStoredTypes(): iterable {
+		yield 'an integer' => [5];
+		yield 'a string' => ['5'];
+		yield 'a bool' => [true];
+	}
+
+	#[DataProvider('foreignStoredTypes')]
+	public function testAKeyOfAnotherTypeNeverBlocksTheSave(mixed $stored): void {
+		// R-45-21-15: occ config:app:set with --type=integer or string puts the
+		// key under another type. AppConfig refuses to write an array over it
+		// (AppConfig.php stable34 l. 914-926), so the save of every rule failed.
+		// The read takes such a key as an empty list; the write replaces it.
+		$this->values[self::EXCLUDED_KEY] = $stored;
+		$this->recordWarnings();
+
+		self::assertSame([], $this->settings()->save(self::form([self::EXCLUDED_FIELD => [8, 3]])));
+
+		self::assertSame([3, 8], $this->values[self::EXCLUDED_KEY]);
+		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+		self::assertSame([3, 8], $this->settings()->excludedExternalMounts());
+		foreach ($this->warnings as $warning) {
+			self::assertStringNotContainsString('5', json_encode($warning[1], JSON_THROW_ON_ERROR), 'a stored value in the log');
 		}
 	}
 
