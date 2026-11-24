@@ -4507,8 +4507,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # comparison run, issue #25, F2); one of plan 45-25, task 1 (the banner of
     # file locking that cannot keep the background jobs apart, I-45-23-03 and
     # I-45-23-04, Text 5); one of plan 45-25, task 2 (the example folder of the
-    # rules, I-45-19-01)
-    assert len(keys_of["de.json"]) == 386
+    # rules, I-45-19-01); one of plan 45-21 (the sentence of the failed storage
+    # list, R-45-21-13)
+    assert len(keys_of["de.json"]) == 387
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -5482,6 +5483,10 @@ MOUNT_TEMPLATE_SENTENCES = (
     "A storage you include again is indexed on the next regular comparison run.",
     "No external storage has been set up by an admin.",
     "External storage is not enabled on this server.",
+    (
+        "The list of external storage could not be read. Saving the rules keeps every external storage that is "
+        "kept out of the index. Reload the page to see the list again."
+    ),
     "ID %s",
 )
 
@@ -5585,6 +5590,7 @@ def scan_mount_template(block: str) -> list[str]:
         "findling-rules-mounts-list",
         "findling-rules-mounts-again",
         "findling-rules-mounts-disabled",
+        "findling-rules-mounts-failed",
         "findling-rules-confirm-mounts",
         "findling-rules-confirm-mounts-value",
     ):
@@ -5860,6 +5866,127 @@ def test_a_failed_read_of_the_storage_list_renders_no_list() -> None:
         _MOUNTS_FAILED_OPEN, _MOUNTS_FAILED_OPEN + '\n\t\t<ul id="findling-rules-mounts-list" hidden></ul>', 1
     )
     assert scan_failed_mount_state(listed) == ["mounts: the failed state renders findling-rules-mounts-list"]
+
+
+# The sentence of the failed state (R-45-21-13, wording approved by the owner
+# on 2026-11-24, `Freigabe Texte Review 45-21` in 45-FREIGABEN.md): without it
+# the page over a failed read showed nothing where the list stands, so an
+# admin could not tell a failed read from a server without external storage.
+# The six languages besides de, de_DE and fr are machine drafts.
+MOUNTS_FAILED_SENTENCE = (
+    "The list of external storage could not be read. Saving the rules keeps every external storage that is "
+    "kept out of the index. Reload the page to see the list again."
+)
+MOUNTS_FAILED_LINE = (
+    f'<p class="settings-hint" id="findling-rules-mounts-failed"><?php p($l->t(\'{MOUNTS_FAILED_SENTENCE}\')); ?></p>'
+)
+MOUNTS_FAILED_WORDINGS = {
+    "de": (
+        "Die Liste der externen Speicher konnte nicht gelesen werden. Beim Speichern der Regeln bleibt jeder "
+        "ausgeschlossene externe Speicher ausgeschlossen. Laden Sie die Seite neu, um die Liste wieder zu sehen."
+    ),
+    "de_DE": (
+        "Die Liste der externen Speicher konnte nicht gelesen werden. Beim Speichern der Regeln bleibt jeder "
+        "ausgeschlossene externe Speicher ausgeschlossen. Laden Sie die Seite neu, um die Liste wieder zu sehen."
+    ),
+    "fr": (
+        "La liste des stockages externes n'a pas pu être lue. L'enregistrement des règles conserve chaque "
+        "stockage externe exclu de l'index. Rechargez la page pour revoir la liste."
+    ),
+    "es": (
+        "No se ha podido leer la lista de almacenamientos externos. Al guardar las reglas, cada almacenamiento "
+        "externo excluido del índice sigue excluido. Vuelva a cargar la página para ver la lista de nuevo."
+    ),
+    "it": (
+        "Non è stato possibile leggere l'elenco delle archiviazioni esterne. Salvando le regole, ogni "
+        "archiviazione esterna esclusa dall'indice resta esclusa. Ricarica la pagina per rivedere l'elenco."
+    ),
+    "nl": (
+        "De lijst met externe opslag kon niet worden gelezen. Bij het opslaan van de regels blijft elke externe "
+        "opslag die buiten de index is gehouden, uitgesloten. Laad de pagina opnieuw om de lijst weer te zien."
+    ),
+    "pt_BR": (
+        "Não foi possível ler a lista de armazenamentos externos. Ao salvar as regras, cada armazenamento "
+        "externo excluído do índice continua excluído. Recarregue a tela para ver a lista novamente."
+    ),
+    "pt_PT": (
+        "Não foi possível ler a lista de armazenamentos externos. Ao guardar as regras, cada armazenamento "
+        "externo excluído do índice continua excluído. Recarregue a página para ver a lista novamente."
+    ),
+    # The full width comma stands as its escape, so the source carries no
+    # character the confusables rule reads as a typo.
+    "zh_TW": (
+        "無法讀取外部儲存空間清單。儲存規則時\uff0c所有已排除在索引之外的外部儲存空間仍會維持排除。"
+        "請重新載入頁面以再次查看清單。"
+    ),
+}
+
+
+def scan_failed_mount_sentence(template: str) -> list[str]:
+    """What keeps the failed state from standing there without a word (R-45-21-13).
+
+    The sentence stands exactly once, through the catalogue with p(), and
+    inside the failed branch: anywhere else it would show up on pages whose
+    list was read, and as fixed text it would speak English under every
+    language.
+    """
+    findings: list[str] = []
+    count = template.count(MOUNTS_FAILED_LINE)
+    if count != 1:
+        findings.append(
+            f"mounts: the sentence of the failed state stands {count} times through the catalogue, not once"
+        )
+    if count == 0 and 'id="findling-rules-mounts-failed"' in template:
+        findings.append(
+            "mounts: the element of the failed state does not print its sentence with p() out of the catalogue"
+        )
+    start = template.find(_MOUNTS_FAILED_OPEN)
+    end = template.find(_MOUNTS_FAILED_CLOSE, start)
+    if start < 0 or end < 0:
+        return [*findings, "mounts: the failed state is no branch of its own before the others"]
+    if count == 1 and MOUNTS_FAILED_LINE not in template[start:end]:
+        findings.append("mounts: the sentence of the failed state does not stand in the failed branch")
+    return findings
+
+
+def test_the_failed_state_of_the_storage_list_names_itself() -> None:
+    """R-45-21-13: the failed state has its own sentence, approved and in all eighteen files."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert scan_failed_mount_sentence(template) == []
+
+    wordings = {path.name: catalogue_of(path).get(MOUNTS_FAILED_SENTENCE) for path in L10N_CATALOGUES}
+    assert wordings == {
+        f"{language}{suffix}": wording
+        for language, wording in MOUNTS_FAILED_WORDINGS.items()
+        for suffix in (".json", ".js")
+    }
+    for document, _ in LANGUAGE_TABLES:
+        assert MOUNTS_FAILED_SENTENCE in language_table(document), document.name
+
+    # Counter samples (B8), built by hand: the sentence gone, as fixed text,
+    # outside the failed branch, and twice.
+    gone = template.replace("\t\t" + MOUNTS_FAILED_LINE + "\n", "", 1)
+    assert scan_failed_mount_sentence(gone) == [
+        "mounts: the sentence of the failed state stands 0 times through the catalogue, not once"
+    ]
+    fixed = template.replace(
+        MOUNTS_FAILED_LINE,
+        f'<p class="settings-hint" id="findling-rules-mounts-failed">{MOUNTS_FAILED_SENTENCE}</p>',
+        1,
+    )
+    assert scan_failed_mount_sentence(fixed) == [
+        "mounts: the sentence of the failed state stands 0 times through the catalogue, not once",
+        "mounts: the element of the failed state does not print its sentence with p() out of the catalogue",
+    ]
+    moved = gone.replace(_MOUNTS_FAILED_OPEN, MOUNTS_FAILED_LINE + "\n\t" + _MOUNTS_FAILED_OPEN, 1)
+    assert scan_failed_mount_sentence(moved) == [
+        "mounts: the sentence of the failed state does not stand in the failed branch"
+    ]
+    twice = template.replace(MOUNTS_FAILED_LINE, MOUNTS_FAILED_LINE + MOUNTS_FAILED_LINE, 1)
+    assert scan_failed_mount_sentence(twice) == [
+        "mounts: the sentence of the failed state stands 2 times through the catalogue, not once"
+    ]
 
 
 def test_the_template_renders_every_state_of_the_mount_list() -> None:
