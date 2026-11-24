@@ -691,6 +691,11 @@ indexierende externe Speicher" (EXCL-04).
   nächsten vollständigen Abgleich sofort, als `deselected` und ohne die Karenz
   von 30 Tagen (siehe `docs/reconcile.md`, Abschnitt "Gelöschte, abgewählte
   und verschwundene Speicher").
+- **Freigaben aus dem Speicher:** ein ausgeschlossener Speicher bleibt
+  ausgeschlossen, auch wenn Nutzer Teile davon teilen. Drin bleibt er nur,
+  wenn ein Mount, den Findling selbst indexiert, ihn ebenfalls trägt, etwa ein
+  zweiter, nicht ausgeschlossener Admin-Speicher oder ein persönlicher externer
+  Speicher mit denselben Zugangsdaten.
 - **Wieder zulassen:** Haken setzen und speichern. Der Speicher wird beim
   nächsten regulären Abgleich nachindexiert; die Seite sagt das unter der
   Liste.

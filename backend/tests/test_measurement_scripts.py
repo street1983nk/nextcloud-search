@@ -1529,8 +1529,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 7e296129 as well; the recipe
 # and the pipeline over git archive of 960dec8c, the last commit before this change, gave 3acaf6d9
 # with 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-12, MEDIUM): lib/Service/StorageService.php lets only a
+# mount of an indexed provider carry an excluded external storage, so a share out of it no longer
+# brings the whole storage back, and tests/Unit/StorageServiceTest.php holds it (its RED commit
+# b3af58e9 alone gives 650b4ef6). No file came or went, so PHP_FILES_TODAY stays at 147. The recipe
+# gave ae34a610; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# ae34a610 as well; the recipe and the pipeline over git archive of a505e180, the last commit before
+# the test, gave 7e296129 with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "7e2961299dc56b05b9be12b8b0f7689a359bdcc47cc7e977125013a94815e3b3"
+PHP_TREE_HASH_TODAY = "ae34a610ac19ea5ebccdaf8d1111a2091da1cc2409e1480f674b8f0e37ccd2df"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

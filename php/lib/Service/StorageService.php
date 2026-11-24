@@ -373,9 +373,16 @@ class StorageService {
 	 * 2. oc_mounts: the storages these mounts carry through the provider of
 	 *    files_external, one per user for credentials per user.
 	 * 3. oc_mounts: every mount of these storages. A storage stays as soon as
-	 *    one of its rows comes from another provider or from a mount id outside
-	 *    the excluded admin mounts, or carries none (T-45-08): a share that an
-	 *    included mount shows as well is not taken away from it.
+	 *    one of its rows is a mount Findling indexes on its own (T-45-08): a
+	 *    provider of providers() and, for files_external, a mount id outside
+	 *    the excluded admin mounts or none. So a share that an included mount
+	 *    shows as well is not taken away from it. A row of any other provider
+	 *    carries nothing (R-45-21-12): files_sharing writes a share into
+	 *    oc_mounts with the numeric id of its source storage (files_sharing
+	 *    Cache.php stable34 l. 45, MountPoint::getNumericStorageId), so a
+	 *    subfolder a user shares out of an excluded storage would otherwise
+	 *    bring the whole storage back, crawled through the excluded mount;
+	 *    the same for a provider whose switch is off.
 	 *
 	 * No log line: an unknown id is the ordinary state after a deletion, and an
 	 * id is a value of the instance (T-45-07).
@@ -453,6 +460,7 @@ class StorageService {
 
 		$storageIds = array_keys($candidates);
 		sort($storageIds);
+		$indexed = $this->providers();
 		foreach (array_chunk($storageIds, self::ABSENT_LOOKUP_BAND) as $band) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->selectDistinct(['storage_id', 'mount_id', 'mount_provider_class'])
@@ -464,9 +472,11 @@ class StorageService {
 				while (is_array($row = $result->fetch())) {
 					$storageId = (int)($row['storage_id'] ?? 0);
 					$mountId = $row['mount_id'] ?? null;
-					$carriedElsewhere = (string)($row['mount_provider_class'] ?? '') !== self::EXTERNAL_STORAGE_MOUNT_PROVIDER
-						|| $mountId === null
-						|| !isset($adminMounts[(int)$mountId]);
+					$provider = (string)($row['mount_provider_class'] ?? '');
+					$carriedElsewhere = in_array($provider, $indexed, true)
+						&& ($provider !== self::EXTERNAL_STORAGE_MOUNT_PROVIDER
+							|| $mountId === null
+							|| !isset($adminMounts[(int)$mountId]));
 					if ($carriedElsewhere) {
 						unset($candidates[$storageId]);
 					}
