@@ -201,8 +201,15 @@ else
 		control2_rc=$?
 		set -e
 		printf '%s\n' "${control2_out}"
-		if [ "${control2_rc}" -eq 0 ] || ! printf '%s\n' "${control2_out}" | grep -q "UPDATE-PROOF failed .*${CONTROL2_MESSAGE}"; then
+		# A pass and another failure are two different statements (R-45-21-19):
+		# exit 0 means the candidate slipped through the probe, any other
+		# failure (docker gone, archive missing) means this run proves nothing,
+		# and the log has to say which of the two happened.
+		if [ "${control2_rc}" -eq 0 ]; then
 			echo "CONTROL 2 BROKEN: the candidate without the migrations of ${candidate_version} passed the probe, so the probe cannot vouch for the migration of the minor step"
+			failures=$((failures + 1))
+		elif ! printf '%s\n' "${control2_out}" | grep -q "UPDATE-PROOF failed .*${CONTROL2_MESSAGE}"; then
+			echo "CONTROL 2 BROKEN: the run from ${newest_tag} failed, but not with '${CONTROL2_MESSAGE}', so this run proves nothing about the migration of the minor step"
 			failures=$((failures + 1))
 		else
 			echo "control 2 ok: without the migrations of ${candidate_version} the recorded version survives ${newest_tag} -> ${candidate_version}, and the probe sees it"
