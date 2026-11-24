@@ -148,3 +148,8 @@ Freigegebener Wortlaut des Satzes für den Fehlerzustand der Speicherliste (R-45
 - FR: La liste des stockages externes n'a pas pu être lue. L'enregistrement des règles conserve chaque stockage externe exclu de l'index. Rechargez la page pour revoir la liste.
 
 Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Das "Ok" des Owners deckt zwei Punkte: (1) den Satz oben für R-45-21-13 (TDD, 18 Kataloge, Schlüsselzahl 387; de_DE wie de; es, it, nl, pt_BR, pt_PT und zh_TW sind maschinelle Entwürfe nach dem Entwurf des Koordinators, gekennzeichnet wie bisher, und nicht Teil der Freigabe) und (2) die Korrektur des CONTROL-2-Wortlauts in scripts/ci/update_in_process_proof.sh (R-45-21-19: die Meldung "CONTROL 2 BROKEN: ... passed the probe" erschien auch bei einem anders gearteten Fehlschlag, gesehen unter Mutation M49; die Meldung unterscheidet jetzt den bestandenen Lauf von einem Lauf, der aus anderem Grund fehlschlug, mit Test vorab). Kein Push, kein Tag, kein Kommentar.
+
+Freigabe Rückfrage Issue #25 (F3): "Go" (2026-11-24, Claude-Code-Chat) Entscheid: posten
+- Gepostet als street1983nk: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-7136596839
+- Inhalt: zwei SQL-Abfragen auf oc_findling_queue (zweimal im Abstand von 5 bis 10 Minuten, einmal GROUP BY kind) zur Klärung des Auslösers der F3-Schleife, plus Ankündigung des Backstops in 1.7.0 (failed nach drei identischen Durchläufen).
+- Wortlaut vom Owner im Chat freigegeben ("Go"), Entwurf vorher gezeigt. Dasselbe Owner-"Ok" vom 24.11. deckt den Umfang von Plan 45-27 (Zählfehler requeueAs, pass-finished-Zeile, Backstop mit Wirkung); Dokumentation dazu im Plan.
