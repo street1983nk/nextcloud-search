@@ -137,3 +137,14 @@ Entscheid Review R-45-21-13 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Ent
 Entscheid Review R-45-21-14 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
 Entscheid Review R-45-21-15 45-21: "Ok" (2026-11-24 02:51, Claude-Code-Chat) Entscheid: beheben
 Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Das "Ok" des Owners antwortet auf die Empfehlung des Koordinators "alle 8 beheben, jeweils mit Test vorab": R-45-21-01 bis -04 aus dem Review dieses Executors, dazu die vier Befunde des zweiten Prüfers (R-45-21-12 MEDIUM, R-45-21-13 bis -15 LOW). R-45-21-05 ist U-45-20-03 aus der Gegenprobe 45-20 und schon behoben (c9dc3270, 0f6afac7), die Zeile bestätigt das nur. Für R-45-21-12 gilt die Semantik der Empfehlung: ein ausgeschlossener Speicher bleibt ausgeschlossen, auch wenn Teile davon geteilt sind. Neue nutzersichtbare Texte (UI oder CHANGELOG) aus diesen Fixes gehen nur über einen eigenen Checkpoint mit Entwurf EN, DE und FR. Kein Push, kein Tag, kein Kommentar.
+
+Freigabe Texte Review 45-21: "Ok" (2026-11-24 12:50, Claude-Code-Chat) Entscheid: ja
+Entscheid Review R-45-21-19 45-21: "Ok" (2026-11-24 12:50, Claude-Code-Chat) Entscheid: beheben
+
+Freigegebener Wortlaut des Satzes für den Fehlerzustand der Speicherliste (R-45-21-13; Ort: Admin-Seite, Abschnitt Regeln, unter "Externen Speicher indexieren", id findling-rules-mounts-failed, class settings-hint, per p($l->t(...)), nur im Fehlerzustand, wenn Settings\Admin failed meldet):
+
+- EN: The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.
+- DE: Die Liste der externen Speicher konnte nicht gelesen werden. Beim Speichern der Regeln bleibt jeder ausgeschlossene externe Speicher ausgeschlossen. Laden Sie die Seite neu, um die Liste wieder zu sehen.
+- FR: La liste des stockages externes n'a pas pu être lue. L'enregistrement des règles conserve chaque stockage externe exclu de l'index. Rechargez la page pour revoir la liste.
+
+Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Das "Ok" des Owners deckt zwei Punkte: (1) den Satz oben für R-45-21-13 (TDD, 18 Kataloge, Schlüsselzahl 387; de_DE wie de; es, it, nl, pt_BR, pt_PT und zh_TW sind maschinelle Entwürfe nach dem Entwurf des Koordinators, gekennzeichnet wie bisher, und nicht Teil der Freigabe) und (2) die Korrektur des CONTROL-2-Wortlauts in scripts/ci/update_in_process_proof.sh (R-45-21-19: die Meldung "CONTROL 2 BROKEN: ... passed the probe" erschien auch bei einem anders gearteten Fehlschlag, gesehen unter Mutation M49; die Meldung unterscheidet jetzt den bestandenen Lauf von einem Lauf, der aus anderem Grund fehlschlug, mit Test vorab). Kein Push, kein Tag, kein Kommentar.
