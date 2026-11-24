@@ -270,16 +270,21 @@ final class ExternalMountServiceTest extends TestCase {
 		self::assertSame([6], array_column($this->service()->adminMounts(), 'id'));
 	}
 
-	public function testADatabaseErrorGivesAnEmptyListAndOneWarningWithoutValues(): void {
+	public function testADatabaseErrorTravelsUpAndIsNoEmptyList(): void {
+		// R-45-21-13: an empty list here was read as "no storage set up", the
+		// page rendered an empty list, and the next save sent no excluded id
+		// and lifted every exclusion. The error goes to the caller, which shows
+		// no list at all; nothing is logged here, the caller logs a counter.
 		$this->mount(4, '/Secret share', 'smb');
 		$this->failing = true;
 
-		self::assertSame([], $this->service()->adminMounts());
-		self::assertCount(1, $this->logs);
-		[$level, $message, $context] = $this->logs[0];
-		self::assertSame('warning', $level);
-		self::assertSame('Findling: could not read the external storage set up by an admin', $message);
-		self::assertSame(['failed' => 1], $context);
+		try {
+			$this->service()->adminMounts();
+			self::fail('a failed read came back as a list');
+		} catch (\Throwable $e) {
+			self::assertNotInstanceOf(\PHPUnit\Framework\AssertionFailedError::class, $e);
+		}
+		self::assertSame([], $this->logs);
 	}
 
 	public function testTheBackendNamesCoverTheIdentifiersOfFilesExternal(): void {

@@ -66,6 +66,8 @@ final class AdminSettingsTest extends TestCase {
 	/** The rows of oc_external_mounts. @var list<array<string, mixed>> */
 	private array $externalMounts = [];
 
+	private bool $mountQueryFails = false;
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -103,6 +105,9 @@ final class AdminSettingsTest extends TestCase {
 				return ':p';
 			});
 			$qb->method('executeQuery')->willReturnCallback(function () use (&$scalars): IResult {
+				if ($this->mountQueryFails) {
+					throw new \RuntimeException('no such table: oc_external_mounts /Secret share');
+				}
 				$rows = array_values(array_filter(
 					$this->externalMounts,
 					static fn (array $row): bool => in_array($row['type'], $scalars, true),
@@ -235,12 +240,31 @@ final class AdminSettingsTest extends TestCase {
 		self::assertSame(['enabled' => false, 'mounts' => []], $params['externalMounts'] ?? null);
 	}
 
+	public function testADatabaseErrorWhileReadingTheListRendersNoListThatCouldLiftTheExclusions(): void {
+		// R-45-21-13: files_external is on and the query on oc_external_mounts
+		// fails. Before the fix the page got an empty list, rendered an empty
+		// list element, and the script sent [] on the next save, which lifted
+		// every stored exclusion. Now the failure is its own state.
+		$this->externalMounts = [['mount_id' => 4, 'mount_point' => '/Secret share', 'storage_backend' => 'smb', 'type' => 1]];
+		$this->mountQueryFails = true;
+
+		$params = $this->admin(static fn (string $appId): bool => $appId === 'files_external')->getForm()->getParams();
+
+		self::assertSame(['enabled' => false, 'failed' => true, 'mounts' => []], $params['externalMounts'] ?? null);
+		$warnings = array_values(array_filter($this->logLines, static fn (array $line): bool => $line['level'] === 'warning'));
+		self::assertCount(1, $warnings);
+		self::assertSame(['failed' => 1], $warnings[0]['context']);
+		self::assertStringNotContainsString('Secret', json_encode($this->logLines, JSON_THROW_ON_ERROR));
+	}
+
 	public function testAFailureWhileReadingTheListStillRendersThePage(): void {
 		$params = $this->admin(static function (string $appId): bool {
 			throw new \RuntimeException('the app manager is gone /Secret');
 		})->getForm()->getParams();
 
-		self::assertSame(['enabled' => false, 'mounts' => []], $params['externalMounts'] ?? null);
+		// R-45-21-13: a failure is a state of its own, not "files_external is
+		// off": the page renders no list and no sentence that would be untrue.
+		self::assertSame(['enabled' => false, 'failed' => true, 'mounts' => []], $params['externalMounts'] ?? null);
 		self::assertArrayHasKey('bootstrap', $this->initialStates);
 
 		$warnings = array_values(array_filter($this->logLines, static fn (array $line): bool => $line['level'] === 'warning'));

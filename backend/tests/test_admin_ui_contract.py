@@ -5815,6 +5815,53 @@ def test_the_example_folder_of_the_rules_comes_from_the_catalogue() -> None:
     ]
 
 
+_MOUNTS_FAILED_OPEN = "<?php if ($externalMountsFailed) { ?>"
+_MOUNTS_FAILED_CLOSE = "<?php } elseif (!$externalMountsEnabled) { ?>"
+
+
+def scan_failed_mount_state(template: str) -> list[str]:
+    """What keeps a failed read of the storage list from lifting the stored exclusions (R-45-21-13).
+
+    Settings\\Admin hands ``failed`` when oc_external_mounts could not be read.
+    The page must then render no list element, because the script sends the
+    ticks of a rendered list and an empty one is "exclude nothing", and no
+    sentence that says files_external is off or that no storage exists.
+    """
+    findings: list[str] = []
+    if "$externalMountsFailed = ($externalMountsData['failed'] ?? false) === true;" not in template:
+        findings.append("mounts: the template does not read the failed state")
+    start = template.find(_MOUNTS_FAILED_OPEN)
+    end = template.find(_MOUNTS_FAILED_CLOSE, start)
+    if start < 0 or end < 0:
+        return [*findings, "mounts: the failed state is no branch of its own before the others"]
+    branch = template[start:end]
+    for element in ("findling-rules-mounts-list", "findling-rules-mounts-disabled", "findling-rules-mounts-empty"):
+        if f'id="{element}"' in branch:
+            findings.append(f"mounts: the failed state renders {element}")
+    return findings
+
+
+def test_a_failed_read_of_the_storage_list_renders_no_list() -> None:
+    """R-45-21-13: no list in the failed state, so a save keeps the stored ids."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert scan_failed_mount_state(template) == []
+    # The script side of the same rule, held at its one line: without a list
+    # it sends the stored ids unchanged.
+    assert "const mounts = mountsListed() ? excludedMountsOf() : inForceMounts.slice()" in script
+
+    # Counter samples (B8): the branch gone, and a list rendered inside it.
+    gone = template.replace(_MOUNTS_FAILED_OPEN + "\n", "", 1).replace(
+        _MOUNTS_FAILED_CLOSE, "<?php if (!$externalMountsEnabled) { ?>", 1
+    )
+    assert scan_failed_mount_state(gone) == ["mounts: the failed state is no branch of its own before the others"]
+    listed = template.replace(
+        _MOUNTS_FAILED_OPEN, _MOUNTS_FAILED_OPEN + '\n\t\t<ul id="findling-rules-mounts-list" hidden></ul>', 1
+    )
+    assert scan_failed_mount_state(listed) == ["mounts: the failed state renders findling-rules-mounts-list"]
+
+
 def test_the_template_renders_every_state_of_the_mount_list() -> None:
     """EXCL-04, UI-SPEC section 1 and 2: four states, one confirmation line, all text through p()."""
     template = TEMPLATE.read_text(encoding="utf-8")
@@ -5838,7 +5885,7 @@ def test_the_template_renders_every_state_of_the_mount_list() -> None:
     assert scan_mount_template(bare) == ["mounts: the mount point is not a text of its own"]
     effect = '<p class="settings-hint" id="findling-rules-effect">'
     moved = block.replace(effect, "<p hidden></p>", 1).replace(
-        "<?php if (!$externalMountsEnabled) { ?>", effect + "</p>\n\t<?php if (!$externalMountsEnabled) { ?>", 1
+        "<?php if ($externalMountsFailed) { ?>", effect + "</p>\n\t<?php if ($externalMountsFailed) { ?>", 1
     )
     assert scan_mount_template(moved) == [
         'mounts: id="findling-rules-mounts" does not stand under the switch',
