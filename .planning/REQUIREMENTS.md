@@ -32,6 +32,7 @@
 
 - [x] **IDX-09**: Eine Nachzählung des Nenners hält den Abgleich des Containers nicht auf: nur ein echter Crawl (wartender Scheduler, Crawl-Zeile oder laufende Crawl-Scheibe) gilt als unfertig, eine Nachzählung nie; Nachzählungsrunden haben einen Mindestabstand (etwa sechs Stunden, Owner), gespeicherte Regeln nach Owner-Entscheid in 45-23 (Owner-Go 22.11.2026, Issue #25, Befund F1)
 - [x] **IDX-10**: Hält die Ruhemarke einen fälligen Abgleich länger als zweimal sein Mindestintervall zurück, läuft er trotzdem, nie während eines Crawls; der Zeitpunkt übersteht Neustarts, das Log warnt ohne Pfade und Namen, die Admin-Seite zeigt einen Hinweis in allen Katalogen (Owner-Go 22.11.2026, Issue #25, Befund F2)
+- [ ] **IDX-11**: Keine Datei kreist endlos zwischen den Warteschlangen: die Antwort von requeueAs zählt nur Zeilen, die wirklich die Spur gewechselt haben, die Logzeile des Passes nennt Übergaben (handed_ocr, handed_embed) getrennt von endgültigen Skips, und ab der dritten Übergabe derselben Bytes an die OCR-Spur endet die Datei sichtbar als failed(repeatedly_stuck), mit Warnzeile ohne Namen und Pfade (Owner-Entscheid 24.11.2026, Issue #25, Befund F3-Eindämmung; Ursache H1 offen bis zu den Daten des Melders)
 
 ### Store-Texte (STORE, Owner-Regel 20.11.2026)
 
@@ -70,8 +71,9 @@
 | COMP-05 | Phase 45 | Complete |
 | IDX-09 | Phase 45 | Complete |
 | IDX-10 | Phase 45 | Complete |
+| IDX-11 | Phase 45 | Pending |
 
-**Coverage:** 14/14 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt (COMP-05 am 22.11.2026 ergänzt, Issue #59; IDX-09 und IDX-10 am 22.11.2026 ergänzt, Issue #25).
+**Coverage:** 15/15 v1.7-Requirements zugeordnet, keine ohne Phase, keine doppelt (COMP-05 am 22.11.2026 ergänzt, Issue #59; IDX-09 und IDX-10 am 22.11.2026 ergänzt, Issue #25; IDX-11 am 24.11.2026 ergänzt, Issue #25 Befund F3).
 
 ---
 *Requirements definiert: 2026-11-21. Traceability gefüllt mit der v1.7-Roadmap: 2026-11-21.*

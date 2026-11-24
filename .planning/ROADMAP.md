@@ -175,7 +175,7 @@ Plans:
 
 **Goal**: Findling 1.7.0 (findling und findling_backend in gleicher Version) steht im Store: Admins schließen einzelne externe Speicher vom Index aus, Findling spricht Traditional Chinese, die Store-Texte sind kurz und verweisen auf die Doku, und das Release ist nach Launch-Härtung und Volltest DE/EN/FR vom Owner freigegeben.
 **Depends on**: Phase 44
-**Requirements**: KAT-03, KAT-04, EXCL-04, EXCL-05, EXCL-06, STORE-03, STORE-04, REL-07, COMP-05, IDX-09, IDX-10
+**Requirements**: KAT-03, KAT-04, EXCL-04, EXCL-05, EXCL-06, STORE-03, STORE-04, REL-07, COMP-05, IDX-09, IDX-10, IDX-11
 **Success Criteria** (what must be TRUE):
 
   1. Admin kann auf der Admin-Seite neben dem Schalter für externe Speicher einzelne externe Speicher ausschließen; bereits indexierte Inhalte eines ausgeschlossenen Speichers verschwinden aus den Suchtreffern, ein wieder zugelassener Speicher wird nachindexiert. Die Seite zeigt die freien Ausschluss-Plätze für Ordner und für Muster, und ein Platzhalterzeichen im Ordnerfeld führt zu einer Fehlermeldung, die auf das Musterfeld verweist, in allen 18 Katalogdateien.
@@ -184,9 +184,9 @@ Plans:
   4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen.
   5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56, #57 und #59.
   6. COMP-05 (#59): Eine Datei unter dem Wasserzeichen von Nextcloud Office wird als ihr Besitzer oder als andere berechtigte Person gelesen (erneutes Öffnen in actAs nur bei Secure-View-Ablehnung, E1), Findling umgeht keine Sperre (E2, eigener Grund policy_blocked), Treffer unter Secure View zeigen keinen Textausschnitt (E3); vorher und nachher auf echter Instanz über den Update-Weg 1.6.5 -> 1.7.0 belegt, der ganze Release-Diff unabhängig geprüft.
-  7. IDX-09 und IDX-10 (#25): Eine Nachzählung des Nenners hält den Abgleich nicht mehr auf (nur ein echter Crawl zählt als unfertig), Nachzählungen haben einen Mindestabstand von etwa sechs Stunden, und eine lange Warteschlange hält den Abgleich höchstens zweimal sein Intervall auf, nie läuft er neben einem Crawl; die Admin-Seite zeigt die Wartezeit; beides auf echter Instanz mit Gegenkontrollen belegt.
+  7. IDX-09 und IDX-10 (#25): Eine Nachzählung des Nenners hält den Abgleich nicht mehr auf (nur ein echter Crawl zählt als unfertig), Nachzählungen haben einen Mindestabstand von etwa sechs Stunden, und eine lange Warteschlange hält den Abgleich höchstens zweimal sein Intervall auf, nie läuft er neben einem Crawl; die Admin-Seite zeigt die Wartezeit; beides auf echter Instanz mit Gegenkontrollen belegt. IDX-11 (F3-Eindämmung): keine Datei kreist endlos zwischen den Warteschlangen, nach drei Übergaben derselben Bytes an die OCR-Spur endet sie sichtbar als failed(repeatedly_stuck), und die requeued-Zahl des Passes zählt nur echte Spurwechsel.
 
-**Plans**: 26 plans
+**Plans**: 27 plans
 
 Plans:
 - [x] 45-01-PLAN.md: PRs #56 und #57 prüfen, je nach Owner-Freigabe mergen, root.lang-Nit, PRODUCT.md, CHANGELOG (KAT-03, KAT-04)
@@ -204,7 +204,7 @@ Plans:
 - [ ] 45-13-PLAN.md: Signatur-Probe mit eigener Owner-Freigabe
 - [ ] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette (erst nach 45-16, E4)
 - [ ] 45-15-PLAN.md: Antworten in #45, #56, #57, #59, #25 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
-- [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-25 (T-45-01 bis T-45-87); Release-Threats im Nachtrag von 45-15 (REL-07)
+- [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-27 (T-45-01 bis T-45-90); Release-Threats im Nachtrag von 45-15 (REL-07)
 - [x] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
 - [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
 - [x] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
@@ -215,7 +215,8 @@ Plans:
 - [x] 45-26-PLAN.md: Release-Blocker: Migration des Minor-Schritts 1.7 (Version001700... löscht backend_app_version, sonst sucht 1.7.0 nach dem Update leer, bis die Einstellungsseite offen war), ohne Klasse der App; I-45-23-07 nach Owner-Entscheid m1|m2; I-45-26-01 (Update aus 1.3.x über Version001500); Probe im Job "Store update in one process (issue 51)" mit Kontrolle 2 (REL-07, IDX-09)
 - [x] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, Live-Proben #25 (F1, F2), CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07, IDX-09, IDX-10)
 - [x] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit inklusive #25, neuer audited_head (COMP-05, REL-07, IDX-09, IDX-10)
-  Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-23, 45-24, 45-25, 45-26, 45-20, 45-21, dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-23 depends_on [45-22], wave 13; 45-24 depends_on [45-23], wave 14; 45-25 depends_on [45-24], wave 15; 45-26 depends_on [45-25], wave 16; 45-20 depends_on [45-26], wave 17; 45-10 depends_on [45-21], wave 19; 45-14 depends_on [45-16])
+- [ ] 45-27-PLAN.md: #25 F3-Eindämmung: ehrliche requeued-Zahl in requeueAs, Logzeile mit handed_ocr/handed_embed, Backstop nach drei identischen Übergaben als failed(repeatedly_stuck), CHANGELOG; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen (IDX-11, REL-07)
+  Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-23, 45-24, 45-25, 45-26, 45-20, 45-21, dann 45-27 (#25 F3-Eindämmung), dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-23 depends_on [45-22], wave 13; 45-24 depends_on [45-23], wave 14; 45-25 depends_on [45-24], wave 15; 45-26 depends_on [45-25], wave 16; 45-20 depends_on [45-26], wave 17; 45-27 depends_on [45-21], wave 19; 45-10 depends_on [45-27], wave 20; 45-14 depends_on [45-16])
 **UI hint**: yes
 
 ## Progress
@@ -230,7 +231,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 17/26 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 19/27 | In Progress | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
