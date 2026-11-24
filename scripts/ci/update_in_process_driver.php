@@ -130,6 +130,12 @@ $recordKey = 'backend_app_version';
 // container. Exactly this state empties every search after a minor step that
 // has no migration to drop it (plan 45-26), so it is planted before the swap.
 Server::get(IAppConfig::class)->setValueString($appId, $recordKey, $oldVersion);
+// Read back before the swap (R-45-21-03): a plant that did not take would let
+// a minor step report "dropped" for a value that was never there, and only
+// control 2 would notice.
+if (Server::get(IAppConfig::class)->getValueString($appId, $recordKey, '') !== $oldVersion) {
+	proofFail("the recorded backend version {$oldVersion} was not planted, so the probe of the minor step would prove nothing");
+}
 echo "UPDATE-PROOF planted {$recordKey} {$oldVersion}\n";
 
 // The swap of the files, as Installer::updateAppstoreApp() does it.
