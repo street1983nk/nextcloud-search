@@ -6312,6 +6312,39 @@ async def test_the_renewal_of_1_7_0_runs_in_the_first_pass_that_reads_generation
     assert row["attempts"] == (1 if renewed else 5)
 
 
+@pytest.mark.parametrize(
+    ("answer", "renewed"),
+    [
+        ({"verdicts": 3, "verdictsMax": 4}, True),
+        ({"verdicts": 3}, False),
+        ({"verdicts": 3, "verdictsMax": 5}, False),
+        ({"verdicts": 2, "verdictsMax": 3}, False),
+    ],
+)
+async def test_the_renewal_of_1_7_0_follows_the_effective_generation_of_the_answer(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, answer: dict[str, object], renewed: bool
+) -> None:
+    # R-45-21-14 without breaking U-45-20-01: since the companion keeps
+    # "verdicts" at 3 for an older container, the renewal of 1.7.0 follows the
+    # generation the container reads off both fields, and that is 4 only for a
+    # companion of 1.7.0 or later.
+    from findling.nc import queue as queue_module  # noqa: PLC0415 - the helper is what this test is about
+
+    store.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
+    for _ in range(5):
+        store.record(7, _refused_file(7), "failed", "gateway_error")
+    queue = _FakeQueue()
+    queue.verdicts_answer = queue_module.announced_generation(answer)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    row = store.file_row(7)
+    assert row is not None
+    assert (REFUSAL_RENEW_MARK_1_7_0 in store.read_meta()) is renewed
+    assert row["attempts"] == (1 if renewed else 5)
+
+
 async def test_a_companion_updated_later_still_gets_the_renewal(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:

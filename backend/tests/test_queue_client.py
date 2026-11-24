@@ -1274,6 +1274,38 @@ async def test_policy_blocked_reaches_only_a_companion_of_generation_4(profile: 
     ]
 
 
+@pytest.mark.parametrize(
+    ("profile", "generation", "expected"),
+    [
+        # the 1.7 companion since R-45-21-14: 3 for an older container, 4 apart
+        ({"profile": "standard", "verdicts": 3, "verdictsMax": 4}, 4, "policy_blocked"),
+        # a 1.6.x companion: no second field
+        ({"profile": "standard", "verdicts": 3}, 3, "gateway_error"),
+        # a later companion whose own generation this container does not know
+        ({"profile": "standard", "verdicts": 3, "verdictsMax": 5}, 3, "gateway_error"),
+        # a second field that is no number of the closed set changes nothing
+        ({"profile": "standard", "verdicts": 3, "verdictsMax": True}, 3, "gateway_error"),
+        ({"profile": "standard", "verdicts": 3, "verdictsMax": "4"}, 3, "gateway_error"),
+        # a smaller second field never lowers the generation
+        ({"profile": "standard", "verdicts": 3, "verdictsMax": 2}, 3, "gateway_error"),
+    ],
+)
+async def test_the_generation_of_a_companion_is_the_highest_known_of_both_fields(
+    profile: dict[str, Any], generation: int, expected: str
+) -> None:
+    # R-45-21-14: the companion keeps "verdicts" at 3, the value a 1.6.x
+    # container reads right, and names its own generation in "verdictsMax";
+    # this container takes the highest generation it knows of the two.
+    session = _FakeSession({("GET", PROFILE_PATH): profile, ("DELETE", ACK_PATH): {"acknowledged": 1}})
+    queue = _queue(session)
+
+    choice = await queue.companion_choice()
+    await queue.acknowledge([1], {31: "policy_blocked"}, {})
+
+    assert choice.verdicts == generation
+    assert _ack_body(session)["failed"] == [{"queueId": 31, "reason": expected}]
+
+
 def test_towards_generation_4_the_skipped_codes_of_3_keep_their_name() -> None:
     # W3: without the entry 4 in the skipped table, generation 4 would read like
     # no signal and archive_limit would travel as too_large to a companion that

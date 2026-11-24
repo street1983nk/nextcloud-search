@@ -13,8 +13,11 @@ like Economy and int8.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+from findling.nc import queue as queue_module
 from findling.nc.queue import LANE_ALL, LANES, VERDICTS_GENERATION
 from findling.precision import PRECISION_DEFAULT, PRECISION_NAMES, Precision
 from findling.profile import PROFILE_NAMES, Profile
@@ -25,6 +28,7 @@ SETTINGS_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "SettingsService.php"
 QUEUE_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "QueueService.php"
 PROFILE_CONTROLLER = REPO_ROOT / "php" / "lib" / "Controller" / "ProfileController.php"
 QUEUE_CLIENT = REPO_ROOT / "backend" / "src" / "findling" / "nc" / "queue.py"
+PARSER_1_6_5 = REPO_ROOT / "backend" / "tests" / "fixtures" / "profile_parser_v1_6_5.py.txt"
 
 _PROFILES = re.compile(r"public const PROFILES = \[(.*?)\];", re.DOTALL)
 _DEFAULT = re.compile(r"public const PROFILE_DEFAULT = '(\w+)';")
@@ -137,8 +141,56 @@ def test_the_verdict_generation_travels_under_one_name_and_one_value() -> None:
 
     generation = re.findall(r"public const VERDICTS_GENERATION = (\d+);", controller)
     assert generation == [str(VERDICTS_GENERATION)]
-    assert controller.count("'verdicts' => self::VERDICTS_GENERATION") == 1
+    # R-45-21-14: the own generation travels as "verdictsMax", "verdicts"
+    # stays at the value an older container reads right.
+    assert controller.count("'verdictsMax' => self::VERDICTS_GENERATION") == 1
+    assert controller.count("'verdicts' => self::VERDICTS_COMPATIBLE") == 1
     assert queue_client.count('payload.get("verdicts")') == 1
+    assert queue_client.count('payload.get("verdictsMax")') == 1
+
+
+def _answer_of_the_controller(controller: str) -> dict[str, int]:
+    """The two generation fields the ProfileController of this tree sends, by their constants."""
+    constants = {name: int(value) for name, value in re.findall(r"public const (VERDICTS_\w+) = (\d+);", controller)}
+    fields = re.findall(r"'(verdicts\w*)' => self::(VERDICTS_\w+),", controller)
+    return {field: constants[constant] for field, constant in fields if constant in constants}
+
+
+def _parser_of_1_6_5() -> Callable[[dict[str, object]], int | None]:
+    """The profile parser of the container 1.6.5, run as it was released (fixture, word for word)."""
+    namespace: dict[str, Any] = {}
+    exec(PARSER_1_6_5.read_text(encoding="utf-8"), namespace)  # noqa: S102 - a fixture of this repository
+    return namespace["read"]
+
+
+def test_a_container_of_1_6_5_reads_the_answer_of_this_companion_as_generation_3() -> None:
+    # R-45-21-14: an app store update brings the companion first more often
+    # than not. 1.6.5 knows the generations 2 and 3 only and reads every other
+    # value as no signal: it would send the codes of 1.4 and 1.5 as their 1.3
+    # substitutes and skip its re-check and catch-up. So "verdicts" must stay
+    # a generation that container knows, and 3 is the one it stores everything
+    # of. The parser is the released code, out of tests/fixtures.
+    read = _parser_of_1_6_5()
+    answer = _answer_of_the_controller(PROFILE_CONTROLLER.read_text(encoding="utf-8"))
+
+    assert answer.get("verdicts") == 3
+    assert read(answer) == 3
+
+    # Counter sample (B8): the answer of 1.7.0 before this fix, 4 in "verdicts",
+    # is no signal to 1.6.5, and the fixture shows exactly that.
+    assert read({"verdicts": 4}) is None
+    assert read({"verdicts": 3, "verdictsMax": 4}) == 3
+
+
+def test_this_container_reads_the_answer_of_this_companion_as_its_own_generation() -> None:
+    # The other half of R-45-21-14: the companion of this tree and the
+    # container of this tree meet at generation 4, policy_blocked included.
+    answer = _answer_of_the_controller(PROFILE_CONTROLLER.read_text(encoding="utf-8"))
+
+    assert answer.get("verdictsMax") == VERDICTS_GENERATION == 4
+    assert queue_module.announced_generation(answer) == VERDICTS_GENERATION
+    # Counter sample: the answer of a 1.6.x companion stays at 3.
+    assert queue_module.announced_generation({"verdicts": 3}) == 3
 
 
 def test_the_pause_wish_travels_under_one_name_on_both_sides() -> None:

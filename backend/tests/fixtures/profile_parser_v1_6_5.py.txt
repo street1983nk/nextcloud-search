@@ -1,0 +1,23 @@
+# The profile parser of the container 1.6.5, word for word (plan 45-21, R-45-21-14).
+# Source: tag v1.6.5 (06a0d7c8), backend/src/findling/nc/queue.py, git blob ca9c8f04,
+# sha256 94387a2e...; line 148, lines 219 to 227 and the read of line 782
+# (verdicts = _verdicts(payload.get("verdicts"))). Run by tests/test_profile_wire.py
+# against the answer the ProfileController of this tree gives. Not a module of the
+# package: never imported, never changed.
+from typing import Final
+KNOWN_VERDICTS_GENERATIONS: Final = frozenset({2, 3})
+
+
+def _verdicts(value: object) -> int | None:
+    """The announced verdict generation, only ever one of KNOWN_VERDICTS_GENERATIONS.
+
+    A closed set like profile and precision (T-29-02, T-31-04): a bool is not a
+    number here, a string is not one either, and any other value is None.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value in KNOWN_VERDICTS_GENERATIONS else None
+
+
+def read(payload):
+    return _verdicts(payload.get("verdicts"))
