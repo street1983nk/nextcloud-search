@@ -80,13 +80,15 @@ final class Admin implements ISettings {
 	}
 
 	/**
-	 * The admin mounts for the storage selection, or an empty, switched off
-	 * list when reading them failed. A failure here must not break the page,
-	 * the same rule as the probe take-over above; the warning carries a
-	 * counter and no value, because a message of the failure could name a
-	 * mount point (T-04-51).
+	 * The admin mounts for the storage selection, or the state failed when
+	 * reading them failed (R-45-21-13): the template renders no list then, so
+	 * the script finds no box and a save keeps the stored exclusions; an empty
+	 * list would have sent none and lifted them all. A failure here must not
+	 * break the page, the same rule as the probe take-over above; the warning
+	 * carries a counter and no value, because a message of the failure could
+	 * name a mount point (T-04-51).
 	 *
-	 * @return array{enabled: bool, mounts: list<array{id: int, mountPoint: string, backend: string, duplicate: bool}>}
+	 * @return array{enabled: bool, failed?: true, mounts: list<array{id: int, mountPoint: string, backend: string, duplicate: bool}>}
 	 */
 	private function externalMounts(): array {
 		try {
@@ -97,7 +99,7 @@ final class Admin implements ISettings {
 		} catch (\Throwable) {
 			$this->logger->warning('Findling: could not list the external storage for the admin page', ['failed' => 1]);
 
-			return ['enabled' => false, 'mounts' => []];
+			return ['enabled' => false, 'failed' => true, 'mounts' => []];
 		}
 	}
 

@@ -101,6 +101,12 @@ final class ExternalMountService {
 	 * point alone and reads this same flag off the box of the row, so the type
 	 * cannot be part of the rule.
 	 *
+	 * A failed read throws and is no empty list (R-45-21-13): an empty list
+	 * says "no storage set up", the page would render an empty list, and the
+	 * next save would send no excluded id and lift every stored exclusion
+	 * without a question. Settings\Admin catches it, logs a counter and renders
+	 * no list, so the script keeps the stored ids.
+	 *
 	 * @return list<array{id: int, mountPoint: string, backend: string, duplicate: bool}>
 	 */
 	public function adminMounts(): array {
@@ -108,14 +114,7 @@ final class ExternalMountService {
 			return [];
 		}
 
-		try {
-			$mounts = $this->read();
-		} catch (\Throwable) {
-			$this->logger->warning('Findling: could not read the external storage set up by an admin', ['failed' => 1]);
-
-			return [];
-		}
-
+		$mounts = $this->read();
 		$this->sort($mounts);
 
 		$seen = [];

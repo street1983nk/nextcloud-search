@@ -1564,8 +1564,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gave 930d987b; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # 930d987b as well; the recipe and the pipeline over git archive of 7fe3f91c, the last commit before
 # this change, gave 02574d1a with 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-13, LOW): lib/Service/ExternalMountService.php lets a
+# failed read of the admin mounts travel up instead of answering an empty list, lib/Settings/Admin.php
+# hands the state failed, and templates/admin.php renders no list in it, so a save keeps the stored
+# exclusions; tests/Unit/AdminSettingsTest.php and ExternalMountServiceTest.php hold it (their RED
+# commit 472b4206 alone gives 7420cc36). No file came or went, so PHP_FILES_TODAY stays at 147. The
+# recipe gave 0db3eed1; the independent pipeline of find, sort, sed and sha256sum over the same tree
+# gave 0db3eed1 as well; the recipe and the pipeline over git archive of 472b4206 gave 7420cc36 with
+# 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "930d987b275c6f90ceba02dfae3a8c6b160506a39c21db601b6e5b4ac47fc858"
+PHP_TREE_HASH_TODAY = "0db3eed1d06aa051f72190e9748d951401e5f500ee2e2162413cdd0f6604f2d4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

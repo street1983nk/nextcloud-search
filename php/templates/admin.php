@@ -1130,6 +1130,9 @@ $externalStorage = ($rules['indexExternalStorage'] ?? false) === true;
 // up alone is not in the list (D-45-03), the help sentence says so.
 $externalMountsData = is_array($_['externalMounts'] ?? null) ? $_['externalMounts'] : [];
 $externalMountsEnabled = ($externalMountsData['enabled'] ?? false) === true;
+// The list could not be read (R-45-21-13): no list and no sentence that would
+// be untrue, so the script finds no box and saves the stored ids unchanged.
+$externalMountsFailed = ($externalMountsData['failed'] ?? false) === true;
 $externalMounts = [];
 foreach ((is_array($externalMountsData['mounts'] ?? null) ? $externalMountsData['mounts'] : []) as $externalMount) {
 	if (!is_array($externalMount) || !is_int($externalMount['id'] ?? null)) {
@@ -1699,7 +1702,8 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * a span of its own and never part of a translated sentence.
 	 */
 ?>
-	<?php if (!$externalMountsEnabled) { ?>
+	<?php if ($externalMountsFailed) { ?>
+	<?php } elseif (!$externalMountsEnabled) { ?>
 		<p class="settings-hint" id="findling-rules-mounts-disabled"><?php p($l->t('External storage is not enabled on this server.')); ?></p>
 	<?php } else { ?>
 		<fieldset id="findling-rules-mounts" class="findling-rules__mounts"<?php if (!$externalStorage) { ?> disabled<?php } ?>>
