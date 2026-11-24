@@ -4,8 +4,8 @@ milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
 stopped_at: "45-21 fertig, Push erfolgt (origin/main = aff5f1d3, CI läuft); als Nächstes 45-27 (#25 F3-Eindämmung, Owner-Go 24.11.), danach 45-10 komplett neu auf dem finalen Kopf"
-last_updated: "2026-11-24T15:59:57.000Z"
-last_activity: "2026-11-24, 45-27 geplant: #25 F3-Eindämmung (Zählfix requeueAs, Logzeile handed_ocr/handed_embed, Backstop failed(repeatedly_stuck) nach drei identischen Übergaben), wave 19 vor 45-10; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen"
+last_updated: "2026-11-24T16:19:11.000Z"
+last_activity: "2026-11-24, 45-27 geplant und nach Plan-Check revidiert: #25 F3-Eindämmung (Zählfix requeueAs, Logzeile handed_ocr/handed_embed, Backstop failed(repeatedly_stuck) nach drei verlangten identischen Übergaben, judged ohne den Backstop-Bestand im Nenner), wave 19 vor 45-10; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen"
 progress:
   total_phases: 2
   completed_phases: 1

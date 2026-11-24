@@ -204,7 +204,7 @@ Plans:
 - [ ] 45-13-PLAN.md: Signatur-Probe mit eigener Owner-Freigabe
 - [ ] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette (erst nach 45-16, E4)
 - [ ] 45-15-PLAN.md: Antworten in #45, #56, #57, #59, #25 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
-- [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-27 (T-45-01 bis T-45-90); Release-Threats im Nachtrag von 45-15 (REL-07)
+- [ ] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-27 (T-45-01 bis T-45-91); Release-Threats im Nachtrag von 45-15 (REL-07)
 - [x] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
 - [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
 - [x] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
@@ -215,7 +215,7 @@ Plans:
 - [x] 45-26-PLAN.md: Release-Blocker: Migration des Minor-Schritts 1.7 (Version001700... löscht backend_app_version, sonst sucht 1.7.0 nach dem Update leer, bis die Einstellungsseite offen war), ohne Klasse der App; I-45-23-07 nach Owner-Entscheid m1|m2; I-45-26-01 (Update aus 1.3.x über Version001500); Probe im Job "Store update in one process (issue 51)" mit Kontrolle 2 (REL-07, IDX-09)
 - [x] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, Live-Proben #25 (F1, F2), CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07, IDX-09, IDX-10)
 - [x] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit inklusive #25, neuer audited_head (COMP-05, REL-07, IDX-09, IDX-10)
-- [ ] 45-27-PLAN.md: #25 F3-Eindämmung: ehrliche requeued-Zahl in requeueAs, Logzeile mit handed_ocr/handed_embed, Backstop nach drei identischen Übergaben als failed(repeatedly_stuck), CHANGELOG; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen (IDX-11, REL-07)
+- [ ] 45-27-PLAN.md: #25 F3-Eindämmung: ehrliche requeued-Zahl in requeueAs, Logzeile mit handed_ocr/handed_embed, Backstop nach drei identischen Übergaben als failed(repeatedly_stuck), Deckungsgrad zählt den Backstop-Bestand nicht doppelt (judged ohne failed/repeatedly_stuck), CHANGELOG; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen (IDX-11, REL-07)
   Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-23, 45-24, 45-25, 45-26, 45-20, 45-21, dann 45-27 (#25 F3-Eindämmung), dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-23 depends_on [45-22], wave 13; 45-24 depends_on [45-23], wave 14; 45-25 depends_on [45-24], wave 15; 45-26 depends_on [45-25], wave 16; 45-20 depends_on [45-26], wave 17; 45-27 depends_on [45-21], wave 19; 45-10 depends_on [45-27], wave 20; 45-14 depends_on [45-16])
 **UI hint**: yes
 
