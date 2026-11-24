@@ -50,6 +50,7 @@ final class StorageServiceTest extends TestCase {
 	private const TEAM = 'OCA\GroupFolders\Mount\MountProvider';
 	private const EXTERNAL = 'OCA\Files_External\Config\ConfigAdapter';
 	private const HOME = 'OC\Files\Mount\LocalHomeMountProvider';
+	private const SHARE = 'OCA\Files_Sharing\MountProvider';
 	private const CATALOGUE = 'backend/tests/fixtures/share_identity_cases.json';
 	private const CONFIG_KEYS = ['host', 'port', 'root', 'share', 'user'];
 
@@ -553,6 +554,59 @@ final class StorageServiceTest extends TestCase {
 
 		self::assertSame([23, 24], self::storageIdsOf($service->getMounts()));
 		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([23, 24]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testASharedFolderOfAnExcludedStorageKeepsTheWholeStorageOut(): void {
+		// R-45-21-12: a user shares a subfolder of the excluded admin mount 6.
+		// files_sharing writes the share into oc_mounts with the numeric id of
+		// the source storage (files_sharing Cache.php stable34 l. 45), so 27
+		// has a second row. The share provider is no mount Findling indexes;
+		// it must not bring the excluded storage back.
+		$this->storages = [27];
+		$this->stageExternalMount(6, 1, 27);
+		$this->mounts[] = ['storage_id' => 27, 'user_id' => 'colleague', 'mount_provider_class' => self::SHARE, 'mount_id' => null];
+		$this->listed = [27];
+
+		$service = $this->service(external: true, excludedMounts: [6]);
+
+		self::assertSame([], self::storageIdsOf($service->getMounts()));
+		self::assertFalse($service->isIndexedStorage(27));
+		self::assertSame(['gone' => [], 'deselected' => [27]], $service->classifyAbsent([27]));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testOnlyAMountOfAnIndexedProviderCarriesAnExcludedStorage(): void {
+		// R-45-21-12: a row of the Team Folder provider counts only while Team
+		// Folders are indexed; switched off, it carries nothing.
+		$this->storages = [28];
+		$this->stageExternalMount(6, 1, 28);
+		$this->mounts[] = ['storage_id' => 28, 'user_id' => 'member', 'mount_provider_class' => self::TEAM, 'mount_id' => null];
+		$this->listed = [28];
+
+		$off = $this->service(teamFolders: false, external: true, excludedMounts: [6]);
+		self::assertSame([], self::storageIdsOf($off->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => [28]], $off->classifyAbsent([28]));
+
+		$this->bands = [];
+		$on = $this->service(teamFolders: true, external: true, excludedMounts: [6]);
+		self::assertSame([28], self::storageIdsOf($on->getMounts()));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testAPersonalMountOfTheSameStorageStillCarriesIt(): void {
+		// T-45-08 of 45-02: a storage that a mount Findling indexes carries as
+		// well stays, and a personal mount of files_external is such a mount
+		// under the main switch.
+		$this->storages = [29];
+		$this->stageExternalMount(6, 1, 29);
+		$this->stageExternalMount(9, 2, 29);
+		$this->listed = [29];
+
+		$service = $this->service(external: true, excludedMounts: [6]);
+
+		self::assertSame([29], self::storageIdsOf($service->getMounts()));
+		self::assertSame(['gone' => [], 'deselected' => []], $service->classifyAbsent([29]));
 		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
 	}
 
