@@ -1557,8 +1557,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 02574d1a as well; the recipe and
 # the pipeline over git archive of c721641f, the last commit before this change, gave bff1ff98 with
 # 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-01, LOW): the class comment of lib/Service/
+# GatewayReader.php names the two places that log the reader of a second open (the audit event and
+# the info line of the controller) and no longer says that the read hooks name it or that it is
+# never logged. A comment only. No file came or went, so PHP_FILES_TODAY stays at 147. The recipe
+# gave 930d987b; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# 930d987b as well; the recipe and the pipeline over git archive of 7fe3f91c, the last commit before
+# this change, gave 02574d1a with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "02574d1a2a3b215e6d77296ff282f1cd5d9654259e71cdabcca74c477cead7c0"
+PHP_TREE_HASH_TODAY = "930d987b275c6f90ceba02dfae3a8c6b160506a39c21db601b6e5b4ac47fc858"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -3081,8 +3088,16 @@ PHP_TREE_HASH_TODAY = "02574d1a2a3b215e6d77296ff282f1cd5d9654259e71cdabcca74c477
 # sed and sha256sum over the CRLF normalised tree: 14c4ae4f... both ways, and
 # the recipe and the same pipeline over git archive of aceed6ca before the
 # step gave efc966a5... (positive control).
+#
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-04, LOW): in worker/poller.py the
+# comment of the re-check stands in front of the re-check again and the
+# renewal of 1.7.0 has its own; comments only. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. Recomputed independently with find, sort,
+# sed and sha256sum over the CRLF normalised tree: 8c87b872... both ways, and
+# the recipe and the same pipeline over git archive of 7fe3f91c before the
+# step gave 14c4ae4f... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "14c4ae4f1aee1d963a9a4e31aac3d0c4bfe6a0428f88a47997e994cdbcfc97c9"
+PACKAGE_TREE_HASH_TODAY = "8c87b872839db3f129994a8c8add8327ca19b64355c34fd5d4a183725ff8865e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

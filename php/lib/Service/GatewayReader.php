@@ -59,8 +59,14 @@ use Psr\Log\LoggerInterface;
  * missing user or file by (T-45-58).
  *
  * What changes for an admin (T-45-74, accepted with E1): for a file whose
- * first open the secure view refused, the read hooks name the reader of the
- * second open, usually the owner. That is written in the CHANGELOG of 1.7.0.
+ * first open the secure view refused, the second open runs as a reader,
+ * usually the owner. The read hooks do not name that reader: admin_audit
+ * names the user of the session, and actAs sets none, so its own line says
+ * "--" (see AUDIT_MESSAGE). The reader is named in exactly two places (plan
+ * 45-20, a1 and a4): the CriticalActionPerformedEvent of openAs(), which
+ * admin_audit writes with file id, path and uid, and the info line of
+ * GatewayController with the uid under "reader". That is written in the
+ * CHANGELOG of 1.7.0 and in docs/privacy.md.
  *
  * allGroups is decided as G1: it refuses only with a user set, the first open
  * runs without one, so an allGroups rule does not stop indexing, as in 1.6.5.
@@ -68,7 +74,8 @@ use Psr\Log\LoggerInterface;
  * The answer is an array: outcome (ok, not_found, policy) and asked, the
  * number of readers of the second round; with ok also the file, its stream
  * (false when fopen returned false), the size of the file cache, the storage
- * and the reader. The reader stays inside the app and is never logged.
+ * and the reader. The reader leaves this class only towards the controller;
+ * it is logged in nothing but the two places named above (R-45-21-01).
  */
 final class GatewayReader {
 	public const OUTCOME_OK = 'ok';

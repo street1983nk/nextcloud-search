@@ -1135,6 +1135,23 @@ class Poller:
         # ever raises the level again, least of all the guard itself.
         guard.note_confirmation(choice.confirmed, choice.profile)
 
+        # The renewal of the refusal streaks of 1.6 (#59, plan 45-20): only in
+        # front of a companion of generation 4, which reads a file under the
+        # watermark as its owner; a 1.6.x companion would refuse the renewed
+        # files again and spend the streak. The generation is the one the
+        # queue client read off both fields of the profile answer (R-45-21-14).
+        # Before the claim, so the reconcile finds the files as work on its
+        # next cycle. Once per process; the store writes the mark and never
+        # renews twice. A failure ends the pass like any other (R-45-21-17).
+        if (
+            not self._renew_1_7_0_asked
+            and choice.verdicts is not None
+            and choice.verdicts >= RENEW_1_7_0_MIN_GENERATION
+        ):
+            store = self._store_or_die()
+            await asyncio.to_thread(lambda: store.renew_refusal_streaks(companion_generation=choice.verdicts))
+            self._renew_1_7_0_asked = True
+
         # The re-check of the old stock after the upgrade (D-29-10): the files
         # of the classes 1.4.0 fixes go back to the queue once, without a full
         # reindex. Only on the signal of K6, because only a companion of a known
@@ -1146,21 +1163,6 @@ class Poller:
         # in the same round. Its length is bounded: about 43 requeue calls on
         # the stock of the reporting instance. A failure is a log line with the
         # class name and nothing else; the next round tries again at the cursor.
-        # The renewal of the refusal streaks of 1.6 (#59, plan 45-20): only in
-        # front of a companion of generation 4, which reads a file under the
-        # watermark as its owner; a 1.6.x companion would refuse the renewed
-        # files again and spend the streak. Before the claim, so the reconcile
-        # finds the files as work on its next cycle. Once per process; the
-        # store writes the mark and never renews twice.
-        if (
-            not self._renew_1_7_0_asked
-            and choice.verdicts is not None
-            and choice.verdicts >= RENEW_1_7_0_MIN_GENERATION
-        ):
-            store = self._store_or_die()
-            await asyncio.to_thread(lambda: store.renew_refusal_streaks(companion_generation=choice.verdicts))
-            self._renew_1_7_0_asked = True
-
         if not self._recheck_done and choice.verdicts in KNOWN_VERDICTS_GENERATIONS:
             try:
                 self._recheck_done = await recheck_step(self._store_or_die(), queue)
