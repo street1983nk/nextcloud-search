@@ -142,6 +142,69 @@ def test_the_probe_and_its_control_name_the_same_failure() -> None:
     assert message_findings(wrong, driver) != []
 
 
+# The two branches of the control 2 verdict (R-45-21-19). Until plan 45-21 one
+# combined condition reported every failure as "passed the probe", so a run
+# that fell over for another reason (docker gone, archive missing; seen under
+# mutation M49) read like a candidate that slipped through, and whoever read
+# the log hunted the wrong failure.
+_CONTROL2_RC_ZERO_BRANCH = 'if [ "${control2_rc}" -eq 0 ]; then'
+_CONTROL2_OTHER_BRANCH = (
+    'elif ! printf \'%s\\n\' "${control2_out}" | grep -q "UPDATE-PROOF failed .*${CONTROL2_MESSAGE}"; then'
+)
+_PASSED = "passed the probe"
+
+
+def control2_verdict_findings(proof: str) -> list[str]:
+    """What keeps control 2 from calling another failure "passed the probe"."""
+    findings: list[str] = []
+    if re.search(r'"\$\{control2_rc\}" -eq 0 \] \|\|', proof) is not None:
+        findings.append("control 2 judges a pass and another failure in one condition")
+    if proof.count(_CONTROL2_RC_ZERO_BRANCH) != 1:
+        findings.append("control 2 has no branch of its own for a run that passed")
+    if proof.count(_CONTROL2_OTHER_BRANCH) != 1:
+        findings.append("control 2 has no branch of its own for a run that failed another way")
+    if proof.count(_PASSED) != 1:
+        findings.append('the sentence "passed the probe" does not stand exactly once')
+    elif (
+        proof.count(_CONTROL2_RC_ZERO_BRANCH) == 1
+        and proof.count(_CONTROL2_OTHER_BRANCH) == 1
+        and not proof.find(_CONTROL2_RC_ZERO_BRANCH) < proof.find(_PASSED) < proof.find(_CONTROL2_OTHER_BRANCH)
+    ):
+        findings.append('the sentence "passed the probe" does not stand in the branch of the passed run')
+    if "failed, but not with '${CONTROL2_MESSAGE}'" not in proof:
+        findings.append("control 2 does not name the failure that was expected and missing")
+    return findings
+
+
+def test_control_2_tells_a_pass_from_another_failure() -> None:
+    """R-45-21-19: only a run with exit code 0 may be reported as "passed the probe"."""
+    proof = PROOF.read_text(encoding="utf-8")
+
+    assert control2_verdict_findings(proof) == []
+
+    # Counter samples (B8), built by hand from the clean script. The combined
+    # condition of 45-26, which called every failure a pass:
+    merged = proof.replace(_CONTROL2_RC_ZERO_BRANCH, 'if [ "${control2_rc}" -eq 0 ] || false; then', 1)
+    assert control2_verdict_findings(merged) == [
+        "control 2 judges a pass and another failure in one condition",
+        "control 2 has no branch of its own for a run that passed",
+    ]
+    # The branch of the other failure gone:
+    blind = proof.replace(_CONTROL2_OTHER_BRANCH, "elif false; then", 1)
+    assert control2_verdict_findings(blind) == ["control 2 has no branch of its own for a run that failed another way"]
+    # Its message no longer names what was expected:
+    mute = proof.replace("failed, but not with '${CONTROL2_MESSAGE}'", "failed without the expected words", 1)
+    assert control2_verdict_findings(mute) == ["control 2 does not name the failure that was expected and missing"]
+    # "passed the probe" twice, and in the wrong branch:
+    doubled = proof.replace("and the probe sees it", "and the probe sees it (passed the probe)", 1)
+    assert control2_verdict_findings(doubled) == ['the sentence "passed the probe" does not stand exactly once']
+    moved = proof.replace(" passed the probe, so the probe cannot vouch", " passed, so the probe cannot vouch", 1)
+    moved = moved.replace("proves nothing about the migration", "proves nothing (not passed the probe)", 1)
+    assert control2_verdict_findings(moved) == [
+        'the sentence "passed the probe" does not stand in the branch of the passed run'
+    ]
+
+
 def test_the_newest_from_tag_is_the_release_before_the_candidate() -> None:
     changelog = CHANGELOG.read_text(encoding="utf-8")
     proof = PROOF.read_text(encoding="utf-8")
