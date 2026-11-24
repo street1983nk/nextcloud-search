@@ -54,6 +54,9 @@ final class SnippetPolicyTest extends TestCase {
 	/** @var array<string,string> */
 	private array $config = [];
 
+	/** @var list<string> keys of $config stored as lazy */
+	private array $lazyKeys = [];
+
 	/** @var array<int,array{int,int}> file id => storage id, permissions */
 	private array $entries = [];
 
@@ -70,15 +73,22 @@ final class SnippetPolicyTest extends TestCase {
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
 
+		// As AppConfig of the server while its lazy values are not loaded: a
+		// lazy key read without the lazy flag answers the default
+		// (AppConfig.php stable34 l. 561-566, the lazy cache stays empty until
+		// a lazy read asks for it); a lazy read also finds a key that is not lazy.
 		$this->appConfig->method('getValueString')->willReturnCallback(
 			fn (string $app, string $key, string $default = '', bool $lazy = false): string => $app === 'files' && array_key_exists($key, $this->config)
+				&& ($lazy || !in_array($key, $this->lazyKeys, true))
 				? $this->config[$key]
 				: $default,
 		);
 		$this->appConfig->method('getKeys')->willReturnCallback(
 			fn (string $app): array => $app === 'files' ? array_keys($this->config) : [],
 		);
-		$this->appConfig->method('isLazy')->willReturn(false);
+		$this->appConfig->method('isLazy')->willReturnCallback(
+			fn (string $app, string $key): bool => $app === 'files' && in_array($key, $this->lazyKeys, true),
+		);
 
 		$this->fileAccess->method('getByFileIds')->willReturnCallback(
 			function (array $fileIds): array {
@@ -216,6 +226,27 @@ final class SnippetPolicyTest extends TestCase {
 		$this->watermark(['watermark_shareAll' => 'yes']);
 
 		self::assertSame([12], $this->policy()->allowed($this->user('alice'), $this->userFolder(), [11, 12, 13]));
+	}
+
+	public function testAModeStoredAsLazyStillTakesTheExcerpt(): void {
+		// R-45-21-02: richdocuments reads its modes through IConfig, which
+		// answers non lazy values only (AllConfig.php stable34 l. 163-165,
+		// AppConfig::getValue l. 1489-1494), so a mode an admin stored lazy
+		// with occ does not watermark there. Findling reads it all the same and
+		// suppresses the excerpt: one excerpt too few, never one too many.
+		$this->watermark(['watermark_shareAll' => 'yes']);
+		$this->lazyKeys = ['watermark_shareAll'];
+
+		self::assertSame([12], $this->policy()->allowed($this->user('alice'), $this->userFolder(), [11, 12, 13]));
+	}
+
+	public function testAListStoredAsLazyStillCounts(): void {
+		// The same for the list of a mode (R-45-21-02).
+		$this->watermark(['watermark_allTags' => 'yes', 'watermark_allTagsList' => '5,9']);
+		$this->lazyKeys = ['watermark_allTagsList'];
+		$this->tagMapper->method('getTagIdsForObjects')->willReturn(['11' => ['9'], '12' => [], '13' => ['4']]);
+
+		self::assertSame([12, 13], $this->policy()->allowed($this->user('alice'), $this->userFolder(), [11, 12, 13]));
 	}
 
 	public function testUnderShareAllTheOwnerKeepsTheExcerptOfTheSameFile(): void {

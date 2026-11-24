@@ -186,8 +186,13 @@ final class SnippetPolicy {
 		}
 
 		// All keys, the lazy ones too, and each value is read the way it is
-		// stored: richdocuments reads them through IConfig, which does not
-		// care whether a key is lazy.
+		// stored. richdocuments reads its modes through IConfig, and that
+		// answers non lazy values only (AllConfig::getAppValue calls
+		// AppConfig::getValue, which reads the fast cache, stable34 l. 163-165
+		// and l. 1489-1494): a mode an admin stored lazy with occ does not
+		// watermark there. Reading it here all the same suppresses an excerpt
+		// richdocuments would not watermark, never the other way round
+		// (R-45-21-02). The switch above is read as richdocuments reads it.
 		$keys = $this->appConfig->getKeys(self::NAMESPACE);
 		$on = function (string $key) use ($keys): bool {
 			if (!in_array($key, $keys, true)) {

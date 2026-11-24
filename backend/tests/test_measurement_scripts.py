@@ -1550,8 +1550,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # stays at 147. The recipe gave bff1ff98; the independent pipeline of find, sort, sed and sha256sum
 # over the same tree gave bff1ff98 as well; the recipe and the pipeline over git archive of 174b8a26,
 # the last commit before the test, gave 33bd9543 with 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-02, LOW): the comment of lib/Service/SnippetPolicy.php
+# says that IConfig answers non lazy values only, so reading a lazy mode suppresses more than
+# richdocuments watermarks, and tests/Unit/SnippetPolicyTest.php holds a lazy mode and a lazy list.
+# No file came or went, so PHP_FILES_TODAY stays at 147. The recipe gave 02574d1a; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 02574d1a as well; the recipe and
+# the pipeline over git archive of c721641f, the last commit before this change, gave bff1ff98 with
+# 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "bff1ff989104c70bc9b67d3638e806aa59c51004ca79a2ba2371f2f551326292"
+PHP_TREE_HASH_TODAY = "02574d1a2a3b215e6d77296ff282f1cd5d9654259e71cdabcca74c477cead7c0"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
