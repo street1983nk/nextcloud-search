@@ -427,6 +427,23 @@ def forget_the_cutter_notice() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def forget_the_settings() -> Iterator[None]:
+    """No case inherits the settings the case before it resolved.
+
+    ``findling.config.settings`` is cached once per process (lru_cache), which
+    is right for a container, whose environment never changes. A test that sets
+    an environment variable with monkeypatch and clears the cache gets its own
+    value, but monkeypatch restores the environment after the test and leaves
+    the cache alone: test_legacy_doc.py set FINDLING_MAX_TEXT_CHARS to 1024, and
+    a mail test that ran after it in the same process was cut at 1024 characters
+    (plan 45-21). Cleared after every case, so the order of the suite decides
+    nothing; the volume fixture clears it on both sides as before.
+    """
+    yield
+    settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def forget_the_profile_state() -> Iterator[None]:
     """No case inherits the hardware or the chosen profile of the case before it.
 
