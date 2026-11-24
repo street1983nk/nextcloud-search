@@ -78,6 +78,45 @@ def from_tag_findings(changelog: str, proof: str, info_xml: str) -> list[str]:
     return findings
 
 
+_PLANT = "Server::get(IAppConfig::class)->setValueString($appId, $recordKey, $oldVersion);"
+_READ_BACK = re.compile(
+    r"if \(Server::get\(IAppConfig::class\)->getValueString\(\$appId, \$recordKey, ''\) !== \$oldVersion\) \{\s*"
+    r'proofFail\("[^"]*planted[^"]*"\);\s*\}'
+)
+
+
+def read_back_findings(driver: str) -> list[str]:
+    """What keeps the driver from proving the planted value before the swap (R-45-21-03).
+
+    Without the read back a plant that silently did not take leaves the ok line
+    of a minor step saying "dropped" for a value that was never there (M35 of
+    plan 45-26); only control 2 caught that.
+    """
+    plant = driver.find(_PLANT)
+    swap = driver.find("removeTree($appPath);")
+    if plant < 0 or swap < 0:
+        return ["the driver has no plant or no swap"]
+    check = _READ_BACK.search(driver, plant)
+    if check is None or check.start() > swap:
+        return ["the driver does not read the planted value back before the swap"]
+    return []
+
+
+def test_the_driver_reads_the_planted_value_back_before_the_swap() -> None:
+    driver = DRIVER.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    assert read_back_findings(driver) == []
+
+    # Counter samples (B8): the read back gone, and the read back after the swap.
+    match = _READ_BACK.search(driver)
+    assert match is not None
+    without = driver.replace(match.group(0), "", 1)
+    assert read_back_findings(without) == ["the driver does not read the planted value back before the swap"]
+    late = without.replace("removeTree($appPath);", match.group(0) + "\nremoveTree($appPath);", 1)
+    late = late.replace(match.group(0) + "\nremoveTree($appPath);", "removeTree($appPath);\n" + match.group(0), 1)
+    assert read_back_findings(late) == ["the driver does not read the planted value back before the swap"]
+
+
 def test_the_driver_plants_the_key_the_service_records() -> None:
     service = EXAPP_SERVICE.read_text(encoding="utf-8")
     driver = DRIVER.read_text(encoding="utf-8")
