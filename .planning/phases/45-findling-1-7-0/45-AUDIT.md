@@ -2,7 +2,8 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: af0e5e13e17aeb8d915dd5caacffcb056eb49e69
+audited_head: 131b45369a27557f693145a3aea65bde1ab65f1e
+status_45_21: passed
 status_45_09: passed
 
 ## Umfang
@@ -2339,3 +2340,114 @@ Braucht der Wrapper Collabora? Nein: richdocuments legt die Secure View über je
 CHANGELOG [1.7.0] unter "### Fixed", "### Behoben", "### Corrigé": Text 4 (#59) und Text 7 (V-45-10-03) aus 45-17-PLAN.md bzw. 45-FREIGABEN.md, E3 aus `Freigegebener Wortlaut CHANGELOG E3`, dazu I-45-26-01 aus `Freigegebener Wortlaut CHANGELOG I-45-26-01`; je Zeile wörtlich geprüft, Gegenprobe mit einem geänderten Wort rot. Keine Zeile für V-45-10-02 und keine für U-45-20-01 bis -03 (nie ausgeliefert). Doku: docs/reconcile.md (policy_blocked in der Strähne, einmalige Erneuerung erst ab Generation 4), docs/formats.md (Generation 4, Reihenfolge der Updates gleichgültig), docs/admin-page.md (neuer Grund, neue unreadable-Abhilfe, Platzhalter, `asked`, `origin`, `reader`), docs/privacy.md (E1 mit der Zeile von Findling in der Prüfspur, E2, E3, Team Folder unter shareAll).
 
 status_45_20: passed
+
+## Nachtrag 45-21 (unabhängiger Review, Delta-Audit, neuer Prüfkopf)
+
+Plan 45-21, 2026-11-23 bis 2026-11-24. Der unabhängige Review des ganzen Release-Diffs v1.6.5..HEAD steht in 45-REVIEW-1-7-0.md (Task 1, zweiter Prüfer-Bericht am 2026-11-24 nachgeprüft und eingearbeitet, R-45-21-12 bis -19). Alle Befunde ab LOW sind vor dem Prüfkopf behoben (Owner "Ok" 2026-11-24 02:51 und 12:50 UTC, 45-FREIGABEN.md); die Fixes mit RED-Commit, Mutationsgegenprobe und Gates stehen unter `### Befunde 45-17 bis 45-24`.
+
+### Delta-Audit af0e5e13 bis Kopf
+
+Jeder Prüfpunkt mit Probe und Ergebnis, am Endstand dieses Plans (Kopf = letzter Commit außerhalb .planning, siehe audited_head oben).
+
+**Umfang.** `git log --oneline af0e5e13..HEAD -- . ':!.planning'`: 46 Commits, von c3885795 (CHANGELOG-Zeile 45-10) über 10d9707e (V-45-10-01) und alle Commits der Pläne 45-17 bis 45-26 (#59, V-45-10-02/03, E3, #25 F1/F2, I-45-23-07, I-45-26-01, I-45-25-01, U-45-20-01 bis -03, watermark-59) bis zu den neun Review-Fixes von 45-21 (R-45-21-01 bis -04, -12 bis -15, -19 samt RED-Commits und Testisolation e7826527).
+
+**Gateway und Rechte (#59, E1/E2).**
+- rejectForeignCaller ist die erste Anweisung von GatewayController::getFileContents (Z. 92); Probe: Code am Kopf, GatewayControllerTest (fremde ExApp 403 ohne Kopf). Ergebnis: bestanden.
+- NoUser/404 nur für die benannte Person, kein neues Orakel: GatewayReader::open Z. 117-125 (NoUserException läuft unverändert hoch, Antwort wortgleich wie fehlende Datei), not_found unverändert zu 1.6.5 (GatewayControllerTest). Ergebnis: bestanden.
+- Erneutes Öffnen nur bei Nachricht UND Ursprungs-Frame SecureViewWrapper::checkFileAccess (isSecureViewRefusal Z. 145-154), dann in actAs (openAs Z. 217 ff.); mit Besitzer genau ein Versuch (openAgain Z. 184-192, E1), keine Umgehung: jedes andere Ende des Besitzer-Versuchs ist policy (E2); jede andere ForbiddenException bricht sofort mit policy ab (open Z. 131-134). Probe: Code am Kopf, GatewayReaderTest (22 Fälle), echte Belege `#### Pfad folgt dem Besitzer`, `#### M2, M4, M5 nach dem Fix`, `#### files_accesscontrol beim Öffnen (I-45-17-03)`. Ergebnis: bestanden.
+- E3 SnippetPolicy fail-closed: wirft die Erkennung oder steht ein unbekannter watermark_*-Modus auf yes, gibt es keinen Ausschnitt (SnippetPolicy, SnippetPolicyTest 30 Fälle inkl. lazy nach R-45-21-02); echter Beleg `#### E3 Ausschnitte unter M1 (45-22)`. Ergebnis: bestanden.
+
+**Endfilterung unverändert (SearchService).** `git diff af0e5e13..HEAD -- php/lib/Service/SearchService.php` enthält genau zwei Hunks; das Skript im Scratchpad (`uv run --no-sync python <scratchpad>/hunks.py`, nie `python -c`) bestimmt die Bereiche am Kopf und ordnet jeden Hunk zu:
+- Bereich (a) Konstruktor-Parameter SnippetPolicy samt Docblock: Z. 163-180 am Kopf; Bereich (b) Block zwischen dem Kommentar "Only now, and only for the survivors" und dem Aufruf `exApp->snippets` (die Zuweisung an $excerpts einschließlich ihrer Argumente): Z. 524-555 am Kopf.
+- `@@ -160,12 +160,22 @@ class SearchService {` -> geänderte Zeilen 163-178: liegt in (a).
+- `@@ -521,11 +531,18 @@ class SearchService {` -> geänderte Zeilen 534-545 (E3-Block, $allowed statt $fileIds als Argument): liegt in (b).
+- Kein Hunk außerhalb der Bereiche (Skript-Exit 0).
+- Funktionskörper per Skript (`<scratchpad>/funcs.py`) an af0e5e13 und am Kopf ausgeschnitten und verglichen: readableFile (af0e5e13 Z. 723-725, Kopf Z. 740-742, sha256 0719e270 beide), readableNode (Z. 736-742 -> 753-759, 60d1ffd0 beide), hitOf (Z. 765-782 -> 782-799, 7417f9f1 beide), Recheck-Schleife (Z. 385-475 -> 395-485) byte-gleich.
+- `tests/test_php_acl_boundary.py` grün (13 passed, Lauf am Endstand). Psalm-Taint grün (0 Befunde gegen nextcloud/ocp v33.0.9, v34.0.6, v35.0.3, Probe gesehen). Ausfallzählung für policy unberührt: GatewayPolicyRefused kehrt vor der Zählung zurück (poller.py Z. 2607-2614 und 2885-2894, test_poller). Ergebnis: bestanden.
+
+**Logzeilen nur Zähler.** `git diff af0e5e13..HEAD -U0 -- php/lib backend/src php/js | grep -E "^\+.*(logger->|LOGGER\.|_LOG\.|console\.)"`: elf neue Zeilen, alle nur Zähler, fileId, Klassennamen, origin (Klasse::Funktion) und die nach a1 freigegebene reader-uid; die Zeile mit `['exception' => $e]` in ReaderCandidates stammt wortgleich aus 1.6.5 (R-45-21-09, INFO). Ergebnis: bestanden.
+
+**Migrationen und Schema (T-45-33, Upgrade-Bruch ab 1.6.5, aus 45-09, keine neue ID).** `git diff --stat af0e5e13..HEAD -- php/lib/Migration` zeigt genau zwei Dateien: Version001500Date20261012000000.php (geändert) und Version001700Date20261123000000.php (neu); der Satz "keine Migration" aus der Planfassung vor 45-26 ist durch die dort ausdrücklich geforderte Aufnahme dieser beiden Migrationen ersetzt. Kein Schema-Zugriff in beiden (0 Treffer createTable/addColumn/changeColumn/dropTable/ISchemaWrapper), Schema unverändert. Im Einzelnen:
+- Migration des Minor-Schritts: `Version001700Date20261123000000` löscht backend_app_version ohne Klasse der App, Löschung mit Wächter und Literale gegen die Konstanten geprüft (Version001700Date20261123000000Test, Mutationen M29 bis M31 rot, 45-26); sonst suchte 1.7.0 nach dem Update leer (T-45-33).
+- Version001500 nach `Entscheid I-45-23-07 45-26` (m1) und nach der Messung I-45-26-01: ohne Klasse der App (Update aus 1.3.2 starb an markScanStale()), setzt die Marke mit Literalen und vergisst scan_recounted_at, ein Sprung aus 1.4 zählt sofort nach (M32 bis M34 rot); Beleg unter T-45-82 (I-45-23-07) und T-45-33.
+- Keine weitere einmalige Marke für 1.7.0 (45-26, MigrationSelfContainedTest).
+- Probe des Update-Nachweises mit Kontrolle 2 (M35, M36 rot, 45-26; FROM_TAGS ab v1.3.2, lokal 137 s), seit 45-21 liest der Treiber den gepflanzten Wert zurück (R-45-21-03, Docker-Gegenprobe: Pflanzen entfernt -> jeder Lauf rot "was not planted") und Kontrolle 2 unterscheidet Bestehen von anderem Fehlschlag (R-45-21-19, Verhaltensprobe der drei Zweige am extrahierten Block); dazu die Suche direkt nach dem Update aus 45-20 (`#### Suche direkt nach dem Update (45-26)`: Treffer sofort). Ergebnis: bestanden.
+- I-45-25-01 (aus 45-26 Task 5, wie der Hinweis aus 45-25 unter T-45-81, keine neue ID): der Hinweis zu Dateisperren erscheint nur, wenn die Memcache-Factory die Klasse aus `memcache.locking` laden würde; `class_exists` auf dem rohen Wert erst nach dem Namensvergleich, Autoloader-Probe, Mutationen M37, M38, M39 und M40 rot (LockingCheckServiceTest). Ergebnis: bestanden.
+
+**Generation und Erneuerung.** Generation 4 mit Rückfall gateway_error für 3/2/None (queue.py, test_queue_client); Begleit-App meldet verdicts 3 und verdictsMax 4 getrennt, ein 1.6.x-Container vor dem Container-Update speichert keine Ersatzgründe (R-45-21-14); Erneuerung refusal_streaks_1_7_0 einmalig und erst ab Generation 4 (repo.py Z. 251, 1637-1669, U-45-20-01, Schritte A und B danach echt neu gefahren). V-45-10-02: Bestätigung nur über text()/textContent, eine Regex-Ersetzung mit Callback (Gate mit Fehl-Samples). Ergebnis: bestanden.
+
+**Performance.** Keine neue Abfrage je Suche ohne aktives Wasserzeichen; mit Wasserzeichen gebänderte Zusatzabfragen je Seite (T-45-77); Nachzählung mit Mindestabstand 6 h statt 15-Minuten-Takt (T-45-82); Rückhalt höchstens ein Zyklus je zwei Intervalle (T-45-84); Zeitmessung 20 Kandidaten 0,21 s (T-45-61). Ergebnis: bestanden.
+
+**#25 F1.** `CrawlAdvanceService::crawling()` liest als Lock-Signal nur `StorageCrawlJob::CRAWL_ACTIVE_LOCK` (CrawlAdvanceService.php Z. 82-91); recount-Scheiben nehmen nie den Marker (StorageCrawlJob.php Z. 290-296: Marker nur im Crawl-Modus); der Slice-Lock serialisiert weiter Crawl und Nachzählung; der Marker wird im verschachtelten finally vor dem Slice-Lock freigegeben (Z. 326-336); Mindestabstand 6 h mit Regelzweig nach `Entscheid Regeln Nachzählung 45-23` (r1: gespeicherte Regeln binnen 15 Minuten, SettingsService.php Z. 322 und 391-398). Ergebnis aus 45-20 `### Live-Proben #25` (F1 bestanden). Ergebnis: bestanden.
+
+**#25 F2.** Rückhalt nie bei crawling (Rundenstart reconcile.py Z. 537-566, jede Scheibe Z. 694-699); Zeitpunkt nur nach ganzem Zyklus gelöscht (Z. 651, ROUND_WALKED); Warnzeile und reconcileHeldSince ohne Pfad und Namen (status.py Z. 471 und 846, nur Zahlen, Satz nur aus dem Katalog). Ergebnis aus 45-20 `### Live-Proben #25` (F2 mit 9000 Seiten OCR-Rückstand bestanden). Ergebnis: bestanden.
+
+**Sonstiges am Kopf.** Generation-4-Tabellen beidseitig (W3); Erneuerung einmalig (Marke in derselben Transaktion); V-45-10-02 nur textContent; R-45-21-13: der Fehlerzustand der Speicherliste hat die Mechanik (Speichern hebt nichts auf) und den freigegebenen Satz in 18 Katalogen (Schlüsselzahl 387).
+
+#### Lokale Gates am Endstand
+
+- `bash scripts/dev/phpunit_docker.sh`: `OK (1448 tests, 9072 assertions)`.
+- `bash scripts/dev/php_gates_docker.sh all` (in den drei Beinen psalm, cs, workflows seriell gefahren): Psalm-Taint gegen nextcloud/ocp v33.0.9, v34.0.6, v35.0.3 je `taint findings: 0`, Probe gesehen (3); php-cs-fixer `Found 0 of 144 files that can be fixed`, Probe gesehen; zizmor grün, Probe gesehen; actionlint grün, Probe gesehen (SC2086). Gefahren am Stand 2ce40602; die beiden späteren Commits (306a727d, GREEN R-45-21-19) ändern keine Datei unter php/ und keinen Workflow, die PHP-Hälfte ist am Endstand byte-gleich (Baumhash 86f595c7, 147 Dateien, Rezept und unabhängige Pipeline).
+- Python in backend/: `ruff check .` grün, `ruff format --check .` 261 Dateien formatiert, pyright (latest) 0 Fehler, vulture grün.
+- pytest gesamt in zehn Teilen (Speicher knapp, Vorgabe des Koordinators): 7411 passed, 305 skipped (Teil 1 bis 10: 866; 665+4sk; 725+35sk; 1096; 659+245sk; 758+10sk; 856+1sk; 569+9sk; 734+1sk; 483).
+
+### Threat-Register 45-17 bis 45-24
+
+T-45-57 bis T-45-87 aus den Threat-Blöcken der Pläne 45-17 bis 45-24 (45-25 und 45-26 führen keine eigene ID: der Teil von 45-25 steht unter T-45-81, der von 45-26 unter T-45-33, T-45-82 und T-45-81), dazu T-45-64 und T-45-73 aus 45-21. Jede Zeile am Kopf nachgeprüft (Code, Test oder Audit-Abschnitt als Beleg).
+
+| Threat ID | Kategorie | Komponente | Disposition | Beleg und Status |
+|---|---|---|---|---|
+| T-45-57 | Elevation of Privilege | erneutes Öffnen im Gateway | mitigate | rejectForeignCaller() ist die erste Anweisung von GatewayController::getFileContents (Z. 92); GatewayControllerTest (fremde ExApp 403 ohne Kopf); closed |
+| T-45-58 | Information Disclosure | 404-Gleichheit, Nutzer-Enumeration | mitigate | NoUser der benannten Person läuft unverändert hoch, Antwort wortgleich wie fehlende Datei (GatewayReader::open Z. 117-125, Docblock); erneutes Öffnen erst nach Auflösung und Secure-View-Ablehnung; GatewayControllerTest not_found-Gleichheit; closed |
+| T-45-59 | Information Disclosure | Logzeilen der neuen Zweige | mitigate | alle neuen Logzeilen af0e5e13..Kopf per `git diff -U0` gezogen (Delta-Audit Punkt 7): nur Zähler, fileId, Klassennamen, origin und die freigegebene reader-uid (a1); closed |
+| T-45-60 | Information Disclosure | Treffer für Empfänger unter Secure View | mitigate | E3 über SnippetPolicy (fail-closed), echter Beleg `#### E3 Ausschnitte unter M1 (45-22)`; carol ohne Freigabe findet nichts (Endfilterung byte-gleich, Delta-Audit Punkt 5); closed |
+| T-45-61 | Denial of Service | Schleife des erneuten Öffnens | mitigate | mit Besitzer genau ein Versuch, sonst Kappe 20 (GatewayReader::openAgain Z. 184-205, ReaderCandidates::MAX_READER_TRIES Z. 34); Zeitmessung 0,21 s für 20 Kandidaten (`#### asked zählt übersprungene Leser`, W6); closed |
+| T-45-62 | Denial of Service | Ausfallzählung im Poller | mitigate | GatewayPolicyRefused kehrt vor der Zählung zurück (poller.py Z. 2607-2614, 2885-2894); test_poller (policy_blocked ohne Ausfallzählung), Mutation in 45-18 rot; closed |
+| T-45-63 | Tampering | Draht-Vokabular bei getrenntem Update | mitigate | Generation 4 mit Rückfall gateway_error für 3/2/None (queue.py, test_queue_client Wire-Mapping); Begleit-App meldet einem 1.6-Container verdicts 3 und verdictsMax 4 getrennt (R-45-21-14, c721641f); closed |
+| T-45-64 | Repudiation | Kandidat ändert sich unbemerkt, Fix ohne Owner | mitigate | Freigabe- und Entscheidzeilen je Befund in 45-FREIGABEN.md, genau eine audited_head-Zeile in dieser Datei, 45-10 läuft komplett neu, kein Push ohne eigene Freigabe; closed |
+| T-45-65 | Tampering (XSS) | Bestätigungszeile mit ID | mitigate | confirmedMounts schreibt nur per text()/textContent, eine Regex-Ersetzung mit Callback (test_the_script_reads_a_mount_only_out_of_its_row_and_writes_it_as_text, Fehl-Samples $& und %2$s); closed |
+| T-45-66 | Tampering | Katalogwert des Platzhalters im Attribut | mitigate | Ausgabe nur über p() (scan_lookup_placeholder, scan_rules_placeholders); test_no_catalogue_value_can_break_the_page deckt alle Schlüssel inkl. 387; closed |
+| T-45-67 | Information Disclosure | Umgehung einer Sperre durch Lesen als andere Person | mitigate | erneutes Öffnen nur bei Nachricht UND Ursprungs-Frame SecureViewWrapper::checkFileAccess (isSecureViewRefusal Z. 145-154, Mutationen aus 45-17 rot); I-45-17-03: files_accesscontrol wirft beim fopen "Access denied by access control" (StorageWrapper.php v6.0.1 Z. 241-253, Operation.php Z. 118), echtes Ergebnis 45-20 Schritt C (c) unter `#### files_accesscontrol beim Öffnen (I-45-17-03)`: 403 policy, asked 0, kein erneutes Öffnen, kein Rückfall auf den Besitzer; dazu C (a) und C (b); closed |
+| T-45-68 | Tampering | Nachbau mit falscher Version oder ohne Quelle | mitigate | `### Quellen am Tag` mit SHA-256, Modustabellen vorher/nachher; closed |
+| T-45-69 | Denial of Service | einmalige Erneuerung erzeugt Last | accept | höchstens drei Anfragen je betroffener Datei, einmal je Datenbank (Marke refusal_streaks_1_7_0 in derselben Transaktion, repo.py Z. 1637-1669); closed |
+| T-45-70 | Spoofing | 403 einer fremden Quelle mit gefälschtem Kopf | accept | Antwort kommt nur vom eigenen Gateway über die AppAPI-Verbindung; Folge wäre nur ein anderes Urteil; closed |
+| T-45-71 | Tampering | richdocuments-Download in CI | mitigate | Version 11.1.3 per SHA-256 gepinnt, nach app:enable geprüft (`### CI-Strecke, CHANGELOG und Doku 45-20`); closed |
+| T-45-72 | Repudiation | Simulation als echter Beleg | mitigate | kein d2-Fall eingetreten: Schritt 0 und die drei Abgleiche echt abgewartet (d1, `#### Schritt 0 Serie auf v1.6.5`); closed |
+| T-45-73 | Repudiation | Review mit dem Muster der Umsetzung | mitigate | Review liest Code gegen Projektregeln und Fremdquellen (raw mit SHA-256), nicht die Tests der Umsetzung; zweiter Prüfer ohne Umsetzungskontext, Executor hat jeden Befund am Code nachgeprüft (45-REVIEW-1-7-0.md `## Auftrag`, Befundtabelle Spalte Beleg); closed |
+| T-45-74 | Repudiation | Prüfspur nennt für Secure-View-Dateien die lesende Person | accept | Owner-Entscheid a4 (2026-11-23 15:47 UTC): CriticalActionPerformedEvent mit fileid, Pfad, uid nur nach einem Lesen in actAs (GatewayReader Z. 231-244), uid auch in der info-Zeile (a1); dieselbe Datenart, die admin_audit für jedes Lesen schreibt; in docs/privacy.md genannt; R-45-21-06 bewertet; AN 45-16 (secure-phase): als bewusste, dokumentierte Erweiterung der Prüfspur führen; open bis 45-16 |
+| T-45-75 | Information Disclosure | Textausschnitt einer Secure-View-Datei in der Suche | mitigate | SnippetPolicy vor exApp->snippets ($allowed, Gate Regel 8 mit Fehl-Sample), fail-closed; echter Beleg `#### E3 Ausschnitte unter M1 (45-22)`; closed |
+| T-45-76 | Spoofing | Erkennung bricht bei neuer richdocuments-Version | mitigate | beide Bedingungen nötig, sonst policy ohne Umgehung (fail-closed); SecureViewRefusal-Fixtures (anderer Frame, andere Meldung); closed |
+| T-45-77 | Denial of Service | Zusatzabfragen je Suche | mitigate | nur bei aktivem Wasserzeichen, gebändert für die ganze Seite (SnippetPolicy: getByFileIds, Mount-Cache, getTagIdsForObjects); Delta-Audit Punkt 11 (Performance); closed |
+| T-45-78 | Tampering | Bruch einer internen richdocuments-API (nur bei S2) | mitigate | entfallen: S2 wurde nicht gebaut, S3 nutzt nur OCP (Entscheid E3-Weg 45-22, `#### S1 für shareDisabledDownload nach dem Owner-Entscheid`); CI-Schritt watermark-59 prüft das Endverhalten mit echtem richdocuments; closed |
+| T-45-79 | Denial of Service | Nachzählung gilt als unfertiger Crawl, Abgleich setzt aus (#25 F1) | mitigate | crawling() liest nur CRAWL_ACTIVE_LOCK (CrawlAdvanceService Z. 82-91), Nachzähl-Scheiben nehmen den Marker nie (StorageCrawlJob Z. 290-296 nur im Crawl-Modus); Live-Probe `#### F1 Nachzählung hält den Abgleich nicht auf`; M-Mutationen 45-23 rot; closed |
+| T-45-80 | Tampering | Abgleich neben unfertiger Crawl-Scheibe | mitigate | Crawl-Scheibe nimmt den Marker unter dem Slice-Lock, Freigabe im verschachtelten finally vor dem Slice-Lock (StorageCrawlJob Z. 326-336); CrawlAdvanceServiceTest; closed |
+| T-45-81 | Denial of Service | Marker eines abgestürzten Prozesses; Locking-Cache nur eines Prozesses | accept/mitigate | Marker mit TTL des Slice-Locks (StorageCrawlJob Z. 122-127); Hinweis der Admin-Seite nach l1 (LockingCheckService, Text 5), seit 45-26 Task 5 nur wenn die Memcache-Factory die Klasse laden würde (I-45-25-01, class_exists auf dem Rohwert nach dem Namensvergleich, Autoloader-Probe, M37 bis M40 rot); closed |
+| T-45-82 | Denial of Service | Nachzählung im 15-Minuten-Takt belegt den Slice-Lock | mitigate | RECOUNT_MIN_INTERVAL_SECONDS 6 h ab Start der letzten Runde (SettingsService Z. 322, 391-398), Regelzweig nach `Entscheid Regeln Nachzählung 45-23` (r1), Zukunftsstempel fällig; Marke aus Migration 1.5 nach m1 (I-45-23-07, 45-26: Version001500 vergisst scan_recounted_at, Sprung aus 1.4 zählt sofort); closed |
+| T-45-83 | Tampering | Rückhalt öffnet neben einem Crawl | mitigate | Rückhalt nie bei crawling: Rundenstart und jede Scheibe prüfen (reconcile.py run_once Z. 537-566, Z. 694-699); test_reconcile; Live-Probe `#### F2 Rückhalt bei langer Warteschlange`; closed |
+| T-45-84 | Denial of Service | Rückhalt-Zyklus auf einer 4-GB-Box | accept | höchstens ein Zyklus je zwei Intervalle (BACKSTOP_FACTOR 2, Z. 214), Scheiben mit Pause; Owner z1 ausdrücklich mit dieser Last; Live-Probe mit 9000 Seiten OCR-Rückstand bestanden; closed |
+| T-45-85 | Information Disclosure | Warnzeile oder Statusfeld tragen Pfade oder Namen | mitigate | Warnzeile nur Stunden, Zähler, Marke; reconcileHeldSince eine ganze Zahl (status.py Z. 471, 846; AdminViewService Z. 3497), Satz aus dem Katalog; closed |
+| T-45-86 | Tampering | ungültiger oder künftiger Zeitpunkt im Zustandsspeicher | mitigate | ungültig oder Zukunft wird als jetzt neu geschrieben, gelöscht nur nach ROUND_WALKED (reconcile.py Z. 651); test_reconcile Zukunftsstempel; closed |
+| T-45-87 | Repudiation | Live-Probe #25 verkürzt als Standard ausgegeben | mitigate | `### Live-Proben #25` nennt Intervalle und Takt wörtlich; Verkürzungen als solche benannt (cron.php in schneller Folge, dokumentiert); closed |
+
+### Befunde 45-17 bis 45-24
+
+Alle Befunde der Gegenprobe 45-20 und des Reviews 45-21 mit Status; die vollständige Tabelle mit Beleg je Befund steht in 45-REVIEW-1-7-0.md `## Befunde`.
+
+| Befund | Schwere | Status |
+|---|---|---|
+| U-45-20-01 (Erneuerung vor Generation 4) | MEDIUM | behoben aec5edcf/151dca7b (Owner f1), Schritte A und B neu gefahren |
+| U-45-20-02 (Prüfspur nennt die lesende Person nicht) | MEDIUM | behoben f3290689/1d191e7e (Owner a4), echter Beleg in audit.log |
+| U-45-20-03 (warning ohne Herkunft) | LOW | behoben 3550b2b3/c9dc3270/0f6afac7 (Entscheid c2); als R-45-21-05 nachgeprüft |
+| R-45-21-01 (Klassenkommentar GatewayReader) | LOW | behoben 6aa00ef6 |
+| R-45-21-02 (Kommentar und Testlücke lazy-Modi SnippetPolicy) | LOW | behoben 7fe3f91c, Mutation (isLazy false) jetzt rot |
+| R-45-21-03 (Treiber liest gepflanzten Wert nicht zurück) | LOW | behoben b653ef3b/f9189779, Docker-Gegenprobe: Pflanzen entfernt, jeder Lauf rot "was not planted" |
+| R-45-21-04 (Kommentar-Reihenfolge poller.py) | LOW | behoben 6aa00ef6 |
+| R-45-21-05 (= U-45-20-03) | LOW | vor 45-21 behoben, nachgeprüft |
+| R-45-21-12 (Freigabe hebt Speicher-Ausschluss auf) | MEDIUM | behoben b3af58e9/6dc5bb70; nur Provider aus providers() tragen einen Speicher anderswo, files_external nur außerhalb der ausgeschlossenen Admin-Mounts; Live-Gegenprobe des Ausschlusses läuft im kompletten Neulauf von 45-10 (Ausschluss mit Abgleich) |
+| R-45-21-13 (leere Liste statt Fehlerzustand) | LOW | behoben 472b4206/f37e3301 (Mechanik) und 2643c072/2ce40602 (Satz nach `Freigabe Texte Review 45-21`, 18 Kataloge, Schlüsselzahl 387) |
+| R-45-21-14 (Generation 4 vor 1.6.x-Container) | LOW | behoben aceed6ca/c721641f; verdicts bleibt 3, verdictsMax 4, ein 1.6.x-Container speichert keine Ersatzgründe |
+| R-45-21-15 (occ-Typkonflikt sperrt das Speichern) | LOW | behoben 51fdc1cf/174b8a26 |
+| R-45-21-19 (CONTROL 2 meldet "passed the probe" bei anderem Fehlschlag) | LOW | behoben 306a727d/131b4536; rc 0 und anderer Fehlschlag getrennt gemeldet, Gate mit Fehl-Samples |
+| R-45-21-06 bis -11, -16 bis -18 | INFO | geschlossen bzw. an 45-10 (R-45-21-08 erster CI-Lauf) und 45-16 (R-45-21-06 unter T-45-74) übergeben |
+
+Stand F3 (I-45-23-01): offen, wartet auf Logs des Melders
