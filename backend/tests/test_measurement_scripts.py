@@ -1543,8 +1543,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # stays at 147. The recipe gave 33bd9543; the independent pipeline of find, sort, sed and sha256sum
 # over the same tree gave 33bd9543 as well; the recipe and the pipeline over git archive of 6dc5bb70,
 # the last commit before the test, gave ae34a610 with 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-14, LOW): lib/Controller/ProfileController.php sends its
+# own verdict generation as verdictsMax and keeps verdicts at VERDICTS_COMPATIBLE 3, so a 1.6.x
+# container that meets this companion first reads generation 3 and stores no substitute reason, and
+# tests/Unit/ProfileControllerTest.php holds both fields. No file came or went, so PHP_FILES_TODAY
+# stays at 147. The recipe gave bff1ff98; the independent pipeline of find, sort, sed and sha256sum
+# over the same tree gave bff1ff98 as well; the recipe and the pipeline over git archive of 174b8a26,
+# the last commit before the test, gave 33bd9543 with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "33bd95430c5d102791c34681feb0f979cd1782516d0627abff67fae1fa94b57e"
+PHP_TREE_HASH_TODAY = "bff1ff989104c70bc9b67d3638e806aa59c51004ca79a2ba2371f2f551326292"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -3058,8 +3065,17 @@ PHP_TREE_HASH_TODAY = "33bd95430c5d102791c34681feb0f979cd1782516d0627abff67fae1f
 # normalised tree: efc966a5... both ways, and the recipe and the same
 # pipeline over git archive of 42ed3b23 before the step gave d45bc1d3...
 # (positive control).
+#
+# Moved on 2026-11-24 by plan 45-21 (R-45-21-14, LOW): nc/queue.py reads the
+# verdict generation of a companion as the highest known value of the two
+# fields verdicts and verdictsMax (announced_generation), so a 1.7 companion
+# keeps verdicts at 3 for a 1.6.x container. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. Recomputed independently with find, sort,
+# sed and sha256sum over the CRLF normalised tree: 14c4ae4f... both ways, and
+# the recipe and the same pipeline over git archive of aceed6ca before the
+# step gave efc966a5... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "efc966a57025a30276ce5d3c9decc1f6f8554cc2cf8a05c071f21071bb0e4e8e"
+PACKAGE_TREE_HASH_TODAY = "14c4ae4f1aee1d963a9a4e31aac3d0c4bfe6a0428f88a47997e994cdbcfc97c9"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -128,7 +128,10 @@ MAX_ACK_LIST: Final = 256
 # unsupported_variant under skipped (release 1.4.0); 3 means it stores
 # archive_limit and blocked_malicious as well (release 1.5.0, D-31-03,
 # D-36-03); 4 means it stores failed(policy_blocked) as well, a file a rule
-# keeps from every user asked (release 1.7.0, #59). A companion that does not
+# keeps from every user asked (release 1.7.0, #59). Since R-45-21-14 a 1.7
+# companion sends 4 in a second field, ``verdictsMax``, and keeps ``verdicts``
+# at 3 for a 1.6.x container, which reads 4 as no signal; announced_generation
+# takes the higher known value of the two. A companion that does not
 # announce it, a 1.3.2 for instance,
 # refuses the WHOLE failure or skip list with a 400 as soon as one code in it
 # is unknown (QueueController), so a code leaves
@@ -243,6 +246,26 @@ def _verdicts(value: object) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value if value in KNOWN_VERDICTS_GENERATIONS else None
+
+
+def announced_generation(payload: Mapping[str, object]) -> int | None:
+    """The verdict generation of a profile answer: the highest known one of its two fields.
+
+    Since R-45-21-14 (plan 45-21) the companion sends its own generation as
+    ``verdictsMax`` (ProfileController::VERDICTS_GENERATION) and keeps
+    ``verdicts`` at 3 (VERDICTS_COMPATIBLE), the value a 1.6.x container reads
+    right: that container knows 2 and 3 only and took the 4 of 1.7.0 as no
+    signal. A 1.6.x companion sends ``verdicts`` alone. Each field passes the
+    closed set of :func:`_verdicts` on its own; a second field this container
+    does not know, or a smaller one, changes nothing, so a companion that
+    announces 3 and 4 is generation 4 here and generation 3 for 1.6.x.
+    """
+    known = [
+        generation
+        for generation in (_verdicts(payload.get("verdicts")), _verdicts(payload.get("verdictsMax")))
+        if generation is not None
+    ]
+    return max(known) if known else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -797,7 +820,7 @@ class DocumentQueue:
         profile = payload.get("profile")
         precision = payload.get("precision")
         confirmed = payload.get("confirmed")
-        verdicts = _verdicts(payload.get("verdicts"))
+        verdicts = announced_generation(payload)
         self._companion_verdicts = verdicts
         return CompanionChoice(
             profile=profile if isinstance(profile, str) and profile in PROFILE_NAMES else None,

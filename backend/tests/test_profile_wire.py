@@ -13,7 +13,7 @@ like Economy and int8.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -156,7 +156,7 @@ def _answer_of_the_controller(controller: str) -> dict[str, int]:
     return {field: constants[constant] for field, constant in fields if constant in constants}
 
 
-def _parser_of_1_6_5() -> Callable[[dict[str, object]], int | None]:
+def _parser_of_1_6_5() -> Callable[[Mapping[str, object]], int | None]:
     """The profile parser of the container 1.6.5, run as it was released (fixture, word for word)."""
     namespace: dict[str, Any] = {}
     exec(PARSER_1_6_5.read_text(encoding="utf-8"), namespace)  # noqa: S102 - a fixture of this repository

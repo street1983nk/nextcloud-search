@@ -75,6 +75,7 @@ from findling.nc.queue import (
     DocumentQueue,
     QueueJob,
     QueueStats,
+    announced_generation,
 )
 from findling.profile import Profile, note_hardware, snapshot
 from findling.store.repo import (
@@ -6328,13 +6329,11 @@ async def test_the_renewal_of_1_7_0_follows_the_effective_generation_of_the_answ
     # "verdicts" at 3 for an older container, the renewal of 1.7.0 follows the
     # generation the container reads off both fields, and that is 4 only for a
     # companion of 1.7.0 or later.
-    from findling.nc import queue as queue_module  # noqa: PLC0415 - the helper is what this test is about
-
     store.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
     for _ in range(5):
         store.record(7, _refused_file(7), "failed", "gateway_error")
     queue = _FakeQueue()
-    queue.verdicts_answer = queue_module.announced_generation(answer)
+    queue.verdicts_answer = announced_generation(answer)
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
 
     await poller.run_once()

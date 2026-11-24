@@ -54,8 +54,27 @@ final class ProfileController extends OCSController {
 	 * known and maps only archive_limit and blocked_malicious for it, and a 1.7
 	 * container sends policy_blocked as gateway_error to a companion of 3 or
 	 * less.
+	 *
+	 * It travels as "verdictsMax" since R-45-21-14 (plan 45-21), not as
+	 * "verdicts": see VERDICTS_COMPATIBLE.
 	 */
 	public const VERDICTS_GENERATION = 4;
+
+	/**
+	 * The generation sent as "verdicts", for a container that predates
+	 * "verdictsMax" (R-45-21-14, plan 45-21).
+	 *
+	 * An app store update often brings this companion before its container. A
+	 * 1.6.x container knows the generations 2 and 3 and reads any other value
+	 * of "verdicts" as no signal (backend/src/findling/nc/queue.py of v1.6.5,
+	 * lines 148 and 219 to 227): it would send the codes of 1.4 and 1.5 as their
+	 * substitutes of 1.3, which this companion stores as false reasons, and it
+	 * would skip its re-check and catch-up. 3 is the highest generation such a
+	 * container knows, and this companion stores every code of it. A 1.7
+	 * container reads both fields and takes the highest generation it knows.
+	 * Stays 3 for good; a later generation goes into VERDICTS_GENERATION only.
+	 */
+	public const VERDICTS_COMPATIBLE = 3;
 
 	public function __construct(
 		IRequest $request,
@@ -70,9 +89,11 @@ final class ProfileController extends OCSController {
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance",
 	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null,
-	 * "verdicts": 4}. verdicts is the constant VERDICTS_GENERATION, the
-	 * capability signal for the skipped codes of releases 1.4.0 and 1.5.0 and
-	 * the failed code policy_blocked of release 1.7.0 (K6).
+	 * "verdicts": 3, "verdictsMax": 4, "paused": bool}. verdictsMax is the
+	 * constant VERDICTS_GENERATION, the capability signal for the skipped codes
+	 * of releases 1.4.0 and 1.5.0 and the failed code policy_blocked of release
+	 * 1.7.0 (K6); verdicts is VERDICTS_COMPATIBLE, the generation an older
+	 * container reads right (R-45-21-14).
 	 * null is a stored precision outside the set; the container keeps its last
 	 * known precision on it rather than reindexing for a typo. confirmed is the
 	 * token the admin stored to lift a lowering of the memory guard (D-26-04),
@@ -103,7 +124,8 @@ final class ProfileController extends OCSController {
 				'profile' => $this->settingsService->profile(),
 				'precision' => $this->settingsService->modelPrecision(),
 				'confirmed' => $this->settingsService->profileConfirmed(),
-				'verdicts' => self::VERDICTS_GENERATION,
+				'verdicts' => self::VERDICTS_COMPATIBLE,
+				'verdictsMax' => self::VERDICTS_GENERATION,
 				'paused' => $this->settingsService->paused(),
 			]);
 		} catch (\Throwable $e) {
