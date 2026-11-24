@@ -33,17 +33,19 @@ back, issue #25, F2; the Chinese wording is a machine draft under the reservatio
 after plan 45-25, task 1 (one key added: the note that file locking cannot keep the background jobs apart,
 I-45-23-03 and I-45-23-04; the Chinese wording is a machine draft under the reservation of this document)
 and after plan 45-25, task 2 (one key added: the example folder of the rules, I-45-19-01; the Chinese
-wording is a machine draft under the reservation of this document):
+wording is a machine draft under the reservation of this document), and again on 24.11.2026 after plan
+45-21 (one key added: the sentence of the rules section for a storage list that could not be read,
+R-45-21-13; the Chinese wording is a machine draft under the reservation of this document):
 
 | Quantity | Value |
 |---|---:|
-| Keys in `de.json` | **386** |
-| Keys in `zh_TW.json`, in the same order | **386** |
+| Keys in `de.json` | **387** |
+| Keys in `zh_TW.json`, in the same order | **387** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
 | with directives, plural keys excluded | **97** |
 | plural keys (the value is a list) | **5** |
 | forms per plural key | **1** |
-| rows in the table below | **386** |
+| rows in the table below | **387** |
 
 The forms per plural key are the line that sets this language apart: every other catalogue of
 the tree carries two or three. The table carries `Findling` as a row of its own, as the Spanish
@@ -410,6 +412,7 @@ this table cannot break on a wording.
 | `A storage you include again is indexed on the next regular comparison run.` | Ein wieder zugelassener Speicher wird beim nächsten regulären Abgleich nachindexiert. | 重新納入的儲存空間會在下一輪例行比對作業時建立索引。 |
 | `No external storage has been set up by an admin.` | Es gibt keinen von Admins angelegten externen Speicher. | 沒有由管理員設定的外部儲存空間。 |
 | `External storage is not enabled on this server.` | Externer Speicher ist auf diesem Server nicht aktiviert. | 此伺服器未啟用外部儲存空間。 |
+| `The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.` | Die Liste der externen Speicher konnte nicht gelesen werden. Beim Speichern der Regeln bleibt jeder ausgeschlossene externe Speicher ausgeschlossen. Laden Sie die Seite neu, um die Liste wieder zu sehen. | 無法讀取外部儲存空間清單。儲存規則時，所有已排除在索引之外的外部儲存空間仍會維持排除。請重新載入頁面以再次查看清單。 |
 | `ID %s` | ID %s | ID %s |
 | `The next run applies the new rules. Nothing restarts.` | Der nächste Lauf übernimmt die neuen Regeln. Es startet nichts neu. | 下一輪會套用新規則。不會重新啟動任何東西。 |
 | `Save rules` | Regeln speichern | 儲存規則 |

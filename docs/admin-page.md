@@ -706,9 +706,11 @@ indexierende externe Speicher" (EXCL-04).
   `occ` gesetzte Liste schließt dann nichts aus und hält weder Crawl noch
   Abgleich noch Dateiereignisse auf.
 - **Liste nicht lesbar:** schlägt das Lesen von `oc_external_mounts` fehl,
-  zeigt die Seite keine Liste, und ein Speichern der Regeln lässt die
-  gespeicherten Ausschlüsse unverändert (das Protokoll nennt nur einen
-  Zähler).
+  zeigt die Seite statt der Liste einen eigenen Satz: die Liste konnte nicht
+  gelesen werden, ein Speichern der Regeln lässt jeden ausgeschlossenen
+  Speicher ausgeschlossen, Neuladen der Seite zeigt die Liste wieder. Die
+  gespeicherten Ausschlüsse bleiben beim Speichern unverändert (das Protokoll
+  nennt nur einen Zähler).
 
 Das Protokoll nennt dazu nur Zähler, nie Konfigurations-IDs, Einhängepunkte
 oder Pfade.

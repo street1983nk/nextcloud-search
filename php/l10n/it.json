@@ -215,6 +215,7 @@
         "A storage you include again is indexed on the next regular comparison run.": "Un'archiviazione inclusa di nuovo viene indicizzata alla prossima passata di confronto regolare.",
         "No external storage has been set up by an admin.": "Nessun amministratore ha configurato un'archiviazione esterna.",
         "External storage is not enabled on this server.": "L'archiviazione esterna non è attivata su questo server.",
+        "The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.": "Non è stato possibile leggere l'elenco delle archiviazioni esterne. Salvando le regole, ogni archiviazione esterna esclusa dall'indice resta esclusa. Ricarica la pagina per rivedere l'elenco.",
         "ID %s": "ID %s",
         "The next run applies the new rules. Nothing restarts.": "La prossima passata applica le nuove regole. Non si riavvia nulla.",
         "Save rules": "Salva le regole",

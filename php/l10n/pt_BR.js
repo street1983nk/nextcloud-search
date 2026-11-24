@@ -216,6 +216,7 @@ OC.L10N.register(
     "A storage you include again is indexed on the next regular comparison run.": "Um armazenamento incluído de novo é indexado na próxima execução de comparação regular.",
     "No external storage has been set up by an admin.": "Nenhum armazenamento externo foi configurado por um administrador.",
     "External storage is not enabled on this server.": "O armazenamento externo não está ativado neste servidor.",
+    "The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.": "Não foi possível ler a lista de armazenamentos externos. Ao salvar as regras, cada armazenamento externo excluído do índice continua excluído. Recarregue a tela para ver a lista novamente.",
     "ID %s": "ID %s",
     "The next run applies the new rules. Nothing restarts.": "A próxima execução aplica as novas regras. Nada é reiniciado.",
     "Save rules": "Salvar regras",

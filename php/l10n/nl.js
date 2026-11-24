@@ -216,6 +216,7 @@ OC.L10N.register(
     "A storage you include again is indexed on the next regular comparison run.": "Weer toegelaten opslag wordt bij de volgende reguliere vergelijkingsdoorloop geïndexeerd.",
     "No external storage has been set up by an admin.": "Er is geen externe opslag door een beheerder ingesteld.",
     "External storage is not enabled on this server.": "Externe opslag is op deze server niet ingeschakeld.",
+    "The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.": "De lijst met externe opslag kon niet worden gelezen. Bij het opslaan van de regels blijft elke externe opslag die buiten de index is gehouden, uitgesloten. Laad de pagina opnieuw om de lijst weer te zien.",
     "ID %s": "ID %s",
     "The next run applies the new rules. Nothing restarts.": "De volgende doorloop neemt de nieuwe regels over. Er start niets opnieuw.",
     "Save rules": "Regels opslaan",

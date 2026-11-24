@@ -216,6 +216,7 @@ OC.L10N.register(
     "A storage you include again is indexed on the next regular comparison run.": "重新納入的儲存空間會在下一輪例行比對作業時建立索引。",
     "No external storage has been set up by an admin.": "沒有由管理員設定的外部儲存空間。",
     "External storage is not enabled on this server.": "此伺服器未啟用外部儲存空間。",
+    "The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.": "無法讀取外部儲存空間清單。儲存規則時，所有已排除在索引之外的外部儲存空間仍會維持排除。請重新載入頁面以再次查看清單。",
     "ID %s": "ID %s",
     "The next run applies the new rules. Nothing restarts.": "下一輪會套用新規則。不會重新啟動任何東西。",
     "Save rules": "儲存規則",

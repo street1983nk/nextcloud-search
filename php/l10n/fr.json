@@ -215,6 +215,7 @@
         "A storage you include again is indexed on the next regular comparison run.": "Un stockage inclus de nouveau est indexé lors de la prochaine comparaison régulière.",
         "No external storage has been set up by an admin.": "Aucun stockage externe n'a été créé par un administrateur.",
         "External storage is not enabled on this server.": "Le stockage externe n'est pas activé sur ce serveur.",
+        "The list of external storage could not be read. Saving the rules keeps every external storage that is kept out of the index. Reload the page to see the list again.": "La liste des stockages externes n'a pas pu être lue. L'enregistrement des règles conserve chaque stockage externe exclu de l'index. Rechargez la page pour revoir la liste.",
         "ID %s": "ID %s",
         "The next run applies the new rules. Nothing restarts.": "Le prochain passage applique les nouvelles règles. Rien ne redémarre.",
         "Save rules": "Enregistrer les règles",

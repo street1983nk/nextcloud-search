@@ -1572,8 +1572,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # recipe gave 0db3eed1; the independent pipeline of find, sort, sed and sha256sum over the same tree
 # gave 0db3eed1 as well; the recipe and the pipeline over git archive of 472b4206 gave 7420cc36 with
 # 147 files (positive control).
+# Moved on 2026-11-24 by plan 45-21 (sentence of R-45-21-13): templates/admin.php renders the owner
+# approved sentence in the failed state of the storage list (id findling-rules-mounts-failed, out of
+# the catalogue, key count 387 in all 18 files), so an admin can tell a failed read from a server
+# without external storage; tests/test_admin_ui_contract.py holds it (its RED commit 2643c072 keeps
+# the PHP tree at 0db3eed1). No file came or went, so PHP_FILES_TODAY stays at 147. The recipe gave
+# 86f595c7; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
+# 86f595c7 as well; the recipe and the pipeline over git archive of 2643c072, the last commit before
+# this change, gave 0db3eed1 with 147 files (positive control).
 PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "0db3eed1d06aa051f72190e9748d951401e5f500ee2e2162413cdd0f6604f2d4"
+PHP_TREE_HASH_TODAY = "86f595c7e95c1edb14900f5e6af1f5413fff122e5aa6ccc21d68a3fe4815ca5d"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
