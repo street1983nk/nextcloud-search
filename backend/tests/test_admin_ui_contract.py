@@ -6879,3 +6879,55 @@ def test_no_number_stands_before_a_plural_noun_without_a_singular_form() -> None
         "$l->n('%s file is searchable.', '%s files are searchable.', $count, [$shown])\n"
     )
     assert scan_for_counted_nouns_without_plural("sample.js", clean) == []
+
+
+# The second half of V-45-10-05, found live in the full test 45-10: Nextcloud's
+# $l->n picks the form only through %n (L10NString hands the count to the
+# translator only when the forms carry %n); without it vsprintf got both forms
+# at once and the admin page answered 500 while every gate above stayed green.
+SERVER_PLURAL_CALL = re.compile(r"\$l->n\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*'((?:[^'\\]|\\.)*)'")
+FIRST_DIRECTIVE = re.compile(r"%(?:\d\$)?[sdn]")
+
+
+def scan_server_plurals_without_count(name: str, source: str) -> list[str]:
+    """Findings: a $l->n call whose singular or plural carries no %n."""
+    return [
+        f"{name}: $l->n({singular!r}, ...) has no %n in both forms, Nextcloud cannot pick the form"
+        for singular, plural in SERVER_PLURAL_CALL.findall(source)
+        if "%n" not in singular or "%n" not in plural
+    ]
+
+
+def scan_counted_forms(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """Findings: a plural key with %n whose form lacks %n or puts another directive first.
+
+    The template and the script swap the first standalone run of the count's
+    digits for the figure of the locale (helper counted), which holds only while
+    %n is the first directive of every form.
+    """
+    findings: list[str] = []
+    for key, value in catalogue.items():
+        if not isinstance(value, list) or "%n" not in key:
+            continue
+        for index, form in enumerate(value):
+            first = FIRST_DIRECTIVE.search(form)
+            if first is None or first.group(0) != "%n":
+                findings.append(f"{name}: {key[:60]!r} form {index} does not start its directives with %n")
+    return findings
+
+
+def test_every_server_plural_carries_its_count_as_the_first_directive() -> None:
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert scan_server_plurals_without_count(TEMPLATE.name, template) == []
+    assert len(SERVER_PLURAL_CALL.findall(template)) == template.count("$l->n(")
+    findings = [finding for path in L10N_CATALOGUES for finding in scan_counted_forms(path.name, catalogue_of(path))]
+    assert findings == []
+    # Positive controls: the shape that answered 500, a form that lost its %n
+    # and a form that puts another figure first go red.
+    assert len(scan_server_plurals_without_count("sample.php", "$l->n('%s file', '%s files', $n, [$c])")) == 1
+    assert scan_server_plurals_without_count("sample.php", "$l->n('%n file', '%n files', $n)") == []
+    bad: dict[str, str | list[str]] = {
+        "_%n file, %2$s with OCR._::_%n files, %2$s of them need OCR._": ["%2$s, %n Datei", "%n Dateien, %2$s"],
+        "_%n day_::_%n days_": ["ein Tag", "%n Tage"],
+    }
+    assert len(scan_counted_forms("sample.json", bad)) == 2
