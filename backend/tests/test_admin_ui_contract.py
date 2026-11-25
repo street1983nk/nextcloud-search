@@ -2283,7 +2283,10 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
     assert before not in template
     assert before not in script
     assert before not in catalogue_of(L10N_JSON)
-    assert sentence in catalogue_of(L10N_JSON)
+    # Since V-45-10-05 (plan 45-10) the sentence is the plural half of a key
+    # with its own singular, so one searchable file no longer reads "1 files".
+    singular = sentence.replace("%s files are searchable.", "%s file is searchable.")
+    assert f"_{singular}_::_{sentence}_" in catalogue_of(L10N_JSON)
 
     assert "$recounting = ($coverage['recounting'] ?? false) === true;" in template
     # Since plan 43-06 neither sentence stands while the per document count
@@ -2742,6 +2745,12 @@ COUNTING_SENTENCE = (
 NOT_READABLE_SENTENCE = (
     "%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure."
 )
+# The singular of V-45-10-05 (plan 45-10, owner "Ok" 2026-11-25): one file no
+# longer reads "1 files"; the plural above is the accepted line of 43-TEXTE.md.
+NOT_READABLE_SINGULAR = (
+    "%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure."
+)
+NOT_READABLE_KEY = f"_{NOT_READABLE_SINGULAR}_::_{NOT_READABLE_SENTENCE}_"
 LEGACY_SENTENCE = (
     "This instance has more storages than the count per document can handle. The figure is therefore "
     "counted per storage as in version 1.6.2, and a file mounted for several users can stand in it "
@@ -2787,7 +2796,8 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
     assert (
         '<p class="settings-hint" id="findling-coverage-not-readable"'
         "<?php if ($notReadable === 0) { ?> hidden<?php } ?>>"
-        f"<?php p($l->t('{NOT_READABLE_SENTENCE}', [$count($notReadable)])); ?></p>" in template
+        f"<?php p($l->n('{NOT_READABLE_SINGULAR}', '{NOT_READABLE_SENTENCE}', $notReadable, [$count($notReadable)]));"
+        " ?></p>" in template
     )
     assert (
         '<p class="settings-hint" id="findling-coverage-legacy"<?php if (!$legacyLimits) { ?> hidden<?php } ?>>'
@@ -2807,7 +2817,10 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
     assert "shown('findling-coverage-legacy', coverage.legacyReason === 'limits')" in script
     assert f"text('findling-coverage-per-document', t('findling', '{PER_DOCUMENT_HINT_SENTENCE}'))" in script
     assert f"text('findling-coverage-counting', t('findling', '{COUNTING_SENTENCE}'))" in script
-    assert f"text('findling-coverage-not-readable', t('findling', '{NOT_READABLE_SENTENCE}')" in script
+    assert (
+        f"text('findling-coverage-not-readable', n('findling', '{NOT_READABLE_SINGULAR}', '{NOT_READABLE_SENTENCE}',"
+        " notReadable)" in script
+    )
     assert f"text('findling-coverage-legacy', t('findling', '{LEGACY_SENTENCE}'))" in script
     assert "coverage.counting, coverage.perDocumentHint, coverage.notReadable, coverage.legacyReason," in script
 
@@ -2828,11 +2841,13 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
     }
     for block, sentence in english.items():
         assert accepted[f"EN-{block}"] == sentence, block
+        # The accepted line is the plural form of the key since V-45-10-05.
+        key = NOT_READABLE_KEY if block == "UNREADABLE" else sentence
         for catalogue in L10N_CATALOGUES:
-            assert sentence in catalogue_of(catalogue), (catalogue.name, block)
-        assert catalogue_of(L10N_JSON)[sentence] == accepted[f"DE-{block}"], block
-        assert catalogue_of(L10N_DE_DE_JSON)[sentence] == accepted[f"DE-{block}"], block
-        assert catalogue_of(L10N_FR_JSON)[sentence] == accepted[f"FR-{block}"], block
+            assert key in catalogue_of(catalogue), (catalogue.name, block)
+        for catalogue, tag in ((L10N_JSON, "DE"), (L10N_DE_DE_JSON, "DE"), (L10N_FR_JSON, "FR")):
+            value = catalogue_of(catalogue)[key]
+            assert (value[-1] if isinstance(value, list) else value) == accepted[f"{tag}-{block}"], block
 
 
 #: The one sentence of plan 40-06 (E-40-06-04, issue #36 Befund D), written out
@@ -3878,21 +3893,38 @@ TEMPLATE_SENTENCE = re.compile(r"\$l->t\(\s*'((?:[^'\\]|\\.)*)'")
 SCRIPT_SENTENCE = re.compile(r"\bt\(\s*'findling'\s*,\s*'((?:[^'\\]|\\.)*)'")
 TEMPLATE_PLURAL = re.compile(r"\$l->n\(")
 SCRIPT_PLURAL = re.compile(r"\bn\(\s*'findling'")
+TEMPLATE_PLURAL_SENTENCE = re.compile(r"\$l->n\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*'((?:[^'\\]|\\.)*)'")
+SCRIPT_PLURAL_SENTENCE = re.compile(r"\bn\(\s*'findling'\s*,\s*'((?:[^'\\]|\\.)*)'\s*,\s*'((?:[^'\\]|\\.)*)'")
+
+
+def plain_and_plural_sentences(template: str, script: str) -> set[str]:
+    """The catalogue keys of a cut: plain sentences, and plural calls as their composite key."""
+    for pattern, plural, part in (
+        (TEMPLATE_PLURAL, TEMPLATE_PLURAL_SENTENCE, template),
+        (SCRIPT_PLURAL, SCRIPT_PLURAL_SENTENCE, script),
+    ):
+        assert len(pattern.findall(part)) == len(plural.findall(part)), plural.pattern
+    plain = {
+        match.replace("\\'", "'")
+        for pattern, part in ((TEMPLATE_SENTENCE, template), (SCRIPT_SENTENCE, script))
+        for match in pattern.findall(part)
+    }
+    composite = {
+        "_" + singular.replace("\\'", "'") + "_::_" + plural_form.replace("\\'", "'") + "_"
+        for pattern, part in ((TEMPLATE_PLURAL_SENTENCE, template), (SCRIPT_PLURAL_SENTENCE, script))
+        for singular, plural_form in pattern.findall(part)
+    }
+    return plain | composite
 
 
 def profile_block_sentences() -> set[str]:
     """Every catalogue key the template and the script of the profile block ask for."""
     template = cut_between(TEMPLATE.read_text(encoding="utf-8"), PROFILE_TEMPLATE_START, PROFILE_TEMPLATE_END)
     script = cut_between(SCRIPT.read_text(encoding="utf-8"), PROFILE_SCRIPT_START, PROFILE_SCRIPT_END)
-    # A plural call would need its composite key; the block has none, and one
-    # that arrives is a red line here rather than a sentence this gate skips.
-    assert TEMPLATE_PLURAL.search(template) is None
-    assert SCRIPT_PLURAL.search(script) is None
-    return {
-        match.replace("\\'", "'")
-        for pattern, part in ((TEMPLATE_SENTENCE, template), (SCRIPT_SENTENCE, script))
-        for match in pattern.findall(part)
-    }
+    # A plural call asks for its composite key (V-45-10-05 brought the first
+    # ones into the blocks); a plural call the pattern cannot read stays a red
+    # line here rather than a sentence this gate skips.
+    return plain_and_plural_sentences(template, script)
 
 
 def scan_missing_sentences(sentences: set[str], catalogues: dict[str, frozenset[str]]) -> list[str]:
@@ -3987,15 +4019,10 @@ def rules_block_sentences() -> set[str]:
     script = cut_between(script_source, RULES_SCRIPT_START, PROFILE_SCRIPT_START) + cut_between(
         script_source, LIMITS_SCRIPT_START, LIMITS_SCRIPT_END
     )
-    # A plural call would need its composite key; the block has none, and one
-    # that arrives is a red line here rather than a sentence this gate skips.
-    assert TEMPLATE_PLURAL.search(template) is None
-    assert SCRIPT_PLURAL.search(script) is None
-    return {
-        match.replace("\\'", "'")
-        for pattern, part in ((TEMPLATE_SENTENCE, template), (SCRIPT_SENTENCE, script))
-        for match in pattern.findall(part)
-    }
+    # A plural call asks for its composite key (V-45-10-05 brought the first
+    # ones into the blocks); a plural call the pattern cannot read stays a red
+    # line here rather than a sentence this gate skips.
+    return plain_and_plural_sentences(template, script)
 
 
 def test_every_sentence_of_the_rules_block_is_in_every_catalogue() -> None:
@@ -4845,7 +4872,8 @@ def test_every_catalogue_carries_the_plural_rule_of_its_language() -> None:
     """
     german = catalogue_of(L10N_JSON)
     german_plural_keys = sorted(key for key, value in german.items() if isinstance(value, list))
-    assert len(german_plural_keys) == 5
+    # Five until plan 45-10; V-45-10-05 gave eight counted sentences a singular.
+    assert len(german_plural_keys) == 13
 
     present = [code for code in PLURAL_FORM_OF if (REPO_ROOT / "php" / "l10n" / f"{code}.json").is_file()]
     # The anti vacuity clause of the loop: a rename that took the files away

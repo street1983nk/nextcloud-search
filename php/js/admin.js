@@ -455,13 +455,13 @@
     text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
       .replace('%1$s', numbers.format(searchable))
       .replace('%2$s', numbers.format(indexable)))
-    text('findling-coverage-recounting', t('findling', '%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.')
+    text('findling-coverage-recounting', n('findling', '%s file is searchable. The count of indexable files is being updated, and the share is shown again afterwards.', '%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', searchable)
       .replace('%s', numbers.format(searchable)))
-    text('findling-coverage-unknown', t('findling', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.')
+    text('findling-coverage-unknown', n('findling', 'The share cannot be worked out right now because the backend does not answer. %s file of this instance is indexable.', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', indexable)
       .replace('%s', numbers.format(indexable)))
     text('findling-coverage-per-document', t('findling', 'Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.'))
     text('findling-coverage-counting', t('findling', 'The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.'))
-    text('findling-coverage-not-readable', t('findling', '%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.')
+    text('findling-coverage-not-readable', n('findling', '%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure.', '%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', notReadable)
       .replace('%s', numbers.format(notReadable)))
     text('findling-coverage-legacy', t('findling', 'This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.'))
     text('findling-coverage-leftout-count', t('findling', 'Deliberately left out: %s')
@@ -704,12 +704,12 @@
         .replace('%2$s', numbers.format(whole(estimate.ocrMax)))
       : numbers.format(measured)
 
-    text('findling-estimate-line', t('findling', '%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.')
+    text('findling-estimate-line', n('findling', '%1$s file, %2$s with OCR. About %3$s and about %4$s of index.', '%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.', whole(estimate.files))
       .replace('%1$s', numbers.format(whole(estimate.files)))
       .replace('%2$s', share)
       .replace('%3$s', span(seconds === null ? 0 : seconds))
       .replace('%4$s', size(bytes === null ? 0 : bytes)))
-    text('findling-estimate-line-short', t('findling', '%1$s files, %2$s of them need OCR.')
+    text('findling-estimate-line-short', n('findling', '%1$s file, %2$s with OCR.', '%1$s files, %2$s of them need OCR.', whole(estimate.files))
       .replace('%1$s', numbers.format(whole(estimate.files)))
       .replace('%2$s', share))
     text('findling-estimate-counting-text', t('findling', 'Counting the files, this takes a moment.') + ' ' +
@@ -1687,7 +1687,7 @@
     text(
       'findling-rules-confirm-message',
       counted
-        ? t('findling', 'Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.')
+        ? n('findling', 'Remove indexed content? Excluding %1$s also removes %2$s already indexed document under that path from the index. The files themselves stay untouched on disk.', 'Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.', answer.affectedDocuments)
           .replace('%2$s', function () { return documents })
           .replace('%1$s', function () { return prefixes.join(', ') })
         : t('findling', 'Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.')
@@ -2344,10 +2344,10 @@
     // duration only out of a rate this box measured.
     const seconds = precision === 'fp32' ? profile.secondsFp32 : profile.secondsInt8
     text('findling-profile-reindex-long', fill(
-      t('findling', 'Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.'),
+      n('findling', 'Re-embedding of %1$s document, estimated about %2$s. Full text search stays fully available.', 'Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.', whole(profile.documents)),
       [count(profile.documents), span(seconds === null ? 0 : seconds)]))
     text('findling-profile-reindex-short', fill(
-      t('findling', 'Re-embedding of %s documents. Full text search stays fully available.'),
+      n('findling', 'Re-embedding of %s document. Full text search stays fully available.', 'Re-embedding of %s documents. Full text search stays fully available.', whole(profile.documents)),
       [count(profile.documents)]))
     shown('findling-profile-reindex-long', seconds !== null)
     shown('findling-profile-reindex-short', seconds === null)

@@ -63,6 +63,8 @@ dans [CHANGELOG.md](CHANGELOG.md).
 - Une mise à jour depuis 1.3.x ne s'arrête plus avec une erreur « undefined
   method » ; elle se déroule en une seule fois (problème présent depuis
   1.5.0).
+- Les nombres égaux à un ne précèdent plus un nom au pluriel sur la page
+  d'administration.
 
 ## [1.6.5] - 2026-11-16
 

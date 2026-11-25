@@ -1619,6 +1619,16 @@ SUPERSEDED_IN_1_7_0: dict[str, str] = {
         "ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch "
         "einige Male erneut versucht."
     ),
+    # V-45-10-05 (plan 45-10, owner "Ok" 2026-11-25 17:23): the sentence is the
+    # plural form of a key with its own singular since 1.7.0, so "1 files" is
+    # gone; the plain key left every catalogue, the accepted wording is unchanged.
+    (
+        "%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage "
+        "figure."
+    ): (
+        "%s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht "
+        "durchsuchbar und senken den Deckungsgrad."
+    ),
 }
 FULL_CHANGELOG_1_6_3 = "**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3"
 # The release note the owner accepted in round 2 (point C, variant a): five
@@ -3469,9 +3479,14 @@ def _catalogue_without_the_superseded_sentence() -> dict[str, str]:
 
 def test_the_superseded_sentence_is_the_old_remedy_of_unreadable_and_an_accepted_one() -> None:
     assert set(SUPERSEDED_IN_1_7_0) <= set(ACCEPTED_SENTENCES_1_6_3)
-    assert list(SUPERSEDED_IN_1_7_0) == [ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]]
+    not_readable = next(sentence for sentence in ACCEPTED_SENTENCES_1_6_3 if "could not be read" in sentence)
+    assert list(SUPERSEDED_IN_1_7_0) == [ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX], not_readable]
     assert "asks the first 20 of its users" in ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX]
     assert ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX] not in _german_catalogue()
+    # V-45-10-05: the plain key left, its accepted German is the plural form of the new key.
+    assert not_readable not in _german_catalogue()
+    plural_key = next(key for key in _german_catalogue() if key.endswith(f"_::_{not_readable}_"))
+    assert cast("list[str]", _german_catalogue()[plural_key])[1] == SUPERSEDED_IN_1_7_0[not_readable]
 
 
 def test_a_superseded_sentence_is_checked_against_the_listing_only() -> None:

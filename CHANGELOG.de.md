@@ -59,6 +59,8 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 - Der Beispielpfad unter "Einzelne Datei prüfen" folgt der Sprache der Seite.
 - Ein Update von 1.3.x bricht nicht mehr mit einem Fehler "undefined method"
   ab, es läuft in einem Durchgang durch (seit 1.5.0 betroffen).
+- Zahlen mit dem Wert eins stehen auf der Verwaltungsseite nicht mehr vor
+  einem Nomen im Plural.
 
 ## [1.6.5] - 2026-11-16
 

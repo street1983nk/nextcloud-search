@@ -35,15 +35,18 @@ I-45-23-03 and I-45-23-04; the Chinese wording is a machine draft under the rese
 and after plan 45-25, task 2 (one key added: the example folder of the rules, I-45-19-01; the Chinese
 wording is a machine draft under the reservation of this document), and again on 24.11.2026 after plan
 45-21 (one key added: the sentence of the rules section for a storage list that could not be read,
-R-45-21-13; the Chinese wording is a machine draft under the reservation of this document):
+R-45-21-13; the Chinese wording is a machine draft under the reservation of this document), and again on
+25.11.2026 after plan 45-10 (eight keys became plural keys of the same sentences, so that one file no
+longer reads "1 files", finding V-45-10-05; the count of keys stays, and the Chinese column keeps its
+former wording as the one form):
 
 | Quantity | Value |
 |---|---:|
 | Keys in `de.json` | **387** |
 | Keys in `zh_TW.json`, in the same order | **387** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
-| with directives, plural keys excluded | **97** |
-| plural keys (the value is a list) | **5** |
+| with directives, plural keys excluded | **89** |
+| plural keys (the value is a list) | **13** |
 | forms per plural key | **1** |
 | rows in the table below | **387** |
 
@@ -189,7 +192,8 @@ separated by ` / ` as in every other table of the tree.
 The three columns are generated from `php/l10n/de.json` and `php/l10n/zh_TW.json` and not typed;
 the order is the order of the files. The key is the English source string the code asks for: most
 keys stand in a template or a script and run through `$l->t()` or `t()`, some come from the PHP
-services, and the five plural keys are composed by `n()` out of their singular and plural. In
+services, and the thirteen plural keys (five until plan 45-10) are composed by `n()` or `$l->n` out of
+their singular and plural. In
 every catalogue file it is the key of the translation.
 
 No value and no key can contain a pipe character, `scan_pipe_character` makes sure of that, so
@@ -207,10 +211,10 @@ this table cannot break on a wording.
 | `%1$s of %2$s indexable files are searchable` | %1$s von %2$s indexierbaren Dateien sind durchsuchbar | %2$s 個可索引的檔案中，有 %1$s 個可以搜尋 |
 | `Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.` | Seit Version 1.6.3 zählt jedes Dokument nur einmal. Bisher wurde ein externer Speicher, der für jeden Nutzer einzeln eingebunden ist, je Einbindung gezählt, deshalb können die Zahlen jetzt niedriger sein als vorher. Dieser Hinweis verschwindet sieben Tage nach der ersten vollständigen Zählung. | 自 1.6.3 版起，每份文件只計算一次。先前為每位使用者分別掛載的外部儲存空間，是按掛載次數重複計算，因此現在的數字可能比以前低。此提示會在第一次完整計算後七天消失。 |
 | `The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.` | Der Deckungsgrad wird gerade pro Dokument gezählt. Auf großen Instanzen kann das einige Zeit dauern, die Suche arbeitet währenddessen normal weiter. Die Zahl erscheint hier, sobald die Zählung fertig ist. | 正在逐份文件計算涵蓋率。在大型站台上可能需要一段時間，期間搜尋仍正常運作。計算完成後，數字就會顯示在這裡。 |
-| `%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.` | %s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht durchsuchbar und senken den Deckungsgrad. | 有 %s 個檔案無法讀取或一再卡住。這些檔案算作無法搜尋，會拉低涵蓋率。 |
+| `_%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure._::_%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure._` | %s Datei konnte nicht gelesen werden oder ist mehrfach hängen geblieben. Sie zählt als nicht durchsuchbar und senkt den Deckungsgrad. / %s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht durchsuchbar und senken den Deckungsgrad. | 有 %s 個檔案無法讀取或一再卡住。這些檔案算作無法搜尋，會拉低涵蓋率。 |
 | `This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.` | Diese Instanz hat mehr Speicherorte, als die Zählung pro Dokument verarbeiten kann. Die Zahl wird deshalb wie in Version 1.6.2 je Speicherort gezählt, und eine Datei, die für mehrere Nutzer eingebunden ist, kann mehrfach darin stehen. | 此站台的儲存空間數量超出逐份文件計算所能處理的範圍。因此改用 1.6.2 版按儲存空間計算的方式，掛載給多位使用者的檔案可能會被重複計入。 |
-| `%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.` | %s Dateien sind durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder. | %s 個檔案可以搜尋。可索引檔案的數量正在更新，完成後會再次顯示比例。 |
-| `The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.` | Der Anteil ist im Moment nicht berechenbar, weil das Backend nicht antwortet. %s Dateien dieser Instanz sind indexierbar. | 後端沒有回應，目前無法算出比例。此站台有 %s 個檔案可以索引。 |
+| `_%s file is searchable. The count of indexable files is being updated, and the share is shown again afterwards._::_%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards._` | %s Datei ist durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder. / %s Dateien sind durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder. | %s 個檔案可以搜尋。可索引檔案的數量正在更新，完成後會再次顯示比例。 |
+| `_The share cannot be worked out right now because the backend does not answer. %s file of this instance is indexable._::_The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable._` | Der Anteil ist im Moment nicht berechenbar, weil das Backend nicht antwortet. %s Datei dieser Instanz ist indexierbar. / Der Anteil ist im Moment nicht berechenbar, weil das Backend nicht antwortet. %s Dateien dieser Instanz sind indexierbar. | 後端沒有回應，目前無法算出比例。此站台有 %s 個檔案可以索引。 |
 | `Deliberately left out: %s` | Bewusst ausgelassen: %s | 刻意略過：%s |
 | `Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.` | Diese Dateien sind zu groß, von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen. Sie stehen nicht im Nenner darüber, damit der Deckungsgrad 100 Prozent erreichen kann. | 這些檔案過大、屬於 Findling 不讀取的類型，或被規則排除。它們不計入上方的分母，因此涵蓋率可以達到百分之百。 |
 | `Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.` | Derzeit ist nichts bewusst ausgelassen. Hier stünden Dateien, die zu groß sind, von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen, und sie zählen nicht im Nenner darüber. | 目前沒有刻意略過的檔案。過大、屬於 Findling 不讀取的類型或被規則排除的檔案會計入此處，且不計入上方的分母。 |
@@ -273,8 +277,8 @@ this table cannot break on a wording.
 | `The two halves of Findling report different versions: this app is %1$s, the backend is %2$s. While they disagree the search answers with no results, because a wrong answer without a word would be worse. Bring both halves to the same version.` | Die beiden Hälften von Findling melden unterschiedliche Versionen: diese App ist %1$s, das Backend ist %2$s. Solange sie nicht zusammenpassen, antwortet die Suche ohne Ergebnisse, weil eine falsche Antwort ohne Hinweis schlimmer wäre. Beide Hälften auf dieselbe Version bringen. | Findling 的兩個部分回報的版本不同：此應用程式為 %1$s，後端為 %2$s。版本不一致期間，搜尋一律不回傳結果，因為默默給出錯誤的答案會更糟。請將兩個部分更新到相同版本。 |
 | `The Findling backend does not answer. The numbers below are the last ones this app recorded. Check under Apps that the External App "Findling Backend" is installed and running.` | Das Findling-Backend antwortet nicht. Die Zahlen unten sind die letzten, die diese App festgehalten hat. Unter Apps prüfen, ob die External App "Findling Backend" installiert und gestartet ist. | Findling 後端沒有回應。下方是此應用程式最後記錄的數字。請到「應用程式」確認外部應用程式「Findling Backend」已安裝且正在執行。 |
 | `Estimate for the first index` | Schätzung für den Erstindex | 首次索引的估算 |
-| `%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.` | %1$s Dateien, davon %2$s mit OCR. Etwa %3$s und etwa %4$s Index. | %1$s 個檔案，其中 %2$s 個需要 OCR。約需 %3$s，索引約占 %4$s。 |
-| `%1$s files, %2$s of them need OCR.` | %1$s Dateien, davon %2$s mit OCR. | %1$s 個檔案，其中 %2$s 個需要 OCR。 |
+| `_%1$s file, %2$s with OCR. About %3$s and about %4$s of index._::_%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index._` | %1$s Datei, davon %2$s mit OCR. Etwa %3$s und etwa %4$s Index. / %1$s Dateien, davon %2$s mit OCR. Etwa %3$s und etwa %4$s Index. | %1$s 個檔案，其中 %2$s 個需要 OCR。約需 %3$s，索引約占 %4$s。 |
+| `_%1$s file, %2$s with OCR._::_%1$s files, %2$s of them need OCR._` | %1$s Datei, davon %2$s mit OCR. / %1$s Dateien, davon %2$s mit OCR. | %1$s 個檔案，其中 %2$s 個需要 OCR。 |
 | `%1$s to %2$s` | %1$s bis %2$s | %1$s 至 %2$s |
 | `Counting the files, this takes a moment.` | Die Dateien werden gezählt, das dauert einen Moment. | 正在計算檔案數量，請稍候。 |
 | `Startup value, being measured.` | Startwert, wird gemessen. | 初始值，測量中。 |
@@ -446,7 +450,7 @@ this table cannot break on a wording.
 | `1 of %s slots free. This is the last one.` | Noch 1 von %s frei. Das ist der letzte Platz. | 剩餘 1 個空位（共 %s 個），這是最後一個。 |
 | `0 of %s slots free. Remove an entry to add another one.` | Noch 0 von %s frei. Einen Eintrag entfernen, um einen neuen hinzuzufügen. | 已沒有空位（共 %s 個）。請先移除一個項目，才能再新增。 |
 | `Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.` | Einen Eintrag zu entfernen wirkt innerhalb von %1$s Stunden, wenn der nächste Abgleichlauf diese Dateien wieder aufnimmt. Mit "%2$s" sofort übernehmen. | 移除項目會在 %1$s 小時內生效，也就是下一輪比對作業重新處理這些檔案時。執行「%2$s」可立即套用。 |
-| `Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexierte Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %1$s 也會將該路徑下 %2$s 份已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
+| `_Remove indexed content? Excluding %1$s also removes %2$s already indexed document under that path from the index. The files themselves stay untouched on disk._::_Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk._` | Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexiertes Dokument unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. / Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexierte Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %1$s 也會將該路徑下 %2$s 份已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將該路徑下已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the already indexed documents that match that pattern from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente, auf die dieses Muster passt, aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將符合該樣式的已索引文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the already indexed documents that match these patterns from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente, auf die diese Muster passen, aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將符合這些樣式的已索引文件從索引中移除。磁碟上的檔案本身不受影響。 |
@@ -524,8 +528,8 @@ this table cannot break on a wording.
 | `Everything but one core, up to %s OCR slots.` | Alles bis auf einen Kern, bis zu %s OCR-Slots. | 保留一個核心，其餘全部使用，最多 %s 個 OCR 工作槽。 |
 | `More accurate search model (fp32)` | Genaueres Suchmodell (fp32) | 較精確的搜尋模型（fp32） |
 | `Downloaded once during the check, about %s from the Findling release on GitHub. Needs more memory than int8.` | Wird bei der Prüfung einmal geladen, etwa %s aus dem Findling-Release auf GitHub. Braucht mehr Speicher als int8. | 在檢查期間從 GitHub 上的 Findling 發行版本下載一次，約 %s。比 int8 需要更多記憶體。 |
-| `Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.` | Neueinbettung von %1$s Dokumenten, geschätzt etwa %2$s. Die Volltextsuche bleibt voll verfügbar. | 將重新嵌入 %1$s 份文件，預估約需 %2$s。全文搜尋仍可完整使用。 |
-| `Re-embedding of %s documents. Full text search stays fully available.` | Neueinbettung von %s Dokumenten. Die Volltextsuche bleibt voll verfügbar. | 將重新嵌入 %s 份文件。全文搜尋仍可完整使用。 |
+| `_Re-embedding of %1$s document, estimated about %2$s. Full text search stays fully available._::_Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available._` | Neueinbettung von %1$s Dokument, geschätzt etwa %2$s. Die Volltextsuche bleibt voll verfügbar. / Neueinbettung von %1$s Dokumenten, geschätzt etwa %2$s. Die Volltextsuche bleibt voll verfügbar. | 將重新嵌入 %1$s 份文件，預估約需 %2$s。全文搜尋仍可完整使用。 |
+| `_Re-embedding of %s document. Full text search stays fully available._::_Re-embedding of %s documents. Full text search stays fully available._` | Neueinbettung von %s Dokument. Die Volltextsuche bleibt voll verfügbar. / Neueinbettung von %s Dokumenten. Die Volltextsuche bleibt voll verfügbar. | 將重新嵌入 %s 份文件。全文搜尋仍可完整使用。 |
 | `Choose a different profile or model to check it.` | Ein anderes Profil oder Modell wählen, um es zu prüfen. | 請選擇其他設定檔或模型來進行檢查。 |
 | `Changing the profile needs JavaScript. Everything above stays complete without it.` | Das Profil zu ändern braucht JavaScript. Alles darüber bleibt ohne es vollständig. | 變更設定檔需要 JavaScript。即使沒有 JavaScript，上方的所有內容仍然完整。 |
 | `The check calculates with these values from environment variables:` | Die Prüfung rechnet mit diesen Werten aus Umgebungsvariablen: | 檢查會使用以下來自環境變數的數值計算： |
@@ -621,7 +625,7 @@ Run on 15.11.2026 over the two generated files, not by eye:
 | `zh_TW.js` carries the same values as `zh_TW.json`, form for form | yes (`test_the_two_halves_of_every_language_carry_the_same_values`) |
 | Every key of `zh_TW.json` has a row in this file, with the catalogue wording | yes (`test_every_language_table_carries_every_key_with_the_catalogue_wording`) |
 | Placeholder parity key against value, over all 102 keys with directives (22.11.2026) | 0 deviations |
-| Plural keys with exactly **one** form | 5 of 5 |
+| Plural keys with exactly **one** form | 5 of 5; 13 of 13 after plan 45-10 (25.11.2026) |
 | `pluralForm` equal to the block in section 3 of `docs/l10n-catalogues.md` | yes, in both files |
 | U+2014 and U+2013 (dashes) | 0 |
 | Emoji and dingbats (`[\U0001f000-\U0001faff☀-➿️]`) | 0 |

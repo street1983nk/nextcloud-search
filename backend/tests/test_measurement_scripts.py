@@ -1596,8 +1596,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # find, sort, sed and sha256sum over the same tree gave d5834a55 as well; the recipe and the
 # pipeline over git archive of 2a7befdc, the last commit before this change, gave 94720fd6 with
 # 148 files (positive control).
+# Moved on 2026-11-25 by plan 45-10 (finding V-45-10-05 of the full test, owner "Ok" 17:23 UTC):
+# templates/admin.php renders the six counted sentences of the coverage, the estimate and the
+# re-embedding through $l->n with a singular form, so one file no longer reads "1 files". No file
+# came or went, so PHP_FILES_TODAY stays at 148. The recipe gave 00bf7160; the independent
+# pipeline of find, sort, sed and sha256sum over the same tree gave 00bf7160 as well; the recipe
+# and the pipeline over git archive of 8988ba79, the last commit before this change, gave
+# d5834a55 with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "d5834a557a77850451e56c57a3de4186a4f5738f5101c6dc438ebbcff06d0898"
+PHP_TREE_HASH_TODAY = "00bf71604578f2b2c0d0f752bc6a601e67431f016e1a03f8f02494af11dca3ac"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

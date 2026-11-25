@@ -54,6 +54,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - The example path in "Look up one file" follows the language of the page.
 - Updating from 1.3.x no longer stops with an "undefined method" error; the
   update runs through in one go (it broke with 1.5.0).
+- Numbers of one no longer stand before a plural noun on the admin page.
 
 ## [1.6.5] - 2026-11-16
 
