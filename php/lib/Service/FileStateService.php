@@ -733,12 +733,15 @@ class FileStateService {
 	 * a job given up after it got stuck again and again (QueueService::finish),
 	 * and a file the queue found gone. Since 1.6.3 skipped(unreadable) is also
 	 * the receipt this side writes for a gateway answer 422, a file the content
-	 * gateway could not open within its deadline (D-43-16), so not every one of
-	 * these rows stayed on this side of the boundary; the count treats both
+	 * gateway could not open within its deadline (D-43-16), and since 1.7.0
+	 * the backstop of the container writes failed(repeatedly_stuck) itself and
+	 * hands it over through the acknowledgement (#25), so not every one of
+	 * these rows stayed on this side of the boundary; the count treats all
 	 * origins alike, and the container takes such rows out of its judged
-	 * expression either way. The first two pairs are what the admin page names
-	 * as "not readable or stuck" (D-43-11); the third belongs to the
-	 * denominator only.
+	 * expression either way. For this constant what counts stays the row this
+	 * side holds, whichever side first spoke the verdict. The first two pairs
+	 * are what the admin page names as "not readable or stuck" (D-43-11); the
+	 * third belongs to the denominator only.
 	 *
 	 * @var list<array{0: string, 1: string}>
 	 */

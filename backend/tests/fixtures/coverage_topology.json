@@ -31,6 +31,7 @@
     {"file_id": 1210, "storage_id": 12, "path": "Daten/x/a10.txt", "doc_key": "x/a10.txt", "state": "indexed", "reason": null, "deleted": true, "chunks": 2, "note": "a tombstone that still says indexed"},
     {"file_id": 1112, "storage_id": 11, "path": "Daten/n/a12.txt", "doc_key": "n/a12.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "N1: indexed for anna, PHP-only skipped/unreadable for carl (expected.php.phpOnlyRows)"},
     {"file_id": 1213, "storage_id": 12, "path": "Daten/x/a13.txt", "doc_key": "", "state": "indexed", "reason": null, "deleted": false, "chunks": 2, "note": "the sentinel: counts as a document of its own over (storage_id, file_id)"},
+    {"file_id": 1214, "storage_id": 12, "path": "Daten/x/st1.txt", "doc_key": "x/st1.txt", "state": "failed", "reason": "repeatedly_stuck", "deleted": false, "chunks": 0, "note": "since 1.7.0 the backstop of the container writes failed/repeatedly_stuck itself (#25); the acknowledgement carries the same reason to the PHP side, so this row stands NEXT TO the PHP row of the same file (expected.php.phpOnlyRows, storage 12, x/st1.txt). judged leaves the reason to the PHP side, which counts the document over phpOnly, exactly once"},
     {"file_id": 2101, "storage_id": 21, "path": "Archiv/b1.txt", "doc_key": "b1.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 2},
     {"file_id": 2201, "storage_id": 22, "path": "Archiv/b1.txt", "doc_key": "b1.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
     {"file_id": 2202, "storage_id": 22, "path": "Archiv/b2.txt", "doc_key": "b2.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
@@ -248,7 +249,7 @@
     "derivation": {
       "documentsByGroup": "group 0, living indexed rows of 11/12/13, distinct key: x/a1.txt (1101, 1201, 1301), x/a2.txt (1102, 1202, A1 reshare), z/a3.txt (1303), y/a4.txt (1104, 1204, two mount points), n/a12.txt (1112), sentinel #1213 = 6; 1210 is a tombstone. group 1, rows of 21/22: b1.txt (2101, 2201), b2.txt (2202), x/a1.txt (2103) = 3",
       "embeddedByGroup": "group 0: x/a1.txt (chunks on 1201), x/a2.txt (chunks on 1102), #1213 = 3; 1210 has chunks but is a tombstone. group 1: b1.txt (chunks on 2101) = 1",
-      "judgedByGroup": "group 0: the 6 documents plus x/a5.bin (too_large) and x/a9.pdf (failed corrupt) = 8; x/a6.exe (mime_not_allowed), tmp/a7.txt (excluded) and x/a8.txt (container skipped/gone) do not count. group 1: the 3 documents plus b4.pdf (encrypted) = 4; b5.exe (mime_not_allowed) does not count",
+      "judgedByGroup": "group 0: the 6 documents plus x/a5.bin (too_large) and x/a9.pdf (failed corrupt) = 8; x/a6.exe (mime_not_allowed), tmp/a7.txt (excluded) and x/a8.txt (container skipped/gone) do not count, and neither does x/st1.txt (1214, container failed/repeatedly_stuck since the backstop of 1.7.0, #25): the PHP side counts that document over phpOnly, counted here too it would stand twice in the denominator. group 1: the 3 documents plus b4.pdf (encrypted) = 4; b5.exe (mime_not_allowed) does not count",
       "documentsByStorage": "31: 3101, 3102, 3106 (no key, still a row of a single storage) = 3, 3105 is a tombstone. 32: 3201 = 1. 33 has no rows and is left out. 41 is not mounted, row 1 has storage id 0",
       "embeddedByStorage": "31: 3101 = 1 (3105 has chunks but is a tombstone). 32: none, left out",
       "judgedByStorage": "31: the 3 documents plus 3104 (failed timeout) = 4, 3103 (mime_not_allowed) does not count. 32: 3201 plus 3202 (too_large) = 2",
@@ -258,7 +259,7 @@
       "docKeysMissing": "no living row of a group member has a NULL key; 3106 and row 1 are no group members"
     },
     "php": {
-      "about": "The PHP half of D-43-11. scanStats are the counters of oc_findling_scan_stats per storage; refused is countByReasonPerStorage('skipped', 'mime_not_allowed') over mounted storages only. phpOnlyRows are verdicts only PHP writes (skipped/unreadable, failed/repeatedly_stuck, skipped/gone); internalPath is oc_filecache.path, filecache false means the file cache row is gone.",
+      "about": "The PHP half of D-43-11. scanStats are the counters of oc_findling_scan_stats per storage; refused is countByReasonPerStorage('skipped', 'mime_not_allowed') over mounted storages only. phpOnlyRows are the verdicts of PHP_ONLY_NOT_READABLE and PHP_ONLY_GONE (skipped/unreadable, failed/repeatedly_stuck, skipped/gone) in oc_findling_file_state; since 1.7.0 the backstop of the container writes failed/repeatedly_stuck itself (#25) and the acknowledgement carries it here, so such a row can stand next to a container row of the same file (1214), which judged therefore excludes. internalPath is oc_filecache.path, filecache false means the file cache row is gone.",
       "scanStats": {
         "11": {"filesSeen": 12, "overCap": 1, "excluded": 1, "finished": true},
         "12": {"filesSeen": 10, "overCap": 0, "excluded": 1, "finished": true},
@@ -290,7 +291,7 @@
         "byStorage": {"31": 1, "32": 1},
         "notReadableByGroup": [2, 1],
         "notReadableByStorage": {"31": 1, "32": 1},
-        "derivation": "group 0: x/u1.txt (unreadable, three rows, one path), x/st1.txt (stuck), x/g1.txt (gone with file cache row) = 3, of which not readable or stuck: u1, st1 = 2; x/g2.txt has no file cache row; n/a12.txt is N1. group 1: b/u2.txt = 1, not readable 1. 31: st2 = 1 (g3 has no file cache row), not readable 1. 32: u3 = 1, not readable 1. 41 is not mounted"
+        "derivation": "group 0: x/u1.txt (unreadable, three rows, one path), x/st1.txt (stuck; the container row 1214 of the same file changes nothing here, phpOnly reads oc_findling_file_state), x/g1.txt (gone with file cache row) = 3, of which not readable or stuck: u1, st1 = 2; x/g2.txt has no file cache row; n/a12.txt is N1. group 1: b/u2.txt = 1, not readable 1. 31: st2 = 1 (g3 has no file cache row), not readable 1. 32: u3 = 1, not readable 1. 41 is not mounted"
       },
       "groupParts": {
         "groups": [9, 9],
@@ -300,7 +301,7 @@
       "denominatorParts": {
         "groups": [11, 9],
         "singles": {"31": 7, "32": 3, "33": 0},
-        "derivation": "group 0: max(PHP 9, judged 8 + phpOnly 3 = 11) = 11, the container side wins. group 1: max(9, 4 + 1 = 5) = 9, the PHP side wins. 31: max(7, 4 + 1 = 5) = 7. 32: max(2, 2 + 1 = 3) = 3, files_seen lags. 33: max(0, 0 + 0) = 0"
+        "derivation": "group 0: max(PHP 9, judged 8 + phpOnly 3 = 11) = 11, the container side wins. judged 8 holds BECAUSE the container row 1214 (failed/repeatedly_stuck, backstop of 1.7.0, #25) is excluded from judged: counted there too, x/st1.txt would stand in judged AND in phpOnly and the container side would win with an air number (12). group 1: max(9, 4 + 1 = 5) = 9, the PHP side wins. 31: max(7, 4 + 1 = 5) = 7. 32: max(2, 2 + 1 = 3) = 3, files_seen lags. 33: max(0, 0 + 0) = 0"
       },
       "denominator": 30,
       "counted": 13,

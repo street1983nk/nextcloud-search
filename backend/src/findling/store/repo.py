@@ -2359,11 +2359,17 @@ def embedded_in_storages(state_db: Path, vectors_db: Path, storage_ids: Sequence
 # for a gateway 422 and acknowledges it, and the PHP side counts that document
 # out of oc_findling_file_state, with N1, in notReadable and in the
 # denominator. Counted here too, it would stand twice in the denominator.
+# failed/repeatedly_stuck is out for the same reason since 1.7.0 (#25): the
+# backstop of the poller writes that pair itself now, and its acknowledgement
+# carries the same reason to the PHP side, which counts the document over
+# PHP_ONLY_NOT_READABLE in phpOnly and notReadable. Counted here too, it would
+# stand twice in the denominator.
 _COVERAGE_DOCUMENTS: Final = "f.state = 'indexed'"
 _COVERAGE_EMBEDDED: Final = "f.state = 'indexed' AND EXISTS (SELECT 1 FROM vec.chunks c WHERE c.file_id = f.file_id)"
 _COVERAGE_NO_VECTORS: Final = "0"
 _COVERAGE_JUDGED: Final = (
     "NOT (f.state = 'skipped' AND COALESCE(f.reason, '') IN ('mime_not_allowed', 'excluded', 'gone', 'unreadable'))"
+    " AND NOT (f.state = 'failed' AND COALESCE(f.reason, '') = 'repeatedly_stuck')"
 )
 
 # The sets the statement starts from. listed is the mount list without ids

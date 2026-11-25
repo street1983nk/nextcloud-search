@@ -109,6 +109,50 @@ def test_the_fixture_matches_the_hand_derived_truth(topology: tuple[dict[str, An
     assert dict(counts.judged_by_storage) == _by_storage(expected["judgedByStorage"])
 
 
+def test_a_container_row_repeatedly_stuck_counts_once_in_the_denominator(
+    topology: tuple[dict[str, Any], Path, Path],
+) -> None:
+    # The constellation after the backstop of 1.7.0 (#25): the container wrote
+    # failed/repeatedly_stuck itself and the acknowledgement carried the same
+    # reason to the PHP side, so a container row and a PHP row of the SAME file
+    # stand next to each other (x/st1.txt, storage 12). judged leaves the
+    # reason to the PHP side, which counts the document over phpOnly; counted
+    # in judged too, the file would stand twice in the term judged + phpOnly
+    # and the container side would win the denominator with an air number.
+    # Every expected figure of the fixture is therefore the one it had WITHOUT
+    # the container row, and the denominator built from the live judged counts
+    # is the hand derived one.
+    data, state_db, vectors_db = topology
+    stuck = [row for row in data["rows"] if row["reason"] == "repeatedly_stuck"]
+    assert [(row["storage_id"], row["doc_key"]) for row in stuck] == [(12, "x/st1.txt")]
+    php = data["expected"]["php"]
+    assert {(row["storage_id"], row["internalPath"]) for row in php["phpOnlyRows"]} >= {(12, "x/st1.txt")}
+
+    counts = coverage_counts(state_db, vectors_db, data["mounted"], data["groups"])
+
+    assert counts.judged_documents == data["expected"]["judgedDocuments"]
+    assert list(counts.judged_by_group) == data["expected"]["judgedByGroup"]
+    assert dict(counts.judged_by_storage) == _by_storage(data["expected"]["judgedByStorage"])
+
+    # The denominator of the admin page, max(PHP part, judged + phpOnly) per
+    # group and per single storage, built from the LIVE judged counts and the
+    # hand derived PHP figures of the fixture.
+    group_parts = [
+        max(php_part, judged + php_only)
+        for php_part, judged, php_only in zip(
+            php["groupParts"]["groups"], counts.judged_by_group, php["phpOnly"]["byGroup"], strict=True
+        )
+    ]
+    assert group_parts == php["denominatorParts"]["groups"]
+    single_only = _by_storage(php["phpOnly"]["byStorage"])
+    single_parts = {
+        storage_id: max(part, counts.judged_by_storage.get(storage_id, 0) + single_only.get(storage_id, 0))
+        for storage_id, part in _by_storage(php["groupParts"]["singles"]).items()
+    }
+    assert single_parts == _by_storage(php["denominatorParts"]["singles"])
+    assert sum(group_parts) + sum(single_parts.values()) == php["denominator"]
+
+
 def test_the_sums_are_the_sums_of_the_parts(topology: tuple[dict[str, Any], Path, Path]) -> None:
     data, state_db, vectors_db = topology
 

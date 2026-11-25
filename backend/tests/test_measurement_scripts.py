@@ -1588,8 +1588,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # The recipe gave 94720fd6; the independent pipeline of find, sort, sed and sha256sum over the
 # same tree gave 94720fd6 as well; the recipe and the pipeline over git archive of b755694e, the
 # last commit before this change, gave 86f595c7 with 147 files (positive control).
+# Moved on 2026-11-25 by plan 45-27, task 4 (issue #25): the docblock of PHP_ONLY_NOT_READABLE in
+# lib/Service/FileStateService.php says that since 1.7.0 the backstop of the container writes
+# failed(repeatedly_stuck) itself and hands it over through the acknowledgement, so the pair is no
+# longer a verdict only Nextcloud writes; a comment only, the code is byte identical. No file came
+# or went, so PHP_FILES_TODAY stays at 148. The recipe gave d5834a55; the independent pipeline of
+# find, sort, sed and sha256sum over the same tree gave d5834a55 as well; the recipe and the
+# pipeline over git archive of 2a7befdc, the last commit before this change, gave 94720fd6 with
+# 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "94720fd6c5823d2feca4ac2f8a72045e8e0afc863d28e3e086f7a57cab35cb66"
+PHP_TREE_HASH_TODAY = "d5834a557a77850451e56c57a3de4186a4f5738f5101c6dc438ebbcff06d0898"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -3131,8 +3139,21 @@ PHP_TREE_HASH_TODAY = "94720fd6c5823d2feca4ac2f8a72045e8e0afc863d28e3e086f7a57ca
 # ways, and the recipe and the same pipeline over git archive of b5665f27, the
 # last commit before this change, gave 8c87b872... with 83 files
 # (positive control).
+#
+# Moved on 2026-11-25 by plan 45-27, task 4 (issue #25): store/repo.py takes
+# failed/repeatedly_stuck out of _COVERAGE_JUDGED, because since the backstop
+# of 1.7.0 the container writes that pair itself while the PHP side counts the
+# same document over PHP_ONLY_NOT_READABLE, and counted in judged too it would
+# stand twice in the denominator (precedent D-43-16, unreadable);
+# worker/reconcile.py says at GIVEN_UP_REASON that such a row now also carries
+# a verdict in this container and rests over the etag comparison, a comment
+# only. No file came or went, so PACKAGE_FILES_TODAY stays at 83. Recomputed
+# independently with find, sort, sed and sha256sum over the CRLF normalised
+# tree: d031ba6c... both ways, and the recipe and the same pipeline over git
+# archive of 2a7befdc, the last commit before this change, gave 961cd6ae...
+# with 83 files (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "961cd6aef0f62bc313c75dff47951ba2941cef60a52c41a25b4a5060c3e77807"
+PACKAGE_TREE_HASH_TODAY = "d031ba6c76651582db17eb55754cece37426ed0062e7881955ae0c5f4bea6325"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

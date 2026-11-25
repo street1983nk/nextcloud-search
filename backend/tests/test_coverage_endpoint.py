@@ -604,8 +604,9 @@ def test_coverage_counts_nothing_while_the_mark_is_generation_one(
     assert response.status_code == 200, response.text
     answer = response.json()
     _assert_counting_without_a_figure(answer)
-    # Not the rows without a key, there are none: the living rows of the request.
-    assert _living(data) == 29
+    # Not the rows without a key, there are none: the living rows of the request
+    # (30 since the container row 1214 of the backstop case, #25).
+    assert _living(data) == 30
     assert answer["docKeysMissing"] == _living(data)
     assert answer["docKeyFormat"] == 2
     assert calls == []
@@ -743,7 +744,7 @@ def test_coverage_counts_nothing_during_a_backup_pause_before_the_reset(
         asyncio.run(backfill.run_once())
         assert store.read_meta()[doc_keys.DOC_KEY_MARK] == "2:0:0"
         everything = sum(1 for row in data["rows"] if not row["deleted"])
-        assert store.doc_keys_missing() == everything == 32
+        assert store.doc_keys_missing() == everything == 33
 
         after_reset = _send(client, sign("admin"), body).json()
         _assert_counting_without_a_figure(after_reset)

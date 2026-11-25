@@ -101,6 +101,12 @@ ROUND_HELD: Final = "held"
 # happened again the next night, forever. On fifty thousand files that is
 # permanent load whose cause is invisible in every counter the app has.
 #
+# Since 1.7.0 the backstop of the poller writes failed(repeatedly_stuck) itself
+# as well (#25): such a row carries a verdict IN this container, so it rests
+# over the ordinary etag comparison below, and the repaired pair of DI-05-23
+# does not match it either, because that pair asks for skipped(no_text_layer)
+# on this side. The file stays written off, rightly, until its bytes change.
+#
 # The two codes are spelled out here rather than imported from
 # findling.extract.errors on purpose. This module never produces a verdict of its
 # own; it recognises one that arrived over the wire, and the vocabulary of the

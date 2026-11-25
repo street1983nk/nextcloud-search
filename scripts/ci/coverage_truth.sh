@@ -335,18 +335,28 @@ truth_not_readable() {
 #                 nought.
 #   judged:       distinct inodes of living container rows with a verdict that
 #                 is a document (not mime_not_allowed, excluded, gone,
-#                 unreadable). unreadable is left out since D-43-16 (plan
-#                 43-18): a file the gateway refused with 422 is judged
-#                 skipped/unreadable by the container and acknowledged, and
-#                 the PHP side counts it out of oc_findling_file_state (PHP
-#                 only below), not the container. A 1.6.2 container never
-#                 writes that pair.
-#   PHP only:     verdicts only Nextcloud writes (skipped/unreadable,
-#                 failed/repeatedly_stuck, skipped/gone) on a file that still
-#                 has a file cache row; distinct inodes, and without an inode
-#                 that another row of the tree holds without such a verdict
+#                 unreadable, and not failed/repeatedly_stuck). unreadable is
+#                 left out since D-43-16 (plan 43-18): a file the gateway
+#                 refused with 422 is judged skipped/unreadable by the
+#                 container and acknowledged, and the PHP side counts it out
+#                 of oc_findling_file_state (PHP only below), not the
+#                 container. A 1.6.2 container never writes that pair; since
+#                 1.6.3 the companion writes it as the receipt of a 422.
+#                 failed/repeatedly_stuck is left out for the same reason
+#                 since 1.7.0 (#25): the backstop of the container writes
+#                 that pair itself now, its acknowledgement carries the same
+#                 reason to the PHP side, and the document counts once over
+#                 PHP only below.
+#   PHP only:     the verdicts of PHP_ONLY_NOT_READABLE and PHP_ONLY_GONE
+#                 (skipped/unreadable, failed/repeatedly_stuck, skipped/gone)
+#                 in oc_findling_file_state, on a file that still has a file
+#                 cache row; distinct inodes, and without an inode that
+#                 another row of the tree holds without such a verdict
 #                 (N1: a file locked for one account that another one reads is
 #                 one inode, and it is judged through the one who reads it).
+#                 Until 1.6.x only Nextcloud wrote these pairs; since 1.7.0
+#                 failed/repeatedly_stuck also arrives from the container over
+#                 the acknowledgement of the backstop (#25).
 #
 # The phase A figure cannot be known from the outside any other way, because
 # during a crawl neither the file system nor the file cache says which files
@@ -378,7 +388,8 @@ WITH mounted(sid) AS (SELECT DISTINCT storage_id FROM oc_mounts),
          JOIN part AS p ON p.sid = sf.storage_id
          LEFT JOIN ph.phys AS x ON x.fileid = sf.file_id
         WHERE sf.deleted_at IS NULL
-          AND NOT (sf.state = 'skipped' AND sf.reason IN ('mime_not_allowed', 'excluded', 'gone', 'unreadable'))),
+          AND NOT (sf.state = 'skipped' AND sf.reason IN ('mime_not_allowed', 'excluded', 'gone', 'unreadable'))
+          AND NOT (sf.state = 'failed' AND sf.reason = 'repeatedly_stuck')),
      judged(pkey, n) AS (SELECT pkey, COUNT(DISTINCT doc) FROM judged_rows GROUP BY pkey),
      php_only AS (
        SELECT p.pkey, fc.fileid, COALESCE('i:' || x.inode, 'id:' || fc.fileid) AS doc
