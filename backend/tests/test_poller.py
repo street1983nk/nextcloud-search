@@ -6893,3 +6893,232 @@ async def test_a_rename_the_index_cannot_take_fails_alone_and_keeps_the_old_name
     assert queue.acknowledged[1] == ([], {92: "corrupt"})
     assert _by_name(index, "kuendigung") == [4711]
     assert _by_name(index, "aufhebungsvertrag") == []
+
+
+# -- the backstop against a circling file and the sharpened pass line (#25, F3) --
+
+# The start of the owner approved warning line, enough to find it and nothing
+# that could ever match another line of this module.
+BACKSTOP_PREFIX = "one file circles between the queues,"
+
+
+def _circling_job(queue_id: int = 91, file_id: int = 4711, *, size: int, kind: str = "content") -> QueueJob:
+    """One picture the way the loop of finding F3 delivers it: a content row, every pass again."""
+    return _job(
+        queue_id=queue_id,
+        file_id=file_id,
+        mime="image/jpeg",
+        size=size,
+        kind=kind,
+        title="Beleg.jpg",
+        path="Belege/Beleg.jpg",
+    )
+
+
+def _backstop_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [line for line in _poller_lines(caplog) if line.startswith(BACKSTOP_PREFIX)]
+
+
+async def test_the_pass_line_counts_the_handovers_apart_from_the_final_skips(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # One pass, one handover to the OCR track and one final skip. The old line
+    # counted both in skipped and summed the two tracks in requeued, and the
+    # circling of finding F3 was unreadable from it: 3941 passes looked like
+    # ordinary work. The prefix and the end of the line are byte identical to
+    # before, because resilience.yml, deploy-harp.yml and the tests below hold
+    # on to exactly those two pieces.
+    jobs = (_scan_job(), _job(queue_id=92, file_id=4712, mime="video/mp4"))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    finished = [line for line in _poller_lines(caplog) if line.startswith("pass finished, claimed=")]
+    assert len(finished) == 1
+    assert " skipped=1 " in finished[0]
+    assert "handed_ocr=1 handed_embed=0" in finished[0]
+    assert finished[0].endswith("slots=1 throttled=0")
+    assert (result.skipped, result.handed_ocr, result.handed_embed) == (1, 1, 0)
+    assert result.requeued == 1
+
+
+async def test_two_handovers_of_the_same_bytes_still_hand_over(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Two identical handovers are legitimate: a lost requeue answer plus its
+    # redelivery (CR-02) looks exactly like this pair, and a backstop that fired
+    # here would write healthy files off on every transient failure.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)),
+    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES})
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        first = await poller.run_once()
+        second = await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr"), ([4711], "ocr")]
+    assert (first.failed, second.failed) == (0, 0)
+    assert _backstop_lines(caplog) == []
+
+
+async def test_a_third_handover_of_the_same_bytes_ends_as_repeatedly_stuck(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The backstop of #25: the third demanded handover of the same bytes is
+    # refused, the row ends visibly on the admin page instead of circling, and
+    # the one warning line carries the file id and the count and nothing of the
+    # file itself (B6).
+    queue = _FakeQueue(*[ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)) for _ in range(3)])
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES})
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        await poller.run_once()
+        await poller.run_once()
+        third = await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr"), ([4711], "ocr")]
+    assert queue.acknowledged[2] == ([], {91: "repeatedly_stuck"})
+    assert third.failed == 1
+    assert third.handed_ocr == 0
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("failed", "repeatedly_stuck")
+    expected = (
+        "one file circles between the queues, 3 demanded handovers to the ocr track "
+        "with the same bytes, file id 4711, written off as failed(repeatedly_stuck)"
+    )
+    assert _backstop_lines(caplog) == [expected]
+    for line in _poller_lines(caplog):
+        assert "Beleg" not in line
+        assert ".jpg" not in line
+
+
+async def test_changed_bytes_reset_the_handover_count(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Changed bytes are a new attempt by right: the user wrote to the file, and
+    # the catch up of D-31-02 offers a written off file again for exactly that
+    # case. Only identical bytes may ever trip the backstop.
+    bodies: dict[int, bytes | BaseException | None] = {4711: SLIP_BYTES}
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_circling_job(size=len(ICON_BYTES)),)),
+    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        await poller.run_once()
+        await poller.run_once()
+        bodies[4711] = ICON_BYTES
+        third = await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr"), ([4711], "ocr"), ([4711], "ocr")]
+    assert third.failed == 0
+    assert _backstop_lines(caplog) == []
+    # And the new bytes count at one, so they get the three chances they earned.
+    assert poller._ocr_handovers[4711] == (hashlib.sha256(ICON_BYTES).hexdigest(), 1)
+
+
+async def test_a_failed_requeue_does_not_count_towards_the_backstop(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The CR-02 redelivery stays harmless: a handover whose requeue answer never
+    # arrived did not happen as far as the loop is concerned, and three of them
+    # in a row must not walk a healthy file into failed(repeatedly_stuck).
+    queue = _FakeQueue(*[ClaimResult(jobs=(_circling_job(size=len(SLIP_BYTES)),)) for _ in range(4)])
+    queue.requeue_fails = True
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES})
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        for _ in range(3):
+            await poller.run_once()
+        queue.requeue_fails = False
+        fourth = await poller.run_once()
+
+    # The call itself is recorded even when its answer is not ok.
+    assert len(queue.requeues) == 4
+    assert fourth.failed == 0
+    assert fourth.handed_ocr == 1
+    assert _backstop_lines(caplog) == []
+    assert poller._ocr_handovers[4711] == (hashlib.sha256(SLIP_BYTES).hexdigest(), 1)
+
+
+async def test_an_ocr_pass_clears_the_backstop_entry(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A real OCR judgement ends the journey between the tracks, so the entry
+    # goes: the map stays proportional to the files BETWEEN the tracks, and a
+    # later legitimate round starts at zero instead of inheriting old counts.
+    size = len(SLIP_BYTES)
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_circling_job(size=size),)),
+        ClaimResult(jobs=(_circling_job(92, size=size),)),
+        ClaimResult(jobs=(_circling_job(93, size=size, kind="ocr"),)),
+        ClaimResult(jobs=(_circling_job(94, size=size),)),
+        ClaimResult(jobs=(_circling_job(95, size=size),)),
+    )
+    engine = _Extractor(outcome=ExtractionOutcome.failed(Reason.OCR_FAILED))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        results = [await poller.run_once() for _ in range(5)]
+
+    # The two content passes before the judgement hand over, the OCR pass judges
+    # (failed(ocr_failed) is a judgement of the engine, not of the loop), and the
+    # two passes after it hand over again without tripping anything.
+    assert queue.requeues == [([4711], "ocr")] * 4
+    assert [result.failed for result in results] == [0, 0, 1, 0, 0]
+    assert _backstop_lines(caplog) == []
+    assert poller._ocr_handovers[4711] == (hashlib.sha256(SLIP_BYTES).hexdigest(), 2)
+
+
+async def test_the_backstop_counts_per_file_and_never_logs_a_name(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Two files circle independently and each falls at its own third demanded
+    # handover, one pass apart; and no line of any of these passes carries a
+    # name or a path, only counters and file ids (B6, T-02-56).
+    def second(queue_id: int) -> QueueJob:
+        return _job(
+            queue_id=queue_id,
+            file_id=4712,
+            mime="image/jpeg",
+            size=len(ICON_BYTES),
+            title="Quittung.jpg",
+            path="Belege/Quittung.jpg",
+        )
+
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_circling_job(91, size=len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_circling_job(92, size=len(SLIP_BYTES)), second(95))),
+        ClaimResult(jobs=(_circling_job(93, size=len(SLIP_BYTES)), second(96))),
+        ClaimResult(jobs=(second(97),)),
+    )
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES, 4712: ICON_BYTES}
+    )
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        for _ in range(4):
+            await poller.run_once()
+
+    warnings = _backstop_lines(caplog)
+    assert len(warnings) == 2
+    assert ", 3 demanded handovers" in warnings[0]
+    assert "file id 4711," in warnings[0]
+    assert ", 3 demanded handovers" in warnings[1]
+    assert "file id 4712," in warnings[1]
+    assert queue.requeues == [([4711], "ocr"), ([4711, 4712], "ocr"), ([4712], "ocr")]
+    assert queue.acknowledged[2] == ([], {93: "repeatedly_stuck"})
+    assert queue.acknowledged[3] == ([], {97: "repeatedly_stuck"})
+    for line in _poller_lines(caplog):
+        assert "Beleg" not in line
+        assert "Quittung" not in line
+        assert ".jpg" not in line

@@ -163,6 +163,23 @@ ROUND_WAITING_FOR_RUNNER: Final = "waiting_for_runner"
 # for policy_blocked (#59), a 1.6 companion announcing 3 still qualifies.
 CATCHUP_MIN_GENERATION: Final = 3
 
+# The backstop against a circling file (#25 F3), the analogy of the give-up
+# rule of the claim side (QueueService MAX_DELIVERIES). Why three: the number
+# counts DEMANDED handovers of the same bytes to the OCR track, and the third
+# demand is refused after two handovers really went. Two identical handovers
+# are still legitimate on their own, because a lost requeue answer plus its
+# redelivery (CR-02) looks exactly like that pair; a third demand over the
+# same content hash is the loop of finding F3, which nothing else ever ends,
+# since requeueAs resets the retries the give-up rule counts (pitfall 11).
+OCR_HANDOVER_LIMIT: Final = 3
+
+# The owner approved wording of the backstop warning (#25 F3), one literal so
+# the log line, docs/ocr.md and the audit can be held against each other
+# verbatim. It carries the file id and the count of demanded handovers, three
+# when it fires (two that went plus the refused third), and nothing of the
+# file itself, never a name and never a path (B6, T-02-56).
+BACKSTOP_LINE: Final = "one file circles between the queues, %d demanded handovers to the ocr track with the same bytes, file id %d, written off as failed(repeatedly_stuck)"  # noqa: E501
+
 # How one job of the second track ended, the names of the embedding track since
 # plan 25-07 (worker/embedding.py). They are imported here because this module
 # reads one of them and a caller has always found all three here.
@@ -345,15 +362,26 @@ class RoundResult:
     state: str
     claimed: int = 0
     indexed: int = 0
+    # Final skips only, since #25 F3: a verdict of skipped whose file is in the
+    # OCR handover of this very round is a handover note and not an end state,
+    # so it counts in handed_ocr below and never here. Before the split a
+    # circling file looked like ordinary skipping, 3941 passes long.
     skipped: int = 0
     failed: int = 0
     unchanged: int = 0
     acknowledged: int = 0
-    # Rows this pass moved to a trailing track instead of finishing them.
-    # Counted separately from skipped because they are the opposite of an end
-    # state: the track that had them is done and the next one has not started.
-    # Both tracks are counted here, because the number answers one question,
-    # namely how much of this pass turned into work somewhere else.
+    # Handovers to the two trailing tracks of this round, one field per track
+    # (#25 F3): what the circling of a file is made of is handed_ocr moving
+    # every round while committed stays at zero, and that is only readable
+    # when the handovers stand apart from the final skips above and from the
+    # sum below.
+    handed_ocr: int = 0
+    handed_embed: int = 0
+    # Rows this pass moved to a trailing track instead of finishing them, as
+    # THE QUEUE counted them in its requeue answers. Both tracks in one sum,
+    # because the number answers one question, namely how much of this pass
+    # turned into work somewhere else; the two fields above say which track
+    # this side asked for, this one says what the other side did.
     requeued: int = 0
     # Documents whose vectors this pass wrote. Not a subset of indexed: those
     # were judged in an earlier pass, hours earlier on a first index (D-15).
@@ -688,6 +716,21 @@ class Poller:
         self._gateway: GatewayClient | None = None
         self._queue: DocumentQueue | None = None
         self._held: set[int] = set()
+        # The backstop of #25 F3, per process: file id to (content hash, number
+        # of successful handovers of exactly those bytes to the OCR track). An
+        # entry is advanced in step 3b only when the requeue answered ok, so
+        # the CR-02 redelivery never counts; a real OCR judgement clears it
+        # (_judge_scan), and so does writing the file off. A process restart
+        # empties the map, a deliberate limit documented in docs/ocr.md: the
+        # loop then runs at most two more handovers before the counter bites
+        # again. Cleared entries keep the map proportional to the files
+        # BETWEEN the tracks, never to the instance.
+        self._ocr_handovers: dict[int, tuple[str, int]] = {}
+        # The content hashes of the OCR handovers of the pass in flight, file
+        # id to hash, written at the handover decision and read in step 3b
+        # when the requeue answer is known. Starts over in _work with the
+        # other per pass state.
+        self._handover_hashes: dict[int, str] = {}
         # The refusals of the pass in flight, HTTP status to the number of
         # files, and how many files the pass claimed: the two figures the
         # threshold of E-40-06-02 is decided on. Both start over in _work.
@@ -1361,6 +1404,9 @@ class Poller:
         self._refusal_storages = {}
         self._refused_rows = set()
         self._refused_jobs = {}
+        # The hashes of this pass's OCR handovers (#25 F3), per pass like the
+        # refusal state above it.
+        self._handover_hashes = {}
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
         handover: list[int] = []
@@ -1459,6 +1505,11 @@ class Poller:
             requeued += moved.count
             if moved.ok:
                 self._held.difference_update(queue_ids[file_id] for file_id in file_ids if file_id in queue_ids)
+                if kind == KIND_OCR:
+                    # The backstop counter of #25 F3 moves here and nowhere
+                    # else: only a handover whose requeue answered ok counts,
+                    # so the CR-02 redelivery of a lost answer never does.
+                    self._count_ocr_handovers(file_ids)
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
@@ -1471,15 +1522,25 @@ class Poller:
         _note_gateway_answered()
 
         indexed = sum(1 for verdict in verdicts if verdict.outcome.state is State.INDEXED)
-        skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
+        # Final skips only (#25 F3): a skipped verdict whose file is in the OCR
+        # handover of this round is the handover note of D-07 and counts in
+        # handed_ocr, two fields further. The prefix and the end of the line
+        # are byte identical to before, because resilience.yml and
+        # deploy-harp.yml grep exactly those two pieces.
+        handed = set(handover)
+        skipped = sum(
+            1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED and verdict.job.file_id not in handed
+        )
         LOGGER.info(
             "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d "
-            "requeued=%d embedded=%d committed=%d slots=%d throttled=%d",
+            "handed_ocr=%d handed_embed=%d requeued=%d embedded=%d committed=%d slots=%d throttled=%d",
             len(jobs),
             indexed,
             skipped,
             len(failed),
             unchanged,
+            len(handover),
+            len(embedding),
             requeued,
             len(embedded),
             flush.documents,
@@ -1494,6 +1555,8 @@ class Poller:
             failed=len(failed),
             unchanged=unchanged,
             acknowledged=ack.count,
+            handed_ocr=len(handover),
+            handed_embed=len(embedding),
             requeued=requeued,
             embedded=len(embedded),
         )
@@ -1894,8 +1957,18 @@ class Poller:
         if outcome.state is State.INDEXED:
             outcome = await self._write_or_fail(job, outcome)
         hand_over = self._goes_to_the_ocr_track(outcome)
+        if hand_over and self._third_handover_demanded(job.file_id, read.content_hash):
+            # The backstop of #25 F3: the loop is ended visibly instead of
+            # being fed. failed(repeatedly_stuck) runs through _collect into
+            # the failures of the acknowledgement, the companion records the
+            # verdict and deletes the row, and the admin page names the file.
+            outcome = ExtractionOutcome.failed(Reason.REPEATEDLY_STUCK)
+            hand_over = False
         if hand_over:
             handover.append(job.file_id)
+            # Remembered for step 3b, which advances the backstop counter only
+            # for the handovers whose requeue really went (moved.ok).
+            self._handover_hashes[job.file_id] = read.content_hash
         to_embed = self._goes_to_the_embedding_track(outcome)
         if to_embed:
             embedding.append(job.file_id)
@@ -2096,6 +2169,12 @@ class Poller:
         #
         # ocr_used travels with the verdict even when the engine found nothing,
         # because the time was spent either way.
+        #
+        # And the entry of the backstop goes (#25 F3): a real OCR judgement,
+        # whatever it says, ends the journey between the tracks that the entry
+        # was counting. The map stays proportional to the files BETWEEN the
+        # tracks, and a later legitimate round starts at zero.
+        self._ocr_handovers.pop(job.file_id, None)
         to_embed = self._goes_to_the_embedding_track(outcome)
         if to_embed:
             embedding.append(job.file_id)
@@ -2139,6 +2218,43 @@ class Poller:
         if outcome.state is not State.SKIPPED or outcome.reason is not Reason.NO_TEXT_LAYER:
             return False
         return self._ocr_enabled
+
+    def _third_handover_demanded(self, file_id: int, content_hash: str) -> bool:
+        """True when the content track demands the third handover of the same bytes.
+
+        The backstop of #25 F3, and the counting is deliberately about DEMANDS:
+        the entry carries the handovers that really went, so at
+        ``OCR_HANDOVER_LIMIT - 1`` the demand in hand is the third one, it is
+        refused, and the warning says three because two went and one was
+        refused. Changed bytes never trip it, they are a different entry by
+        hash; a missing entry is a first find or a fresh process, and both get
+        their handovers. Firing clears the entry, so a later legitimate round
+        of the same file, after the catch up of D-31-02 offered it again,
+        starts at zero.
+        """
+        known = self._ocr_handovers.get(file_id)
+        if known is None or known[0] != content_hash or known[1] < OCR_HANDOVER_LIMIT - 1:
+            return False
+        LOGGER.warning(BACKSTOP_LINE, known[1] + 1, file_id)
+        self._ocr_handovers.pop(file_id, None)
+        return True
+
+    def _count_ocr_handovers(self, file_ids: Sequence[int]) -> None:
+        """Advance the backstop counter for the OCR handovers that really went.
+
+        Called from step 3b after a requeue whose answer was ok, with the file
+        ids of the OCR list of this pass. The hash is the one the handover
+        decision wrote down for this pass; the same hash advances the count,
+        changed bytes start over at one, and a file without a noted hash is
+        not of this pass and stays untouched.
+        """
+        for file_id in file_ids:
+            handed_hash = self._handover_hashes.get(file_id)
+            if handed_hash is None:
+                continue
+            known = self._ocr_handovers.get(file_id)
+            count = known[1] + 1 if known is not None and known[0] == handed_hash else 1
+            self._ocr_handovers[file_id] = (handed_hash, count)
 
     def _goes_to_the_embedding_track(self, outcome: ExtractionOutcome) -> bool:
         """True when this document still has to have its vectors written.

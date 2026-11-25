@@ -3120,8 +3120,19 @@ PHP_TREE_HASH_TODAY = "94720fd6c5823d2feca4ac2f8a72045e8e0afc863d28e3e086f7a57ca
 # sed and sha256sum over the CRLF normalised tree: 8c87b872... both ways, and
 # the recipe and the same pipeline over git archive of 7fe3f91c before the
 # step gave 14c4ae4f... (positive control).
+#
+# Moved on 2026-11-25 by plan 45-27, task 3 (issue #25): worker/poller.py ends a
+# circling file after three demanded handovers of the same bytes to the OCR
+# track (OCR_HANDOVER_LIMIT, failed(repeatedly_stuck), one warning with file id
+# and count only) and splits the pass line into final skips and handovers
+# (handed_ocr, handed_embed), prefix and line end byte identical. No file came
+# or went, so PACKAGE_FILES_TODAY stays at 83. Recomputed independently with
+# find, sort, sed and sha256sum over the CRLF normalised tree: 961cd6ae... both
+# ways, and the recipe and the same pipeline over git archive of b5665f27, the
+# last commit before this change, gave 8c87b872... with 83 files
+# (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "8c87b872839db3f129994a8c8add8327ca19b64355c34fd5d4a183725ff8865e"
+PACKAGE_TREE_HASH_TODAY = "961cd6aef0f62bc313c75dff47951ba2941cef60a52c41a25b4a5060c3e77807"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
