@@ -2,7 +2,7 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: 131b45369a27557f693145a3aea65bde1ab65f1e
+audited_head: d3e6d76a047421482af9ea3adcbff42fa0b690d6
 status_45_21: passed
 status_45_09: passed
 
@@ -2543,3 +2543,30 @@ Alle Befunde der Gegenprobe 45-20 und des Reviews 45-21 mit Status; die vollstä
 | R-45-21-06 bis -11, -16 bis -18 | INFO | geschlossen bzw. an 45-10 (R-45-21-08 erster CI-Lauf) und 45-16 (R-45-21-06 unter T-45-74) übergeben |
 
 Stand F3 (I-45-23-01): offen, wartet auf Logs des Melders
+
+## Nachtrag 45-10 (Volltest DE/EN/FR auf dem finalen Kopf)
+
+Stand: 2026-11-25. Kopf 8c02b706 (= origin/main), letzter Commit außerhalb .planning d3e6d76a047421482af9ea3adcbff42fa0b690d6.
+
+### Push und Rebase-Prüfung
+
+- `Freigabe Push 45-10` steht in 45-FREIGABEN.md ("Go", Push aff5f1d3..8c02b706 laut `git reflog show origin/main`: `8c02b706 refs/remotes/origin/main@{2026-11-25 16:21:21 +0100}: update by push`).
+- `git fetch origin` (2026-11-25 15:24 UTC), danach `git rev-list HEAD..origin/main` leer (0 Zeilen), `git merge-base --is-ancestor origin/main HEAD` gelingt. Kein Rebase, deshalb kein Unterabschnitt Rebase.
+
+### CI-Lauf am Kopf 8c02b706
+
+Der eine CI-Warter (B4) ist der Koordinator; er wertet den Lauf `scripts/ci/head_green.sh` für 8c02b706 selbst aus. Dieser Executor startet keinen zweiten Warter. Ausgabe mit Lauf-IDs: vom Koordinator nachzutragen.
+
+### R-45-21-08 erster echter CI-Lauf watermark-59
+
+Erfüllt vor 45-10: Integration-Lauf 45425766124 zu aff5f1d3202d60e6f3b993fe200ed616c54dd206 (`conclusion: success`, 2026-11-24 15:27 UTC), Job 138557213079 `watermark-59 (stable34, 8.2)` `success` (gelesen mit `gh run list --commit aff5f1d3... --workflow integration.yml` und `gh run view 45425766124 --json jobs`).
+
+### Delta-Audit 131b4536 bis d3e6d76a (45-27)
+
+Der Code-Delta seit dem audited_head von 45-21 ist genau Plan 45-27 (17 Dateien, 799+/36-: CHANGELOG EN/DE/FR, repo.py, poller.py, reconcile.py, coverage_truth.sh, QueueMapper.php, FileStateService.php, docs/ocr.md, docs/reconcile.md, Tests und Fixture). Jeder Punkt ist unter `### RED und GREEN 45-27` mit RED, GREEN und den Mutationen M50 bis M58 belegt. Eigene Gegenproben dieses Plans am Kopf:
+
+- B6: die einzige neue Logzeile ist `BACKSTOP_LINE` (poller.py Z. 181) mit `%d demanded handovers` und `file id %d`, kein Name, kein Pfad.
+- Keine neue nutzersichtbare Zeichenkette in einem Katalog und keine Routenänderung: `git diff 131b4536 d3e6d76a -- php/l10n backend/appinfo php/appinfo` und `-- backend/src/findling/api` je 0 Zeilen.
+- QueueMapper.php: außer Kommentaren ändert sich nur die Lesung `$dirtyBefore` vor den beiden Updates und ihre Verwendung in der Rückgabezeile (diff ohne Kommentarzeilen: drei Zeilen).
+
+audited_head (oben im Dokument) steht seit diesem Nachtrag auf d3e6d76a047421482af9ea3adcbff42fa0b690d6.
