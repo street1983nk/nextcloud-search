@@ -455,14 +455,11 @@
     text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
       .replace('%1$s', numbers.format(searchable))
       .replace('%2$s', numbers.format(indexable)))
-    text('findling-coverage-recounting', n('findling', '%s file is searchable. The count of indexable files is being updated, and the share is shown again afterwards.', '%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', searchable)
-      .replace('%s', numbers.format(searchable)))
-    text('findling-coverage-unknown', n('findling', 'The share cannot be worked out right now because the backend does not answer. %s file of this instance is indexable.', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', indexable)
-      .replace('%s', numbers.format(indexable)))
+    text('findling-coverage-recounting', counted(n('findling', '%n file is searchable. The count of indexable files is being updated, and the share is shown again afterwards.', '%n files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', searchable), searchable))
+    text('findling-coverage-unknown', counted(n('findling', 'The share cannot be worked out right now because the backend does not answer. %n file of this instance is indexable.', 'The share cannot be worked out right now because the backend does not answer. %n files of this instance are indexable.', indexable), indexable))
     text('findling-coverage-per-document', t('findling', 'Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.'))
     text('findling-coverage-counting', t('findling', 'The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.'))
-    text('findling-coverage-not-readable', n('findling', '%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure.', '%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', notReadable)
-      .replace('%s', numbers.format(notReadable)))
+    text('findling-coverage-not-readable', counted(n('findling', '%n file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure.', '%n files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', notReadable), notReadable))
     text('findling-coverage-legacy', t('findling', 'This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.'))
     text('findling-coverage-leftout-count', t('findling', 'Deliberately left out: %s')
       .replace('%s', numbers.format(whole(coverage.deliberatelyLeftOut))))
@@ -704,13 +701,11 @@
         .replace('%2$s', numbers.format(whole(estimate.ocrMax)))
       : numbers.format(measured)
 
-    text('findling-estimate-line', n('findling', '%1$s file, %2$s with OCR. About %3$s and about %4$s of index.', '%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.', whole(estimate.files))
-      .replace('%1$s', numbers.format(whole(estimate.files)))
+    text('findling-estimate-line', counted(n('findling', '%n file, %2$s with OCR. About %3$s and about %4$s of index.', '%n files, %2$s of them need OCR. About %3$s and about %4$s of index.', whole(estimate.files)), whole(estimate.files))
       .replace('%2$s', share)
       .replace('%3$s', span(seconds === null ? 0 : seconds))
       .replace('%4$s', size(bytes === null ? 0 : bytes)))
-    text('findling-estimate-line-short', n('findling', '%1$s file, %2$s with OCR.', '%1$s files, %2$s of them need OCR.', whole(estimate.files))
-      .replace('%1$s', numbers.format(whole(estimate.files)))
+    text('findling-estimate-line-short', counted(n('findling', '%n file, %2$s with OCR.', '%n files, %2$s of them need OCR.', whole(estimate.files)), whole(estimate.files))
       .replace('%2$s', share))
     text('findling-estimate-counting-text', t('findling', 'Counting the files, this takes a moment.') + ' ' +
       t('findling', 'Provisional figure, %1$s of %2$s storages have been counted through.')
@@ -2182,6 +2177,20 @@
   }
 
   /**
+   * A counted sentence of n(), with the count in the figure of the locale.
+   *
+   * The catalogue keys carry the count as %n, the placeholder the server side
+   * $l->n needs to pick a form (V-45-10-05); n() puts it in as plain digits, and
+   * the first standalone run of exactly those digits is swapped for the figure
+   * numbers.format gives every other number of this page. %n stands before every
+   * other placeholder in every catalogue, which a gate holds.
+   */
+  function counted (sentence, value) {
+    const pattern = new RegExp('(?<![\\d.,%$])' + String(value) + '(?![\\d.,])')
+    return sentence.replace(pattern, function () { return numbers.format(value) })
+  }
+
+  /**
    * The placeholders of a catalogue sentence, filled in one pass.
    *
    * One regular expression with a function replacement, so neither a dollar
@@ -2344,11 +2353,11 @@
     // duration only out of a rate this box measured.
     const seconds = precision === 'fp32' ? profile.secondsFp32 : profile.secondsInt8
     text('findling-profile-reindex-long', fill(
-      n('findling', 'Re-embedding of %1$s document, estimated about %2$s. Full text search stays fully available.', 'Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.', whole(profile.documents)),
-      [count(profile.documents), span(seconds === null ? 0 : seconds)]))
+      counted(n('findling', 'Re-embedding of %n document, estimated about %2$s. Full text search stays fully available.', 'Re-embedding of %n documents, estimated about %2$s. Full text search stays fully available.', whole(profile.documents)), whole(profile.documents)),
+      ['', span(seconds === null ? 0 : seconds)]))
     text('findling-profile-reindex-short', fill(
-      n('findling', 'Re-embedding of %s document. Full text search stays fully available.', 'Re-embedding of %s documents. Full text search stays fully available.', whole(profile.documents)),
-      [count(profile.documents)]))
+      counted(n('findling', 'Re-embedding of %n document. Full text search stays fully available.', 'Re-embedding of %n documents. Full text search stays fully available.', whole(profile.documents)), whole(profile.documents)),
+      []))
     shown('findling-profile-reindex-long', seconds !== null)
     shown('findling-profile-reindex-short', seconds === null)
     shown('findling-profile-reindex', precision !== profile.precision)

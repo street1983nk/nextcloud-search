@@ -164,6 +164,28 @@ $count = static function (int $value) use ($l): string {
 };
 
 /**
+ * A counted sentence of $l->n, with the count in the figure of the locale.
+ *
+ * Nextcloud picks the singular or plural form only through %n: L10NString
+ * hands the number to the translator when the forms carry %n and passes both
+ * forms joined otherwise, which vsprintf then refuses (the page answered 500 in
+ * the full test 45-10). %n arrives as plain digits, so the first standalone
+ * run of exactly those digits, the count, is swapped for the figure $count
+ * gives every other number of this page; %n stands before every other
+ * placeholder in every catalogue, which a gate holds (V-45-10-05).
+ */
+$counted = static function (string $sentence, int $value) use ($count): string {
+	$figure = $count($value);
+
+	return (string)preg_replace_callback(
+		'/(?<![\d.,%$])' . $value . '(?![\d.,])/',
+		static fn (): string => $figure,
+		$sentence,
+		1,
+	);
+};
+
+/**
  * A size in the notation of this admin, unit and all.
  *
  * Written here rather than taken from Util::humanFileSize, which always puts a
@@ -507,11 +529,11 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	<p class="settings-hint" id="findling-coverage-subline"<?php if (!$hasFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($searchable), $count($indexable)])); ?></p>
 	<p class="settings-hint" id="findling-coverage-per-document"<?php if (!$perDocumentHint) { ?> hidden<?php } ?>><?php p($l->t('Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.')); ?></p>
 	<p class="settings-hint" id="findling-coverage-counting"<?php if (!$counting) { ?> hidden<?php } ?>><?php p($l->t('The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.')); ?></p>
-	<p class="settings-hint" id="findling-coverage-not-readable"<?php if ($notReadable === 0) { ?> hidden<?php } ?>><?php p($l->n('%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure.', '%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', $notReadable, [$count($notReadable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-not-readable"<?php if ($notReadable === 0) { ?> hidden<?php } ?>><?php p($counted($l->n('%n file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure.', '%n files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', $notReadable), $notReadable)); ?></p>
 	<p class="settings-hint" id="findling-coverage-legacy"<?php if (!$legacyLimits) { ?> hidden<?php } ?>><?php p($l->t('This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.')); ?></p>
-	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting || $counting) { ?> hidden<?php } ?>><?php p($l->n('%s file is searchable. The count of indexable files is being updated, and the share is shown again afterwards.', '%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', $searchable, [$count($searchable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting || $counting) { ?> hidden<?php } ?>><?php p($counted($l->n('%n file is searchable. The count of indexable files is being updated, and the share is shown again afterwards.', '%n files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', $searchable), $searchable)); ?></p>
 
-	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting || $counting) { ?> hidden<?php } ?>><?php p($l->n('The share cannot be worked out right now because the backend does not answer. %s file of this instance is indexable.', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', $indexable, [$count($indexable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting || $counting) { ?> hidden<?php } ?>><?php p($counted($l->n('The share cannot be worked out right now because the backend does not answer. %n file of this instance is indexable.', 'The share cannot be worked out right now because the backend does not answer. %n files of this instance are indexable.', $indexable), $indexable)); ?></p>
 
 	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
 		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
@@ -742,13 +764,13 @@ $estimateOcrText = $estimateOcrMeasured === null
 // whole answer in that minute.
 $estimateHasFiles = $estimateFiles > 0;
 $estimateComplete = $estimateHasFiles && $estimateSeconds !== null && $estimateBytes !== null;
-$estimateFullLine = $l->n('%1$s file, %2$s with OCR. About %3$s and about %4$s of index.', '%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.', $estimateFiles, [
-	$count($estimateFiles),
+$estimateFullLine = $counted($l->n('%n file, %2$s with OCR. About %3$s and about %4$s of index.', '%n files, %2$s of them need OCR. About %3$s and about %4$s of index.', $estimateFiles, [
+	'',
 	$estimateOcrText,
 	$span($estimateSeconds ?? 0),
 	$size($estimateBytes ?? 0),
-]);
-$estimateShortLine = $l->n('%1$s file, %2$s with OCR.', '%1$s files, %2$s of them need OCR.', $estimateFiles, [$count($estimateFiles), $estimateOcrText]);
+]), $estimateFiles);
+$estimateShortLine = $counted($l->n('%n file, %2$s with OCR.', '%n files, %2$s of them need OCR.', $estimateFiles, ['', $estimateOcrText]), $estimateFiles);
 
 // Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
 // commit in THIRD-PARTY.md.
@@ -1483,8 +1505,8 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 ?>
 	<p class="findling-banner findling-banner--info" id="findling-profile-reindex" hidden>
 		<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($infoIcon); ?>"/></svg>
-		<span class="findling-banner__text" id="findling-profile-reindex-long"<?php if ($reindexSeconds === null) { ?> hidden<?php } ?>><?php p($l->n('Re-embedding of %1$s document, estimated about %2$s. Full text search stays fully available.', 'Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.', $reindexDocuments, [$count($reindexDocuments), $span($reindexSeconds ?? 0)])); ?></span>
-		<span class="findling-banner__text" id="findling-profile-reindex-short"<?php if ($reindexSeconds !== null) { ?> hidden<?php } ?>><?php p($l->n('Re-embedding of %s document. Full text search stays fully available.', 'Re-embedding of %s documents. Full text search stays fully available.', $reindexDocuments, [$count($reindexDocuments)])); ?></span>
+		<span class="findling-banner__text" id="findling-profile-reindex-long"<?php if ($reindexSeconds === null) { ?> hidden<?php } ?>><?php p($counted($l->n('Re-embedding of %n document, estimated about %2$s. Full text search stays fully available.', 'Re-embedding of %n documents, estimated about %2$s. Full text search stays fully available.', $reindexDocuments, ['', $span($reindexSeconds ?? 0)]), $reindexDocuments)); ?></span>
+		<span class="findling-banner__text" id="findling-profile-reindex-short"<?php if ($reindexSeconds !== null) { ?> hidden<?php } ?>><?php p($counted($l->n('Re-embedding of %n document. Full text search stays fully available.', 'Re-embedding of %n documents. Full text search stays fully available.', $reindexDocuments), $reindexDocuments)); ?></span>
 	</p>
 
 	<div id="findling-profile-env"<?php if ($envValues === []) { ?> hidden<?php } ?>>

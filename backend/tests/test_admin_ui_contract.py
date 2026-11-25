@@ -2285,8 +2285,9 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
     assert before not in catalogue_of(L10N_JSON)
     # Since V-45-10-05 (plan 45-10) the sentence is the plural half of a key
     # with its own singular, so one searchable file no longer reads "1 files".
-    singular = sentence.replace("%s files are searchable.", "%s file is searchable.")
-    assert f"_{singular}_::_{sentence}_" in catalogue_of(L10N_JSON)
+    plural = sentence.replace("%s", "%n")
+    singular = plural.replace("%n files are searchable.", "%n file is searchable.")
+    assert f"_{singular}_::_{plural}_" in catalogue_of(L10N_JSON)
 
     assert "$recounting = ($coverage['recounting'] ?? false) === true;" in template
     # Since plan 43-06 neither sentence stands while the per document count
@@ -2299,7 +2300,7 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
         'id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting || $counting) { ?> '
         "hidden" in template
     )
-    assert sentence in template
+    assert f"'{singular}', '{plural}', $searchable)" in template
 
     assert "const recounting = hasDenominator && coverage.recounting === true" in script
     assert "shown('findling-coverage-recounting', recounting && !counting)" in script
@@ -2307,7 +2308,7 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
         "shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true "
         "&& !counting)" in script
     )
-    assert sentence in script
+    assert f"'{singular}', '{plural}', searchable)" in script
     assert "coverage.percent, coverage.recounting," in script
 
 
@@ -2748,9 +2749,12 @@ NOT_READABLE_SENTENCE = (
 # The singular of V-45-10-05 (plan 45-10, owner "Ok" 2026-11-25): one file no
 # longer reads "1 files"; the plural above is the accepted line of 43-TEXTE.md.
 NOT_READABLE_SINGULAR = (
-    "%s file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure."
+    "%n file could not be read or got stuck repeatedly. It counts as not searchable and lowers the coverage figure."
 )
-NOT_READABLE_KEY = f"_{NOT_READABLE_SINGULAR}_::_{NOT_READABLE_SENTENCE}_"
+# The catalogue key carries the count as %n, the placeholder $l->n picks the
+# form by; the accepted line keeps its %s.
+NOT_READABLE_PLURAL = NOT_READABLE_SENTENCE.replace("%s", "%n")
+NOT_READABLE_KEY = f"_{NOT_READABLE_SINGULAR}_::_{NOT_READABLE_PLURAL}_"
 LEGACY_SENTENCE = (
     "This instance has more storages than the count per document can handle. The figure is therefore "
     "counted per storage as in version 1.6.2, and a file mounted for several users can stand in it "
@@ -2796,7 +2800,7 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
     assert (
         '<p class="settings-hint" id="findling-coverage-not-readable"'
         "<?php if ($notReadable === 0) { ?> hidden<?php } ?>>"
-        f"<?php p($l->n('{NOT_READABLE_SINGULAR}', '{NOT_READABLE_SENTENCE}', $notReadable, [$count($notReadable)]));"
+        f"<?php p($counted($l->n('{NOT_READABLE_SINGULAR}', '{NOT_READABLE_PLURAL}', $notReadable), $notReadable));"
         " ?></p>" in template
     )
     assert (
@@ -2818,8 +2822,8 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
     assert f"text('findling-coverage-per-document', t('findling', '{PER_DOCUMENT_HINT_SENTENCE}'))" in script
     assert f"text('findling-coverage-counting', t('findling', '{COUNTING_SENTENCE}'))" in script
     assert (
-        f"text('findling-coverage-not-readable', n('findling', '{NOT_READABLE_SINGULAR}', '{NOT_READABLE_SENTENCE}',"
-        " notReadable)" in script
+        f"text('findling-coverage-not-readable', counted(n('findling', '{NOT_READABLE_SINGULAR}',"
+        f" '{NOT_READABLE_PLURAL}', notReadable), notReadable))" in script
     )
     assert f"text('findling-coverage-legacy', t('findling', '{LEGACY_SENTENCE}'))" in script
     assert "coverage.counting, coverage.perDocumentHint, coverage.notReadable, coverage.legacyReason," in script
@@ -2847,7 +2851,8 @@ def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> Non
             assert key in catalogue_of(catalogue), (catalogue.name, block)
         for catalogue, tag in ((L10N_JSON, "DE"), (L10N_DE_DE_JSON, "DE"), (L10N_FR_JSON, "FR")):
             value = catalogue_of(catalogue)[key]
-            assert (value[-1] if isinstance(value, list) else value) == accepted[f"{tag}-{block}"], block
+            form = value[-1].replace("%n", "%s") if isinstance(value, list) else value
+            assert form == accepted[f"{tag}-{block}"], block
 
 
 #: The one sentence of plan 40-06 (E-40-06-04, issue #36 Befund D), written out

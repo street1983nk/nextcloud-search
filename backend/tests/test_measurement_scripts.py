@@ -1603,8 +1603,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # pipeline of find, sort, sed and sha256sum over the same tree gave 00bf7160 as well; the recipe
 # and the pipeline over git archive of 8988ba79, the last commit before this change, gave
 # d5834a55 with 148 files (positive control).
+# Moved on 2026-11-25 a second time by plan 45-10: $l->n picks a form only through %n and
+# answered 500 with the %s sentences, so the seven counted sentences of templates/admin.php
+# carry their count as %n and the new $counted gives it the figure of the locale. No file came
+# or went. The recipe gave b7faf372; the independent pipeline gave b7faf372 as well; the recipe
+# and the pipeline over git archive of d5efe7cd, the last commit before this change, gave
+# 00bf7160 with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "00bf71604578f2b2c0d0f752bc6a601e67431f016e1a03f8f02494af11dca3ac"
+PHP_TREE_HASH_TODAY = "b7faf372f598c1e759c4d71331151da2544b46bafbdd49dbeed7a84d4958a4fd"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

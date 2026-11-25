@@ -3485,8 +3485,10 @@ def test_the_superseded_sentence_is_the_old_remedy_of_unreadable_and_an_accepted
     assert ACCEPTED_SENTENCES_1_6_3[_SUPERSEDED_INDEX] not in _german_catalogue()
     # V-45-10-05: the plain key left, its accepted German is the plural form of the new key.
     assert not_readable not in _german_catalogue()
-    plural_key = next(key for key in _german_catalogue() if key.endswith(f"_::_{not_readable}_"))
-    assert cast("list[str]", _german_catalogue()[plural_key])[1] == SUPERSEDED_IN_1_7_0[not_readable]
+    counted = not_readable.replace("%s", "%n")
+    plural_key = next(key for key in _german_catalogue() if key.endswith(f"_::_{counted}_"))
+    form = cast("list[str]", _german_catalogue()[plural_key])[1]
+    assert form.replace("%n", "%s") == SUPERSEDED_IN_1_7_0[not_readable]
 
 
 def test_a_superseded_sentence_is_checked_against_the_listing_only() -> None:
