@@ -458,6 +458,61 @@ denen der zweite mit `Failed to load page` endet. Ohne den Deckel wäre die
 Schleife hunderttausend Fehlversuche lang. Die Datei liegt genau dafür im
 Korpus (Bedrohung T-03-601), und sie ist in unter zehn Millisekunden fertig.
 
+## Backstop gegen kreisende Übergaben (#25, 1.7.0)
+
+Ein Bild oder ein Scan geht von der Textspur in die OCR-Spur über
+`skipped(no_text_layer)` und die Übergabe per Requeue. Bei einem Melder kamen
+32 Bilder über Tage jede Runde wieder als Inhaltsaufgabe zurück, wurden erneut
+übergeben und kamen wieder, ohne dass je ein OCR-Urteil fiel. Die Give-up-Regel
+der Claim-Seite griff nie, weil `requeueAs` den Auslieferungszähler beim
+Spurwechsel bewusst auf null setzt. Seit 1.7.0 beendet der Container eine
+solche Schleife selbst.
+
+- **Schwelle:** `OCR_HANDOVER_LIMIT = 3` in `worker/poller.py`. Gezählt werden
+  die VERLANGTEN Übergaben derselben Bytes an die OCR-Spur. Zwei identische
+  Übergaben sind noch legitim (eine verlorene Requeue-Antwort plus ihre
+  Wiederholung sieht genau so aus); die dritte wird verweigert.
+- **Hash-Kriterium:** Verglichen wird der `content_hash` der gelesenen Bytes.
+  Geänderte Bytes sind ein neuer Anlauf und zählen wieder bei eins.
+- **Nur erfolgreiche Übergaben zählen:** Der Zähler bewegt sich erst, wenn der
+  Requeue mit Erfolg antwortete. Eine Übergabe, deren Antwort verloren ging
+  (CR-02), zählt nicht.
+- **Ein OCR-Urteil räumt den Eintrag:** Liest die OCR-Spur die Datei und fällt
+  ein Urteil, gleich welches, beginnt der Zähler für spätere Runden wieder bei
+  null. Die Merkliste bleibt damit so klein wie die Zahl der Dateien zwischen
+  den Spuren.
+- **Bewusste Grenze:** Die Merkliste lebt im Prozess. Ein Neustart des
+  Containers leert sie; eine Schleife läuft dann höchstens zwei weitere
+  Übergaben, bevor der Zähler wieder greift.
+- **Ende:** Die Datei endet als `failed(repeatedly_stuck)`. Die Quittung trägt
+  den Grund auf die Nextcloud-Seite, die Zeile verschwindet aus der
+  Warteschlange, und die Verwaltungsseite führt die Datei mit dem bestehenden
+  Satz für diesen Grund. Im Backend-Log steht genau eine Warnzeile, nur mit
+  Anzahl und Datei-ID, nie mit Name oder Pfad:
+
+  ```
+  one file circles between the queues, 3 demanded handovers to the ocr track with the same bytes, file id <id>, written off as failed(repeatedly_stuck)
+  ```
+
+- **Deckungsgrad:** Die abgeschriebene Datei zählt im Nenner der
+  Verwaltungsseite genau einmal. Der Container lässt
+  `failed(repeatedly_stuck)` aus seiner Zahl der beurteilten Dokumente heraus
+  und überlässt den Grund der Nextcloud-Seite, die ihn über
+  `PHP_ONLY_NOT_READABLE` zählt (wie bei `skipped(unreadable)`, D-43-16).
+- **Wiedereinstieg:** Nach einem Update bietet der Nachholweg (D-31-02) jede
+  `failed(repeatedly_stuck)`-Zeile genau einmal neu an; dann gelten zu Recht
+  wieder drei Chancen.
+
+Dazu ist die Zeile `pass finished` diagnostizierbar geworden. Sie trägt
+`handed_ocr` und `handed_embed` als eigene Felder, die Übergaben dieser Runde
+an die OCR- bzw. Embedding-Spur, und `skipped` zählt nur noch endgültige
+Skips. Ein Kreisen sieht man jetzt daran, dass `handed_ocr` Runde für Runde
+steht, während `committed` bei null bleibt. Anfang (`pass finished,
+claimed=`) und Ende (`slots=%d throttled=%d`) der Zeile sind unverändert.
+
+Die Ursache des Kreisens beim Melder ist damit nicht behoben, nur eingedämmt;
+sie wartet auf dessen Datenbankabfrage (Folge-Punkt I-45-27-01 im Audit).
+
 ## Die DACH-Abnahme, und warum sie kein Rohtextvergleich ist
 
 Die Abnahme zu D-09 prüft, dass ein Schweizer Dokument mit der Schreibweise ss

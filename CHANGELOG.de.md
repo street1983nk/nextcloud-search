@@ -44,6 +44,10 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   so lange gewartet wie sein Intervall (standardmäßig zwei Tage), läuft er
   trotzdem, nie während eines Crawls, und die Verwaltungsseite zeigt an,
   wenn er länger als sein Intervall gewartet hat (#25).
+- Eine Datei kann nicht mehr endlos zwischen den Warteschlangen kreisen: nach
+  drei Durchläufen über dieselben unveränderten Bytes wird sie als
+  fehlgeschlagen auf der Verwaltungsseite geführt, statt erneut übergeben zu
+  werden (#25).
 - Eine Datei unter dem Wasserzeichen von Nextcloud Office, zum Beispiel ohne
   Download geteilt, wird im Namen ihres Besitzers oder eines anderen Nutzers
   gelesen, der sie lesen darf, statt als "Datei war nicht abrufbar" zu enden;

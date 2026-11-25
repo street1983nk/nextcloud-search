@@ -68,6 +68,15 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
    50.000 Dateien ist das Dauerlast, deren Ursache in keinem Zähler der App
    sichtbar ist.
 
+   Seit 1.7.0 entsteht `failed(repeatedly_stuck)` nicht mehr nur auf der
+   Nextcloud-Seite: der Backstop des Containers schreibt es selbst, wenn eine
+   Datei zum dritten Mal mit denselben Bytes an die OCR-Spur übergeben werden
+   soll (#25, `docs/ocr.md`, Abschnitt "Backstop gegen kreisende Übergaben").
+   Eine solche Datei ist dem Container bekannt und trägt hier ein Urteil; sie
+   ruht über den gewöhnlichen ETag-Vergleich, bis ihre Bytes sich ändern. Das
+   Paar des nächsten Abschnitts greift bei ihr nicht, weil es auf der
+   Container-Seite `skipped(no_text_layer)` verlangt.
+
    Und eine Ausnahme von dieser Ausnahme, siehe den nächsten Abschnitt: trägt
    der Container für dieselbe Datei `skipped(no_text_layer)`, ist das
    Endurteil der Nextcloud-Seite kein Endurteil, sondern eine verlorene

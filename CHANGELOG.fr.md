@@ -47,6 +47,9 @@ dans [CHANGELOG.md](CHANGELOG.md).
   deux fois son intervalle (deux jours par défaut), elle a lieu malgré tout,
   jamais pendant un crawl, et la page d'administration indique quand elle a
   attendu plus longtemps que son intervalle (#25).
+- Un fichier ne peut plus tourner sans fin entre les files d'attente : après
+  trois passages sur les mêmes octets inchangés, il est marqué comme échoué
+  sur la page d'administration au lieu d'être transmis à nouveau (#25).
 - Un fichier soumis au filigrane de Nextcloud Office, par exemple partagé sans
   téléchargement, est lu au nom de son propriétaire ou d'un autre utilisateur
   autorisé à le lire, au lieu de finir en « Fichier non récupérable » ; les

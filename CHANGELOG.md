@@ -41,6 +41,9 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   holds the comparison run back for good. Once it has waited twice its
   interval (two days by default), it runs anyway, never during a crawl, and
   the admin page says when it has waited longer than its interval (#25).
+- A file can no longer circle endlessly between the queues: after three
+  passes over the same unchanged bytes it is listed as failed on the admin
+  page instead of being handed over again (#25).
 - A file under the watermark of Nextcloud Office, for example shared without
   download, is read in the name of its owner or of another user allowed to
   read it, instead of ending as "File was not retrievable"; audit logs name
