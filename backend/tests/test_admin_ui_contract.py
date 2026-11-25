@@ -6777,3 +6777,77 @@ def test_the_coloured_sentences_outrank_the_muted_paragraphs_of_a_settings_secti
     )
     assert scan_stylesheet_for_outranked_colours("sample.css", two) == []
     assert len(scan_stylesheet_for_outranked_colours("sample.css", two.replace("--color-error-text", "--x"))) == 1
+
+
+# Finding V-45-10-05 of the full test 45-10 (owner "Ok" 2026-11-25 17:23 UTC,
+# option a): a number directly in front of a plural noun read "1 files could
+# not be read" and "also removes 1 already indexed documents" in every language
+# (in French also at 0). A sentence that counts a noun goes through n() or
+# $l->n with a singular and a plural form; a plain t() may only carry such a
+# figure where it can never be one, and that sentence is named below with its
+# reason. "x of y <noun>" keeps the plural of the whole and is not judged here.
+COUNTED_NOUN = re.compile(
+    r"(?<!%s of )(?<!\$s of )(?<![0-9] of )%(?:\d\$)?[sn] (?:[a-z-]+ ){0,2}?"
+    r"(?:files|documents|pages|entries|folders|patterns|storages|slots|users|chunks|minutes|hours|days)\b"
+)
+PLAIN_TRANSLATION_CALL = re.compile(r"(?:\bt\('findling',\s*|\$l->t\()'((?:[^'\\]|\\.)*)'")
+COUNTED_NOUN_EXCEPTIONS: dict[str, str] = {
+    "At most %s folders can be excluded.": "the bound of the list, a constant of 64",
+    "At most %s patterns are allowed.": "the bound of the list, a constant of 32",
+    "OCR with %s slots": "the label of two slots and more, one slot has a sentence of its own",
+}
+# Two more sentences the gate found that the owner's approval of V-45-10-05 does
+# not cover; they can read "1" only under a deploy option an admin sets
+# (FINDLING_OCR_MAX_PAGES=1, FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1). Finding
+# V-45-10-06, held open here by name until their wording is approved.
+COUNTED_NOUN_AWAITING_OWNER: dict[str, str] = {
+    "OCR limit %1$s pages per file, set by %2$s": "V-45-10-06, FINDLING_OCR_MAX_PAGES=1",
+    (
+        "Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again."
+        ' Run "%2$s" to apply it at once.'
+    ): "V-45-10-06, FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1",
+}
+COUNTED_NOUN_SOURCES = (SCRIPT, TEMPLATE, PAGE_SCRIPT, PAGE_TEMPLATE, REPO_ROOT / "php" / "js" / "unified-search.js")
+
+
+def scan_for_counted_nouns_without_plural(name: str, source: str) -> list[str]:
+    """Findings: a plain translation whose number stands right before a plural noun."""
+    return [
+        f"{name}: {match.group(1)!r} counts a noun without a singular form, use n() or $l->n"
+        for match in PLAIN_TRANSLATION_CALL.finditer(source)
+        if match.group(1) not in COUNTED_NOUN_EXCEPTIONS
+        and match.group(1) not in COUNTED_NOUN_AWAITING_OWNER
+        and COUNTED_NOUN.search(match.group(1)) is not None
+    ]
+
+
+def test_no_number_stands_before_a_plural_noun_without_a_singular_form() -> None:
+    """Finding V-45-10-05: every counted noun of the pages has its singular.
+
+    **What this gate does not prove.** It reads the English source strings and
+    knows the nouns of this app; a translation that drops the singular form in
+    one catalogue is held by the placeholder and plural gates of the catalogues.
+    """
+    findings = [
+        finding
+        for path in COUNTED_NOUN_SOURCES
+        for finding in scan_for_counted_nouns_without_plural(path.name, path.read_text(encoding="utf-8"))
+    ]
+    assert findings == []
+    # The exceptions are still in the sources, so none of them is a dead entry.
+    sources = "".join(path.read_text(encoding="utf-8") for path in COUNTED_NOUN_SOURCES)
+    for sentence in [*COUNTED_NOUN_EXCEPTIONS, *COUNTED_NOUN_AWAITING_OWNER]:
+        assert f"'{sentence}'" in sources, sentence
+    # Positive controls: the shapes of the finding go red, the ratio and n() stay green.
+    dirty = (
+        "t('findling', '%s files could not be read.')\n"
+        "$l->t('Excluding %1$s also removes %2$s already indexed documents.', [$a, $b])\n"
+        "t('findling', 'Re-embedding of %s documents.')\n"
+    )
+    assert len(scan_for_counted_nouns_without_plural("sample.js", dirty)) == 3
+    clean = (
+        "t('findling', '%1$s of %2$s indexable files are searchable')\n"
+        "n('findling', '%s file could not be read.', '%s files could not be read.', count)\n"
+        "$l->n('%s file is searchable.', '%s files are searchable.', $count, [$shown])\n"
+    )
+    assert scan_for_counted_nouns_without_plural("sample.js", clean) == []
