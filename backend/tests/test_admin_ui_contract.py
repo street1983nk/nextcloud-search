@@ -6698,3 +6698,82 @@ def test_the_share_identity_counters_are_five_whole_numbers_and_no_sentence() ->
     for half in (template, script):
         assert "shareIdentity" not in half
         assert "hashedUngrouped" not in half
+
+
+# The coloured sentences of the admin page and the colour token each of them is
+# drawn in (UI-SPEC of phase 45: field error in the error text colour, a list
+# with one or no slot left and the marking of an old folder entry in the warning
+# text colour). Nextcloud's own settings.css colours every paragraph of a
+# settings section with `.section p { color: var(--color-text-maxcontrast) }`
+# (Nextcloud 34.0.3, read in the browser in the full test of plan 45-10), and
+# a selector of one class loses against one class and one element: all three
+# sentences rendered in the muted grey, the colour of the contract never showed.
+COLOURED_SENTENCES: dict[str, str] = {
+    "findling-rules__error": "--color-error-text",
+    "findling-rules__slots--low": "--color-warning-text",
+    "findling-rules__row-warning": "--color-warning-text",
+}
+SECTION_PARAGRAPH_SPECIFICITY = (0, 1, 1)
+
+
+def selector_specificity(selector: str) -> tuple[int, int, int]:
+    """Ids, classes with attributes and pseudo classes, elements of one plain CSS selector."""
+    plain = re.sub(r"::[\w-]+", " x", selector)
+    ids = len(re.findall(r"#[\w-]+", plain))
+    classes = len(re.findall(r"\.[\w-]+|\[[^\]]*\]|:[\w-]+", plain))
+    elements = len(re.findall(r"(?:^|[\s>+~])([a-zA-Z][\w-]*)", plain))
+    return ids, classes, elements
+
+
+def scan_stylesheet_for_outranked_colours(name: str, source: str) -> list[str]:
+    """Findings: a coloured sentence whose colour rule loses against `.section p`."""
+    without_comments = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    rules = [
+        (match.group("selectors"), match.group("body"))
+        for match in re.finditer(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", without_comments)
+    ]
+    findings: list[str] = []
+    for css_class, token in COLOURED_SENTENCES.items():
+        best: tuple[int, int, int] | None = None
+        for selectors, body in rules:
+            if re.search(rf"(?<![\w-])color:\s*var\({re.escape(token)}\)", body) is None:
+                continue
+            for selector in (part.strip() for part in selectors.split(",")):
+                if re.search(rf"\.{re.escape(css_class)}$", selector) is None:
+                    continue
+                score = selector_specificity(selector)
+                best = score if best is None or score > best else best
+        if best is None:
+            findings.append(f"{name}: no rule draws .{css_class} in {token}")
+        elif best <= SECTION_PARAGRAPH_SPECIFICITY:
+            findings.append(
+                f"{name}: .{css_class} is drawn in {token} by a selector of specificity {best}, "
+                f"which .section p {SECTION_PARAGRAPH_SPECIFICITY} of Nextcloud outranks"
+            )
+    return findings
+
+
+def test_the_coloured_sentences_outrank_the_muted_paragraphs_of_a_settings_section() -> None:
+    """Finding of the full test 45-10: field errors, low slots and old entries showed grey.
+
+    **What this gate does not prove.** It compares specificities with the one
+    rule of Nextcloud that was seen winning; a later rule of the theme with a
+    stronger selector would pass here, which is why the full test reads the
+    computed colour of every coloured sentence in the browser.
+    """
+    assert scan_stylesheet_for_outranked_colours(STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8")) == []
+    # The specificity reader counts what it should.
+    assert selector_specificity(".section p") == SECTION_PARAGRAPH_SPECIFICITY
+    assert selector_specificity(".section .findling-rules__error") == (0, 2, 0)
+    assert selector_specificity("#findling-rules .findling-rules__row-warning") == (1, 1, 0)
+    # And it goes red on the shape the page shipped with, a single class each,
+    # and on a rule that forgot the colour; green on two classes.
+    single = "".join(
+        f".{css_class} {{\n\tcolor: var({token});\n}}\n" for css_class, token in COLOURED_SENTENCES.items()
+    )
+    assert len(scan_stylesheet_for_outranked_colours("sample.css", single)) == len(COLOURED_SENTENCES)
+    two = single.replace("\n.", "\n.section .").replace(
+        ".findling-rules__error {", ".section .findling-rules__error {", 1
+    )
+    assert scan_stylesheet_for_outranked_colours("sample.css", two) == []
+    assert len(scan_stylesheet_for_outranked_colours("sample.css", two.replace("--color-error-text", "--x"))) == 1
