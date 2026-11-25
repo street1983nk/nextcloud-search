@@ -2,7 +2,7 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: d3e6d76a047421482af9ea3adcbff42fa0b690d6
+audited_head: b9ace7bd90750834e2c84ddb8e2b6bc9c551c3a1
 status_45_21: passed
 status_45_09: passed
 
@@ -2555,7 +2555,7 @@ Stand: 2026-11-25. Kopf 8c02b706 (= origin/main), letzter Commit außerhalb .pla
 
 ### CI-Lauf am Kopf 8c02b706
 
-Der eine CI-Warter (B4) ist der Koordinator; er wertet den Lauf `scripts/ci/head_green.sh` für 8c02b706 selbst aus. Dieser Executor startet keinen zweiten Warter. Ausgabe mit Lauf-IDs: vom Koordinator nachzutragen.
+Der eine CI-Warter (B4) ist der Koordinator; er hat den Lauf `scripts/ci/head_green.sh` für 8c02b706 selbst ausgewertet, dieser Executor startete keinen zweiten Warter. Ergebnis laut Koordinator (2026-11-25): CI 8/8 success, darunter Integration 45644218526 und HaRP deploy 45644218559; der Workflow security lint wurde wegen seines paths-Filters nicht ausgelöst. Das Log des HaRP-deploy-Laufs 45644218559 enthält keine echte Zeile "part A candidate" oder "part B candidate", die Treffer der Suche sind nur die mitgeloggten Skriptquellen (Hinweis aus 45-27 zum repeatedly_stuck-Bestand, I-45-10-05: INFO, kein Befund).
 
 ### R-45-21-08 erster echter CI-Lauf watermark-59
 
@@ -2569,4 +2569,19 @@ Der Code-Delta seit dem audited_head von 45-21 ist genau Plan 45-27 (17 Dateien,
 - Keine neue nutzersichtbare Zeichenkette in einem Katalog und keine Routenänderung: `git diff 131b4536 d3e6d76a -- php/l10n backend/appinfo php/appinfo` und `-- backend/src/findling/api` je 0 Zeilen.
 - QueueMapper.php: außer Kommentaren ändert sich nur die Lesung `$dirtyBefore` vor den beiden Updates und ihre Verwendung in der Rückgabezeile (diff ohne Kommentarzeilen: drei Zeilen).
 
-audited_head (oben im Dokument) steht seit diesem Nachtrag auf d3e6d76a047421482af9ea3adcbff42fa0b690d6.
+audited_head (oben im Dokument) stand nach diesem Abschnitt auf d3e6d76a047421482af9ea3adcbff42fa0b690d6 und steht seit dem Fix-Durchlauf unten auf b9ace7bd90750834e2c84ddb8e2b6bc9c551c3a1.
+
+### Fix-Durchlauf
+
+Fix-Commits aus dem Volltest (45-VOLLTEST.md `## Befunde`), alle lokal, kein Push; der Push braucht `Freigabe Push 45-10 Fix`.
+
+| Befund | Schwere | Commits | Delta-Audit (Probe) |
+|---|---|---|---|
+| V-45-10-04 Farben von Feldfehler, Zähler 1/0 und Markierung | LOW | f7457dac (RED), 685e5578 (GREEN) | nur php/css/admin.css (drei Selektoren mit `.section` davor, Kommentar) und ein Test; getComputedStyle in der Instanz hell rgb(138, 0, 0) / rgb(102, 71, 0), dunkel rgb(255, 204, 204) / rgb(255, 238, 197); drei Mutationen rot; keine PHP- oder Routenänderung |
+| V-45-10-05 Zahl vor Nomen im Plural | MEDIUM | b056b3b9 (Freigabe), 8988ba79 (RED), 1d832d03 (GREEN, Admin-Seite 500), d5efe7cd (RED %n-Gate), b9ace7bd (GREEN) | admin.js (acht Aufrufe n(), Helfer counted), templates/admin.php (sieben Aufrufe $l->n, Helfer $counted mit preg_replace_callback, nur die erste alleinstehende Zahl, nie ein Platzhalter), 18 Kataloge (acht Schlüssel, Werte wie freigegeben, Pluralform unverändert), sechs Sprachtabellen, CHANGELOG EN/DE/FR, Tests; B6: keine Logzeile und keine Route geändert; T-45-35: alle Sätze gehen weiter über p() bzw. text()/textContent, kein Markup; Gate 1 mit 15 Mutationen rot, Gate 2 mit 2 Mutationen rot; Live: Admin-Seite HTTP 200, Sätze in DE/EN/FR wie freigegeben, FR bei 0 im Singular |
+
+Ursache des 500 am Stand 1d832d03, an der Quelle belegt (nextcloud 34.0.3 in der Instanz): `OC\L10N\L10N::n` baut `L10NString` mit den Formen; `L10NString::__toString` ersetzt `%n` durch `%count%` und übergibt die Zahl nur, wenn die Formen `%n` tragen; sonst liefert der Übersetzer beide Formen mit `|` verbunden und `vsprintf` wirft "The arguments array must contain 2 items, 1 given" (L10NString.php Z. 54). PHPUnit und alle Python-Gates waren grün; gefunden erst in der Live-Probe, deshalb das zweite Gate.
+
+Gates am Stand b9ace7bd (seriell): ruff `All checks passed!`, ruff format `261 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund; pytest in zehn Teilen 7422 passed, 305 skipped; PHPUnit `OK (1451 tests, 9087 assertions)`; `php_gates_docker.sh all` EXIT=0 (Psalm-Taint 3 x `No errors found!`, `taint findings: 0`; php-cs-fixer `Found 0 of 145 files`; zizmor `No findings to report.`; actionlint grün). PHP-Baumhash b7faf372/148 (Rezept und Pipeline gleich, Positivkontrolle git archive d5efe7cd = 00bf7160).
+
+Offen aus dem Volltest: V-45-10-06 (LOW, zwei weitere Zahlensätze unter Deploy-Optionen, Textfreigabe nötig), siehe 45-VOLLTEST.md.
