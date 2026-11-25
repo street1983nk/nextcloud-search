@@ -627,6 +627,14 @@ class QueueMapper extends QBMapper {
 			));
 
 			if ($switchable !== []) {
+				// Read BEFORE the two statements below, and for the answer
+				// alone: the $stale statement clears the very mark this list
+				// asks for, so a read after the updates was always empty and
+				// the answer counted every handed back row as a switch
+				// (#25 F3). Inside this branch on purpose, so a band without
+				// a switchable row pays no needless SELECT.
+				$dirtyBefore = $this->dirtyFileIds($band);
+
 				$switch = $this->db->getQueryBuilder();
 				$switch->update(self::TABLE_NAME)
 					->set('kind', $switch->createNamedParameter($kind))
@@ -662,8 +670,11 @@ class QueueMapper extends QBMapper {
 				// for the reason the read above exists: MySQL reports changed
 				// rows and not matched ones. A row that was handed back does not
 				// carry the requested kind because of this call, so it does not
-				// count towards the answer either.
-				$requeued += count($switchable) - count(array_intersect($switchable, $this->dirtyFileIds($band)));
+				// count towards the answer either; the dirty list of that
+				// subtraction is the one read before the two statements, and a
+				// write landing in between makes the answer off by one at most,
+				// where the late read was off by every handed back row.
+				$requeued += count($switchable) - count(array_intersect($switchable, $dirtyBefore));
 			}
 
 			foreach (array_diff($band, array_keys($present)) as $fileId) {
@@ -697,7 +708,13 @@ class QueueMapper extends QBMapper {
 	 * Read for the answer of requeueAs and never for its effect: both statements
 	 * there decide on the mark themselves, in the database, because a write can
 	 * land between a read and an update and the mark is exactly what that write
-	 * sets. What this list is for is the number the method returns.
+	 * sets. What this list is for is the number the method returns, and for
+	 * that it is read BEFORE the two statements run: the $stale statement
+	 * clears the very mark this query asks for, so a list read after the
+	 * updates was always empty and the answer counted every handed back row as
+	 * a switch (#25 F3). A write landing between the read and the updates makes
+	 * the answer off by one at most; the statements still decide on the effect
+	 * themselves.
 	 *
 	 * @param int[] $band
 	 * @return int[]

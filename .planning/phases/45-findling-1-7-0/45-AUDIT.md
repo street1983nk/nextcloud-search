@@ -1457,6 +1457,31 @@ Nachtrag Task 5: der erste Lauf der verify-Zeile endete mit `VERIFY_EXIT=1` an d
 
 Gates Task 5 (verify-Zeile byte-gleich aus dem Plan nach `<scratchpad>/p26/v5.sh` gezogen, zweiter voller Lauf nach dem Nachtrag oben, seriell, Docker vorher und danach leer) -> `VERIFY_EXIT=0`: PHPUnit voll `OK (1430 tests, 8961 assertions)`, `php_gates_docker.sh all` grün (Psalm-Taint je 0 Befunde gegen v33, v34, v35; php-cs-fixer ohne Verstoß; zizmor und actionlint grün), ruff `All checks passed!`, ruff format `261 files already formatted`, pyright `0 errors, 0 warnings, 0 informations`, vulture still, pytest `tests/test_measurement_scripts.py tests/test_admin_ui_contract.py tests/test_phase33_audit.py tests/test_phase34_audit.py` `852 passed, 107 skipped`.
 
+### RED und GREEN 45-27
+
+Plan 45-27, 2026-11-24, nach `Freigabe Text F3 45-27` ("Ok", 2026-11-24 16:30 UTC, eingetragen in b755694e). Kopf vor dem Plan 8ffb1409. Docker seriell, vor jedem Start `test -z "$(docker ps -q)"` leer.
+
+#### F3 Zählfix
+
+Umsetzung: QueueMapper::requeueAs liest die Dirty-Menge des Bands als erste Anweisung im `$switchable !== []`-Zweig (`$dirtyBefore`), vor beiden Update-Statements und bewusst im Zweig (ein Band ohne umschaltbare Zeilen zahlt kein überflüssiges SELECT); die Rückgabezeile subtrahiert `array_intersect($switchable, $dirtyBefore)`. Beide Update-Statements byte-gleich, git diff zeigt in requeueAs nur Lesung, Rückgabezeile und Kommentare. Docblöcke nachgezogen: der Zählabsatz in requeueAs und der Docblock von dirtyFileIds sagen, dass die Menge VOR den Statements gelesen wird, warum (das $stale-Update löscht genau die Marke, nach der die Abfrage fragt; die Antwort war im Dirty-Fall immer leer und zählte jede zurückgegebene Zeile als Wechsel, #25 F3), dass die Statements über den Effekt weiter selbst entscheiden und dass ein Schreibzugriff zwischen Lesung und Updates die Antwort höchstens um eins ungenau macht.
+
+Tests (php/tests/Unit/QueueMapperTest.php, neu, Array-simulierte Datenbank nach dem Muster von FileStateServiceCoverageTest, um Updates erweitert: set/executeStatement wenden kind, retries, locked_at und dirty auf die Array-Tabelle an, eq/neq/in als Bedingungstoken mit per createNamedParameter gefangenen Werten, executeQuery beantwortet die zwei Selects aus dem AKTUELLEN Array-Zustand, insertIgnoreConflict legt fehlende Zeilen an): `testTheAnswerCountsNoRowThatWasOnlyHandedBack`, `testADeleteRowIsNeitherMovedNorCounted`, `testAMissingRowIsCreatedWithTheKindAndCounted`.
+
+RED (nicht committet), `bash scripts/dev/phpunit_docker.sh --filter QueueMapperTest` vor jeder Änderung an QueueMapper.php: `Tests: 3, Assertions: 9, Failures: 1.`, rot genau der Hauptfall `testTheAnswerCountsNoRowThatWasOnlyHandedBack` mit `Failed asserting that 2 is identical to 1.` (die Antwort zählte die zurückgegebene Dirty-Zeile als Wechsel); die zwei Nebenfälle grün als Wächter des bestehenden Verhaltens (delete-Zeile unberührt, fehlende Zeile angelegt und gezählt).
+
+GREEN gefiltert: derselbe Aufruf -> `OK (3 tests, 15 assertions)`.
+
+Baumhash php/ nach Task 2: Rezept und unabhängige Pipeline (find, sort, sed, sha256sum) `94720fd6...` mit 148 Dateien (QueueMapperTest.php neu); Positivkontrolle Rezept und Pipeline über `git archive b755694e` -> `86f595c7...` mit 147 (gleich dem bisherigen PHP_TREE_HASH_TODAY). backend/src/findling in diesem Task unverändert.
+
+#### F3 Zählfix Mutationen
+
+Je einzeln, gefiltert `bash scripts/dev/phpunit_docker.sh --filter QueueMapperTest`, danach QueueMapper.php byte-gleich zurück (`restored_identical=yes`, SHA-256 `eaa7754a...` vor und nach gleich, Kopie `<scratchpad>/QueueMapper.green.php`).
+
+(M50) Lesung der Dirty-Menge hinter die beiden Updates geschoben -> rot `testTheAnswerCountsNoRowThatWasOnlyHandedBack` (`Failed asserting that 2 is identical to 1.`, `Failures: 1`)
+(M51) Subtraktion entfernt, Antwort `count($switchable)` -> rot `testTheAnswerCountsNoRowThatWasOnlyHandedBack` (`Failed asserting that 2 is identical to 1.`, `Failures: 1`)
+
+Gates Task 2 (seriell im Vordergrund; die Session wurde am 24.11. vom Usage-Limit unterbrochen, der schon gestartete PHP-Gate-Lauf lief zu Ende, der Baum blieb dabei unverändert, am 25.11. per SHA-256-Gegenprobe und erneutem gefilterten GREEN-Lauf `OK (3 tests, 15 assertions)` bestätigt): PHPUnit voll `OK (1451 tests, 9087 assertions)`; `php_gates_docker.sh all` grün (das Skript läuft unter `set -euo pipefail` und der Workflow-Gate ist sein letzter Schritt, die Schlusszeile `php_gates_docker: workflow gate green (zizmor, actionlint)` mit `No findings to report.` und `actionlint: no finding` belegt damit auch Psalm-Taint und php-cs-fixer davor); ruff `All checks passed!`, ruff format `261 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund, pytest `tests/test_measurement_scripts.py` `572 passed`.
+
 ### Gegenprobe nach dem Fix
 
 Plan 45-20 Task 1, 2026-11-23 ab 10:39 UTC, Repo-Kopf 42ed3b23. Instanz findling-59 (Nextcloud 35.0.3, Port 8091, Volume findling-59-html) aus 45-17, Worktree `<scratchpad>/wt-165` (v1.6.5, 06a0d7c8), Speicher `<scratchpad>/state-59/storage`. Docker seriell, vor dem Start `test -z "$(docker ps -q)"` leer, dann `docker compose -p findling-59 start`. Das Host-Backend startet `<scratchpad>/start59.sh` mit dem gespeicherten Secret und der bestehenden Registrierung neu (`uv run --no-sync python -m findling.main`), beendet wird es mit `<scratchpad>/stop59.sh`. Secrets und Passwörter ausgelassen. Abweichungen vom Standard per Umgebung: `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1` (Standard 24) und `FINDLING_RECONCILE_HOUR=<Ortsstunde des Host-Prozesses>` (Standard 3), bei jedem Neustart nachgezogen.

@@ -1580,8 +1580,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # 86f595c7; the independent pipeline of find, sort, sed and sha256sum over the same tree gave
 # 86f595c7 as well; the recipe and the pipeline over git archive of 2643c072, the last commit before
 # this change, gave 0db3eed1 with 147 files (positive control).
-PHP_FILES_TODAY = 147
-PHP_TREE_HASH_TODAY = "86f595c7e95c1edb14900f5e6af1f5413fff122e5aa6ccc21d68a3fe4815ca5d"
+# Moved on 2026-11-24 by plan 45-27, task 2 (issue #25): lib/Db/QueueMapper.php reads the dirty
+# list of a band BEFORE the two update statements of requeueAs, so the answer counts only rows
+# that really switched tracks instead of counting every handed back row as a switch, and
+# tests/Unit/QueueMapperTest.php came new and holds it against a simulated database whose selects
+# see the effect of earlier updates. One file came and none went, so PHP_FILES_TODAY moves to 148.
+# The recipe gave 94720fd6; the independent pipeline of find, sort, sed and sha256sum over the
+# same tree gave 94720fd6 as well; the recipe and the pipeline over git archive of b755694e, the
+# last commit before this change, gave 86f595c7 with 147 files (positive control).
+PHP_FILES_TODAY = 148
+PHP_TREE_HASH_TODAY = "94720fd6c5823d2feca4ac2f8a72045e8e0afc863d28e3e086f7a57cab35cb66"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
