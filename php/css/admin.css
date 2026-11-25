@@ -428,8 +428,12 @@
 /* The marking of a stored folder entry with * or ? (D-45-08): a sentence of its
    own line under the path, in the warning text colour with the warning icon and
    on the normal surface, because it is a hint about one row and not an alarm
-   about the page. The icon and the sentence carry the meaning, not the colour. */
-.findling-rules__row-warning {
+   about the page. The icon and the sentence carry the meaning, not the colour.
+   Nextcloud colours every paragraph of a settings section muted with
+   `.section p`, one class and one element; the section class in front outranks
+   it, or the colour never shows (full test 45-10). The same holds for the slots
+   and the field error below. */
+.section .findling-rules__row-warning {
 	display: flex;
 	flex: 1 1 100%;
 	align-items: flex-start;
@@ -454,7 +458,7 @@
 	color: var(--color-text-maxcontrast);
 }
 
-.findling-rules__slots--low {
+.section .findling-rules__slots--low {
 	color: var(--color-warning-text);
 }
 
@@ -584,8 +588,9 @@
 
 /* An error belongs to its field and is therefore next to it, in the error text
    colour on the plain surface: a filled error surface for one sentence at a
-   field would read as a failure of the page rather than of the value. */
-.findling-rules__error {
+   field would read as a failure of the page rather than of the value. The
+   section class in front outranks the muted `.section p` of Nextcloud. */
+.section .findling-rules__error {
 	margin-block: var(--default-grid-baseline);
 	font-size: 13px;
 	color: var(--color-error-text);
