@@ -6812,6 +6812,52 @@ def test_the_coloured_sentences_outrank_the_muted_paragraphs_of_a_settings_secti
     assert len(scan_stylesheet_for_outranked_colours("sample.css", two.replace("--color-error-text", "--x"))) == 1
 
 
+# Finding V-45-10-07 of the joint acceptance 45-10 (owner: fix it): the remedy
+# under a group of the error list stayed on one line, about 3800 px wide, and
+# the settings page scrolled sideways at every width. server.css of Nextcloud
+# sets `table { white-space: nowrap }`, which every cell, paragraph and button
+# of the table inherits; overflow-wrap cannot break a line that may not wrap.
+WRAPPING_TABLES = ("findling-errors",)
+
+
+def scan_stylesheet_for_unwrapped_tables(name: str, source: str) -> list[str]:
+    """Findings: a table of the page that keeps the nowrap Nextcloud gives every table."""
+    without_comments = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    findings: list[str] = []
+    for css_class in WRAPPING_TABLES:
+        wraps = any(
+            re.search(r"(?<![\w-])white-space:\s*normal\s*(?:;|$)", match.group("body")) is not None
+            for match in re.finditer(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", without_comments)
+            if any(
+                re.fullmatch(rf"(?:table)?\.{re.escape(css_class)}", part.strip()) is not None
+                for part in match.group("selectors").split(",")
+            )
+        )
+        if not wraps:
+            findings.append(f"{name}: .{css_class} keeps white-space: nowrap from server.css of Nextcloud")
+    return findings
+
+
+def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_table() -> None:
+    """Finding V-45-10-07: the table itself resets white-space, so all of it wraps.
+
+    **What this gate does not prove.** It reads the stylesheet, not the page;
+    the joint acceptance checks in the browser that the settings page does not
+    scroll sideways at 1280 and at 375.
+    """
+    assert scan_stylesheet_for_unwrapped_tables(STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8")) == []
+    # Red on the shape the page shipped with and on a reset that sits on a cell
+    # or in another property only; green on the table rule.
+    shipped = ".findling-errors {\n\twidth: 100%;\n}\n.findling-errors td {\n\toverflow-wrap: anywhere;\n}\n"
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", shipped)) == 1
+    on_a_cell = shipped + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", on_a_cell)) == 1
+    commented = shipped.replace("width: 100%;", "width: 100%;\n\t/* white-space: normal; */")
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", commented)) == 1
+    fixed = shipped.replace("width: 100%;", "width: 100%;\n\twhite-space: normal;")
+    assert scan_stylesheet_for_unwrapped_tables("sample.css", fixed) == []
+
+
 # Finding V-45-10-05 of the full test 45-10 (owner "Ok" 2026-11-25 17:23 UTC,
 # option a): a number directly in front of a plural noun read "1 files could
 # not be read" and "also removes 1 already indexed documents" in every language
