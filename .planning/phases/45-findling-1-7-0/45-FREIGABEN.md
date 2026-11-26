@@ -175,3 +175,6 @@ Hinweis: Zeit in UTC. Abgenommen mit Änderung V-45-10-07 (langer Detailhinweis 
 
 Freigabe Push 45-10 V-07: "Go" (2026-11-26 16:17, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: ein Push der lokalen Commits über origin/main 31e37512 bis zu diesem Commit (RED-Tests, Fix 2751fc1f und PHP-Baumhash a46fd501 für V-45-10-07, Abnahme und Befundliste) auf main, ein CI-Warter, höchstens ein Rerun fehlgeschlagener Jobs. Voller Backend-Lauf vorher lokal grün (7423 passed, 305 skipped). Kein Tag, keine Store-Aktion, kein Kommentar im Findling-Repo.
+
+Abnahme zweite Sichtprüfung V-45-10-07: "Ja" (2026-11-26 16:38, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Fehlerliste DE, EN, FR auf 1280, 375 und 320 ohne waagerechtes Scrollen; Trennungen mitten im Wort nur auf 320 (I-45-10-08, 1.7.1). Kein Push, kein Tag, kein Kommentar.
