@@ -4877,8 +4877,8 @@ def test_every_catalogue_carries_the_plural_rule_of_its_language() -> None:
     """
     german = catalogue_of(L10N_JSON)
     german_plural_keys = sorted(key for key, value in german.items() if isinstance(value, list))
-    # Five until plan 45-10; V-45-10-05 gave eight counted sentences a singular.
-    assert len(german_plural_keys) == 13
+    # Five until plan 45-10; V-45-10-05 gave eight counted sentences a singular, V-45-10-06 two more.
+    assert len(german_plural_keys) == 15
 
     present = [code for code in PLURAL_FORM_OF if (REPO_ROOT / "php" / "l10n" / f"{code}.json").is_file()]
     # The anti vacuity clause of the loop: a rename that took the files away

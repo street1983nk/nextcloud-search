@@ -38,15 +38,16 @@ wording is a machine draft under the reservation of this document), and again on
 R-45-21-13; the Chinese wording is a machine draft under the reservation of this document), and again on
 25.11.2026 after plan 45-10 (eight keys became plural keys of the same sentences, so that one file no
 longer reads "1 files", finding V-45-10-05; the count of keys stays, and the Chinese column keeps its
-former wording as the one form):
+former wording as the one form), and on 26.11.2026 after the second step of plan 45-10 (two more keys of
+the same kind, the OCR page limit and the delay of a removed entry, V-45-10-06):
 
 | Quantity | Value |
 |---|---:|
 | Keys in `de.json` | **387** |
 | Keys in `zh_TW.json`, in the same order | **387** |
 | of them with printf directives (`%s`, `%1$s`, `%n`) | **102** |
-| with directives, plural keys excluded | **89** |
-| plural keys (the value is a list) | **13** |
+| with directives, plural keys excluded | **87** |
+| plural keys (the value is a list) | **15** |
 | forms per plural key | **1** |
 | rows in the table below | **387** |
 
@@ -192,7 +193,7 @@ separated by ` / ` as in every other table of the tree.
 The three columns are generated from `php/l10n/de.json` and `php/l10n/zh_TW.json` and not typed;
 the order is the order of the files. The key is the English source string the code asks for: most
 keys stand in a template or a script and run through `$l->t()` or `t()`, some come from the PHP
-services, and the thirteen plural keys (five until plan 45-10) are composed by `n()` or `$l->n` out of
+services, and the fifteen plural keys (five until plan 45-10) are composed by `n()` or `$l->n` out of
 their singular and plural. In
 every catalogue file it is the key of the translation.
 
@@ -449,7 +450,7 @@ this table cannot break on a wording.
 | `%1$s of %2$s slots free` | Noch %1$s von %2$s frei | 剩餘 %1$s 個空位（共 %2$s 個） |
 | `1 of %s slots free. This is the last one.` | Noch 1 von %s frei. Das ist der letzte Platz. | 剩餘 1 個空位（共 %s 個），這是最後一個。 |
 | `0 of %s slots free. Remove an entry to add another one.` | Noch 0 von %s frei. Einen Eintrag entfernen, um einen neuen hinzuzufügen. | 已沒有空位（共 %s 個）。請先移除一個項目，才能再新增。 |
-| `Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.` | Einen Eintrag zu entfernen wirkt innerhalb von %1$s Stunden, wenn der nächste Abgleichlauf diese Dateien wieder aufnimmt. Mit "%2$s" sofort übernehmen. | 移除項目會在 %1$s 小時內生效，也就是下一輪比對作業重新處理這些檔案時。執行「%2$s」可立即套用。 |
+| `_Removing an entry takes effect within %n hour, when the next comparison run picks those files up again. Run "%2$s" to apply it at once._::_Removing an entry takes effect within %n hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once._` | Einen Eintrag zu entfernen wirkt innerhalb von %n Stunde, wenn der nächste Abgleichlauf diese Dateien wieder aufnimmt. Mit "%2$s" sofort übernehmen. / Einen Eintrag zu entfernen wirkt innerhalb von %n Stunden, wenn der nächste Abgleichlauf diese Dateien wieder aufnimmt. Mit "%2$s" sofort übernehmen. | 移除項目會在 %n 小時內生效，也就是下一輪比對作業重新處理這些檔案時。執行「%2$s」可立即套用。 |
 | `_Remove indexed content? Excluding %1$s also removes %2$s already indexed document under that path from the index. The files themselves stay untouched on disk._::_Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk._` | Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexiertes Dokument unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. / Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexierte Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %1$s 也會將該路徑下 %2$s 份已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將該路徑下已索引的文件從索引中移除。磁碟上的檔案本身不受影響。 |
 | `Remove indexed content? Excluding %s also removes the already indexed documents that match that pattern from the index. The files themselves stay untouched on disk.` | Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente, auf die dieses Muster passt, aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte. | 要移除已索引的內容嗎？排除 %s 也會將符合該樣式的已索引文件從索引中移除。磁碟上的檔案本身不受影響。 |
@@ -534,7 +535,7 @@ this table cannot break on a wording.
 | `Changing the profile needs JavaScript. Everything above stays complete without it.` | Das Profil zu ändern braucht JavaScript. Alles darüber bleibt ohne es vollständig. | 變更設定檔需要 JavaScript。即使沒有 JavaScript，上方的所有內容仍然完整。 |
 | `The check calculates with these values from environment variables:` | Die Prüfung rechnet mit diesen Werten aus Umgebungsvariablen: | 檢查會使用以下來自環境變數的數值計算： |
 | `OCR resolution %1$s dpi, set by %2$s` | OCR-Auflösung %1$s dpi, gesetzt durch %2$s | OCR 解析度 %1$s dpi，由 %2$s 設定 |
-| `OCR limit %1$s pages per file, set by %2$s` | OCR-Deckel %1$s Seiten je Datei, gesetzt durch %2$s | OCR 上限每個檔案 %1$s 頁，由 %2$s 設定 |
+| `_OCR limit %n page per file, set by %2$s_::_OCR limit %n pages per file, set by %2$s_` | OCR-Deckel %n Seite je Datei, gesetzt durch %2$s / OCR-Deckel %n Seiten je Datei, gesetzt durch %2$s | OCR 上限每個檔案 %n 頁，由 %2$s 設定 |
 | `Embedding batch size %1$s, set by %2$s` | Einbettungs-Stapelgröße %1$s, gesetzt durch %2$s | 嵌入批次大小 %1$s，由 %2$s 設定 |
 | `Index writer memory %1$s, set by %2$s` | Speicher des Indexschreibers %1$s, gesetzt durch %2$s | 索引寫入器記憶體 %1$s，由 %2$s 設定 |
 | `Apply and check` | Übernehmen und prüfen | 套用並檢查 |
@@ -625,7 +626,7 @@ Run on 15.11.2026 over the two generated files, not by eye:
 | `zh_TW.js` carries the same values as `zh_TW.json`, form for form | yes (`test_the_two_halves_of_every_language_carry_the_same_values`) |
 | Every key of `zh_TW.json` has a row in this file, with the catalogue wording | yes (`test_every_language_table_carries_every_key_with_the_catalogue_wording`) |
 | Placeholder parity key against value, over all 102 keys with directives (22.11.2026) | 0 deviations |
-| Plural keys with exactly **one** form | 5 of 5; 13 of 13 after plan 45-10 (25.11.2026) |
+| Plural keys with exactly **one** form | 5 of 5; 15 of 15 after plan 45-10 (26.11.2026) |
 | `pluralForm` equal to the block in section 3 of `docs/l10n-catalogues.md` | yes, in both files |
 | U+2014 and U+2013 (dashes) | 0 |
 | Emoji and dingbats (`[\U0001f000-\U0001faff☀-➿️]`) | 0 |

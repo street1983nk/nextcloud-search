@@ -1609,8 +1609,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # or went. The recipe gave b7faf372; the independent pipeline gave b7faf372 as well; the recipe
 # and the pipeline over git archive of d5efe7cd, the last commit before this change, gave
 # 00bf7160 with 148 files (positive control).
+# Moved on 2026-11-26 by plan 45-10 (finding V-45-10-06, owner "Ok" 01:44 UTC): the OCR page limit
+# and the delay of a removed entry in templates/admin.php go through $l->n with %n and $counted.
+# No file came or went. The recipe gave 7c52b1f4; the independent pipeline gave 7c52b1f4 as well;
+# the recipe and the pipeline over git archive of fb57b51f, the last commit before this change,
+# gave b7faf372 with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "b7faf372f598c1e759c4d71331151da2544b46bafbdd49dbeed7a84d4958a4fd"
+PHP_TREE_HASH_TODAY = "7c52b1f488dedb7281e6c858048a8ee20607b319e45fa03df4862100ded039ee"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -1448,7 +1448,7 @@ $envVariables = [
 ];
 $envLines = [
 	'dpi' => static fn (int $value): string => $l->t('OCR resolution %1$s dpi, set by %2$s', [$count($value), $envMarker]),
-	'max_pages' => static fn (int $value): string => $l->t('OCR limit %1$s pages per file, set by %2$s', [$count($value), $envMarker]),
+	'max_pages' => static fn (int $value): string => $counted($l->n('OCR limit %n page per file, set by %2$s', 'OCR limit %n pages per file, set by %2$s', $value, ['', $envMarker]), $value),
 	'batch' => static fn (int $value): string => $l->t('Embedding batch size %1$s, set by %2$s', [$count($value), $envMarker]),
 	'writer_heap' => static fn (int $value): string => $l->t('Index writer memory %1$s, set by %2$s', [$size($value), $envMarker]),
 ];
@@ -1756,7 +1756,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<p class="settings-hint" id="findling-rules-effect"><?php p($l->t('The next run applies the new rules. Nothing restarts.')); ?></p>
 
 	<?php if ($latencyHours > 0 && $restartCommand !== '') { ?>
-		<p class="settings-hint" id="findling-rules-latency"><?php p($l->t('Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.', [$count($latencyHours), $restartCommand])); ?></p>
+		<p class="settings-hint" id="findling-rules-latency"><?php p($counted($l->n('Removing an entry takes effect within %n hour, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.', 'Removing an entry takes effect within %n hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.', $latencyHours, ['', $restartCommand]), $latencyHours)); ?></p>
 	<?php } ?>
 
 	<?php
