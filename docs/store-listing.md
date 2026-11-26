@@ -3357,9 +3357,10 @@ Nicht geprüft: die Fremdinstallation aus den Release-Assets als eigener
 Dispatch von `deploy-harp.yml` mit `release_tag=v1.6.4`; der HaRP-Lauf auf
 dem Tag (43210900560) ist grün.
 
-# Entwurf v1.7.0 (Store-Texte kurz), Stand 26.11.2026
+# Entwurf v1.7.0 (Store-Texte kurz), abgenommen am 26.11.2026
 
-**Entwurf, dem Owner noch nicht abgenommen.** Plan 45-11, STORE-03, nach der
+**Owner-Abnahme 26.11.2026 ("Ok", wie vorgelegt); eingespielt in beide
+info.xml durch Plan 45-11, Task 3. Eingereicht ist nichts.** Plan 45-11, STORE-03, nach der
 Abnahme der Härtung 45-10. Grundlage: D-45-13 (Entwurf kurz vor dem Release,
 Einbau erst nach Freigabe), D-45-14 (Kern bleibt: Datenschutz-Satz,
 Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku; Messzahl, die fünf

@@ -3667,3 +3667,223 @@ def test_the_retired_limitation_on_roots_in_the_changelog_is_reported() -> None:
 
     assert len(violations) == 1
     assert "still carries" in violations[0]
+
+
+# The short store texts of 1.7.0 (STORE-03, plan 45-11, D-45-13 and D-45-14).
+# The owner accepted the six descriptions on 26.11.2026 as they were drafted in
+# docs/store-listing.md; the section heading carries that date, and every
+# description of both info.xml has to stand there character for character, in a
+# code block of its own. Since D-45-14 each description also links the README of
+# its own language on the tag of the release it ships with (blob/v1.7.0 for
+# 1.7.0, read from <version> so that the next release moves it), and the
+# contents that moved to the READMEs in plan 45-07 may not come back.
+SHORT_STORE_TEXTS_1_7_0 = "# Entwurf v1.7.0 (Store-Texte kurz)"
+DOC_LINK_BASE = "https://github.com/street1983nk/nextcloud-search/blob/v{version}/"
+DOC_LINK_PAGES = {DEFAULT_LANGUAGE: "README.en.md", "de": "README.md", "fr": "README.fr.md"}
+_DOC_LINK = re.compile(r"https://github\.com/street1983nk/nextcloud-search/blob/([^/\s)]+)/(README(?:\.[a-z]{2})?\.md)")
+_VERSION = re.compile(r"<version>([^<]+)</version>")
+# What moved to the READMEs and stays out of every description: the limitation
+# heading and the file type heading of each language, and the format line that
+# opened the list. The measured figure is matched by MEASURED_FIGURE, the share
+# sentence by SHARE_SENTENCES and the similar documents line by
+# SIMILAR_DOCUMENTS_LINES.
+MOVED_HEADINGS = (
+    "Known limitations:",
+    "Bekannte Grenzen:",
+    "Limites connues :",
+    "Supported file types:",
+    "Unterstützte Dateitypen:",
+    "Types de fichiers pris en charge :",
+    "DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP",
+)
+_CODE_FENCE = "```"
+
+
+def _short_text_section(listing: str) -> tuple[str | None, str]:
+    """The heading line and the body of the section SHORT_STORE_TEXTS_1_7_0, or (None, '')."""
+    listing = listing.replace("\r\n", "\n")
+    offset = 0
+    for line in listing.splitlines(keepends=True):
+        if line.startswith(SHORT_STORE_TEXTS_1_7_0):
+            return line.rstrip("\n"), listing[offset:].split("\n# ", 1)[0]
+        offset += len(line)
+    return None, ""
+
+
+def scan_short_store_texts(listing: str, infos: dict[str, str]) -> list[str]:
+    """Every description of every info.xml stands in the accepted section, character for character."""
+    heading, section = _short_text_section(listing)
+    if heading is None:
+        return [f"docs/store-listing.md: has no section {SHORT_STORE_TEXTS_1_7_0!r}"]
+
+    violations: list[str] = []
+    if APPROVAL_DATE.search(heading) is None:
+        violations.append(
+            f"docs/store-listing.md: the heading {heading!r} carries no approval date "
+            f"in the form 'abgenommen am TT.MM.JJJJ'"
+        )
+    for name, source in infos.items():
+        descriptions, broken = _descriptions(name, source.replace("\r\n", "\n"))
+        violations.extend(broken)
+        violations.extend(
+            f"{name}: the description for {_named(language)} does not stand character for character "
+            f"in the section {SHORT_STORE_TEXTS_1_7_0!r}"
+            for language, text in descriptions
+            if f"{_CODE_FENCE}\n{text.strip()}\n{_CODE_FENCE}" not in section
+        )
+    return violations
+
+
+def scan_doc_links(name: str, source: str) -> list[str]:
+    """Each description links the README of its own language once, on the tag of this release."""
+    version = _VERSION.search(strip_xml_comments(source))
+    if version is None:
+        return [f"{name}: carries no version"]
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        expected = DOC_LINK_BASE.format(version=version.group(1)) + DOC_LINK_PAGES[language]
+        links = [match.group(0) for match in _DOC_LINK.finditer(text)]
+        if links != [expected]:
+            violations.append(
+                f"{name}: the description for {_named(language)} links {links!r}, expected exactly [{expected!r}]"
+            )
+    return violations
+
+
+def scan_moved_contents(name: str, source: str) -> list[str]:
+    """No description takes back what D-45-14 moved to the READMEs."""
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        flat = collapse(text)
+        found = list(MEASURED_FIGURE.findall(text))
+        found += [heading for heading in MOVED_HEADINGS if heading in text]
+        if any(collapse(sentence) in flat for sentence in SHARE_SENTENCES.values()):
+            found.append("share sentence")
+        found += [line for line in SIMILAR_DOCUMENTS_LINES.values() if collapse(line.removeprefix("- ")) in flat]
+        violations.extend(
+            f"{name}: the description for {_named(language)} carries {item!r}, which moved to the README (D-45-14)"
+            for item in found
+        )
+    return violations
+
+
+def _both_infos() -> dict[str, str]:
+    """The two shipped info.xml by the name a finding gives them."""
+    return {
+        f"{path.parent.parent.name}/appinfo/info.xml": path.read_text(encoding="utf-8")
+        for path in (PHP_INFO, BACKEND_INFO)
+    }
+
+
+def _with_version(sample: str) -> str:
+    """A description sample that also carries the version 1.7.0."""
+    return sample.replace("<info>", "<info>\n\t<version>1.7.0</version>", 1)
+
+
+def test_every_description_stands_in_the_accepted_short_texts_of_1_7_0() -> None:
+    assert scan_short_store_texts(STORE_LISTING.read_text(encoding="utf-8"), _both_infos()) == []
+
+
+def test_every_description_links_the_readme_of_its_language_on_the_release_tag() -> None:
+    violations = [message for name, source in _both_infos().items() for message in scan_doc_links(name, source)]
+
+    assert violations == []
+
+
+def test_no_description_takes_back_what_moved_to_the_readmes() -> None:
+    violations = [message for name, source in _both_infos().items() for message in scan_moved_contents(name, source)]
+
+    assert violations == []
+
+
+def test_a_description_changed_by_one_character_is_not_in_the_accepted_section() -> None:
+    infos = _both_infos()
+    name = next(iter(infos))
+    changed = infos[name].replace("Every result is permission-checked", "Every result is permission checked", 1)
+    assert changed != infos[name]
+    infos[name] = changed
+
+    violations = scan_short_store_texts(STORE_LISTING.read_text(encoding="utf-8"), infos)
+
+    expected = (
+        f"{name}: the description for the English default does not stand character for character "
+        f"in the section {SHORT_STORE_TEXTS_1_7_0!r}"
+    )
+    assert violations == [expected]
+
+
+def test_the_short_texts_without_approval_date_or_without_section_are_reported() -> None:
+    listing = STORE_LISTING.read_text(encoding="utf-8")
+    undated = listing.replace("(Store-Texte kurz), abgenommen am 26.11.2026", "(Store-Texte kurz), Stand 26.11.2026", 1)
+    assert undated != listing
+
+    violations = scan_short_store_texts(undated, _both_infos())
+
+    assert len(violations) == 1
+    assert "carries no approval date" in violations[0]
+    assert scan_short_store_texts("# Andere Sache\n", _both_infos()) == [
+        f"docs/store-listing.md: has no section {SHORT_STORE_TEXTS_1_7_0!r}"
+    ]
+
+
+def test_a_doc_link_of_another_language_another_tag_or_none_is_reported() -> None:
+    link = "https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/"
+    sample = _with_version(
+        _description_sample(
+            f"Documentation: [README on GitHub]({link}README.md)",
+            f"Dokumentation: [README auf GitHub]({link.replace('v1.7.0', 'v1.6.5')}README.md)",
+            "Documentation : aucun lien",
+        )
+    )
+
+    violations = scan_doc_links("sample.xml", sample)
+
+    assert len(violations) == 3
+    assert "for the English default links" in violations[0]
+    assert "v1.6.5" in violations[1]
+    assert "lang=fr links []" in violations[2]
+
+
+def test_a_doc_link_on_the_right_page_and_tag_passes() -> None:
+    link = "https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/"
+    sample = _with_version(
+        _description_sample(
+            f"[README]({link}README.en.md)", f"[README]({link}README.md)", f"[README]({link}README.fr.md)"
+        )
+    )
+
+    assert scan_doc_links("sample.xml", sample) == []
+
+
+def test_a_measured_figure_a_limitation_heading_or_a_format_list_in_a_description_is_reported() -> None:
+    sample = _description_sample(
+        "- RAM: 4 GB is enough, 730.2 MB resident after an index run",
+        "Bekannte Grenzen:\n- Spanisch: año und ano gelten als dasselbe Wort",
+        "Types de fichiers pris en charge :\n- PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP",
+    )
+
+    violations = scan_moved_contents("sample.xml", sample)
+
+    assert len(violations) == 4
+    assert "'730.2 MB'" in violations[0]
+    assert "'Bekannte Grenzen:'" in violations[1]
+    assert "'Types de fichiers pris en charge :'" in violations[2]
+    assert "ODT, ODS, ODP" in violations[3]
+
+
+def test_the_share_sentence_or_the_similar_documents_line_in_a_description_is_reported() -> None:
+    sample = _description_sample(SHARE_SENTENCE_EN, SIMILAR_DOCUMENTS_LINES["de"])
+
+    violations = scan_moved_contents("sample.xml", sample)
+
+    assert len(violations) == 2
+    assert "'share sentence'" in violations[0]
+    assert "lang=de" in violations[1]
+
+
+def test_a_short_description_passes_the_moved_contents_scan() -> None:
+    sample = _description_sample("- RAM: 4 GB is enough\n- CPU: 2 cores are enough, amd64 and arm64")
+
+    assert scan_moved_contents("sample.xml", sample) == []
