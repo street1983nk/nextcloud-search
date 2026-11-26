@@ -184,3 +184,6 @@ Hinweis: Zeit in UTC. Freigegeben wie vorgelegt in 45-STORE-VORLAGE.md (e859018a
 
 Freigabe Push 45-12: "Ok" (2026-11-26 19:38, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 1db01d02 (Doku 45-10, Store-Texte 45-11, Datum [1.7.0] auf 2026-11-26 in CHANGELOG EN/DE/FR, gedeckt von Freigabe Changelog 45-08) auf main, ein CI-Warter, höchstens ein Rerun. Kein Tag, keine Store-Aktion, kein Kommentar. Liegt der Tag in 45-14 auf einem späteren Kalendertag, meldet 45-14 das als Befund.
+
+Freigabe Signatur 45-13: "Ja" (2026-11-26 19:55, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: genau ein Lauf `gh workflow run release.yml --ref main -f create_release=false` auf dem Tag-Kopf, nachdem die CI von 45-12 grün ist; baut und signiert beide Archive, veröffentlicht nichts. Kein Tag, keine Store-Aktion, kein Kommentar.
