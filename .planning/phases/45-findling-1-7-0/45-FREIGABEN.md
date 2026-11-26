@@ -181,3 +181,6 @@ Hinweis: Zeit in UTC. Fehlerliste DE, EN, FR auf 1280, 375 und 320 ohne waagerec
 
 Freigabe Storetext 45-11: "Ok" (2026-11-26 18:59, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Freigegeben wie vorgelegt in 45-STORE-VORLAGE.md (e859018a): sechs Beschreibungen findling und findling_backend in DE, EN, FR, mit Enterprise-Zeile, RAM- und CPU-Zeile, Texterkennung ohne Sprachliste, Datenschutz als eigene Zeile. Kein Push, kein Tag, kein Kommentar.
+
+Freigabe Push 45-12: "Ok" (2026-11-26 19:38, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 1db01d02 (Doku 45-10, Store-Texte 45-11, Datum [1.7.0] auf 2026-11-26 in CHANGELOG EN/DE/FR, gedeckt von Freigabe Changelog 45-08) auf main, ein CI-Warter, höchstens ein Rerun. Kein Tag, keine Store-Aktion, kein Kommentar. Liegt der Tag in 45-14 auf einem späteren Kalendertag, meldet 45-14 das als Befund.
