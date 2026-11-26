@@ -3567,6 +3567,83 @@ der Anforderungszeile (Wortlaut aus den READMEs) und die Zeile
 "Dokumentation" mit dem README-Link. Der Datenschutz-Satz steht als eigene
 Zeile statt als Listenpunkt, Wortlaut unverändert.
 
+# Release 1.7.0 (26.11.2026)
+
+Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57),
+Wasserzeichen und Secure View (#59), Abgleich bei langer Warteschlange (#25),
+kurze Store-Texte (Fassung "Entwurf v1.7.0" oben). Owner-Worte vom 26.11.2026
+in der Claude-Code-Sitzung, je eigene Freigabezeile in
+`.planning/phases/45-findling-1-7-0/45-FREIGABEN.md`: Tag, Release-Notiz und
+Dispatch "Go machen wir es vor 0:00" (21:05), Store-Einreichung "Ok" (21:10).
+Tag-Push, Release-Notiz, Dispatch und Einreichung hat Claude im Auftrag des
+Owners ausgeführt.
+
+Belegkette:
+
+1. `git rev-list -n 1 v1.7.0` = `22f98ef260fb12f8b55844b76d8070e64f441a4d`
+   (Tag-Kopf, auf dem die Branch-CI grün war und 45-SECURITY.md
+   threats_open 0 meldet), `git cat-file -t v1.7.0` = tag (annotiert),
+   Nachricht "Findling 1.7.0", Tagger street1983nk, gepusht 2026-11-26
+   21:05 UTC.
+2. Tag-Läufe auf 22f98ef2: Release archives for the app store 45895635994,
+   PHP and store metadata gates 45895636004, Python gates 45895636062,
+   Integration 45895635907, Resilience 45895635843, Multi-arch image
+   45895636060, Workflow security lint 45895635893, alle success. HaRP deploy
+   auf dem Tag (45895635939) lief beim Abschluss von 45-14 noch: drei von vier
+   Jobs success (stable33, stable34 arm64, stable35), stable34 amd64 in Arbeit.
+3. Aus dem Log des Release-Laufs 45895635994: zweimal `Verified OK`,
+   `dist/findling.tar.gz is 808542 bytes, the store limit is 20971520`,
+   `dist/findling_backend.tar.gz is 52368 bytes, the store limit is 20971520`.
+4. `gh release view v1.7.0`: `isImmutable` true, veröffentlicht
+   2026-11-26T21:07:28Z, neun Assets: findling.tar.gz 808542,
+   findling.tar.gz.sig 684, findling_backend.tar.gz 52368,
+   findling_backend.tar.gz.sig 684, findling-1.7.0-source.tar.gz 28300423,
+   pillow_heif-1.8.1.tar.gz 17395786, x265_4.3.tar.gz 2052112,
+   libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898.
+   Release-Notiz mit `gh release edit v1.7.0 --notes-file` gesetzt, Titel
+   "Findling 1.7.0".
+5. SHA-256 der Archive, aus dem Release geladen (`gh release download`):
+   - findling.tar.gz `67f03ba492e9548cd38bdd222d4dbd4efe880f43b829cd41479688966469d409`
+   - findling_backend.tar.gz `21e2c07bbc01cfe024fe0d3681a546847bcefceeade61d9de7a8ad73d2b976d3`
+   Beide Werte stehen gleich im Log der Fremdinstallation (Punkt 7).
+6. Image `ghcr.io/street1983nk/findling_backend:1.7.0`
+   (`docker buildx imagetools inspect`, ohne Pull): Index
+   `sha256:7c5ef16a3e27b20d432e713e2edc8e1b422f47a819ce170d20d07aa9f906ad09`,
+   linux/amd64 `sha256:0f13e6b252a9b2eeef45afd08b7ce6a4f15c94674f93e6a6961a6c7b45ff1eec`,
+   linux/arm64 `sha256:133d4a8d32069e1c2f70541d7c7fffdf456954061f058e0d831d66f47863e095`,
+   dazu je ein Attestation-Manifest.
+7. Fremdinstallation aus den Release-Assets: `deploy-harp.yml` mit
+   `release_tag=v1.7.0`, Lauf 45896004205, alle vier Jobs success (stable33,
+   stable34 amd64 und arm64, stable35). Schritt "Store install 1 from the
+   release, load both archives instead of building them" lädt
+   `releases/download/v1.7.0/findling.tar.gz` und `findling_backend.tar.gz`
+   (808542 und 52368 Bytes) und meldet für findling.tar.gz "carries
+   appinfo/signature.json, as the integrity check of the instance requires".
+8. Tag-Links: alle sechs `blob/v1.7.0`-Links aus beiden info.xml
+   (README.md, README.en.md, README.fr.md, docs/migrate-from-fulltextsearch.md,
+   .en.md, .fr.md) liefern HTTP 200 (2026-11-26, nach der Einreichung).
+9. Eingereicht über `store-submit.yml` (`-f tag=v1.7.0`), ein Lauf,
+   45898491529, success. Update-Gate des Tags: `php.yml run 45895636004 on
+   v1.7.0: success; job 'Store update in one process (issue 51)': success`.
+   Antwortcodes aus dem Log:
+   - release findling v1.7.0: HTTP 201, 21:29:54Z
+   - release findling_backend v1.7.0: HTTP 201, 21:29:56Z
+10. Gegenprobe Store-API (B9: drei Abfragen, je mindestens 10 Minuten
+    Abstand), Befund:
+    - 2026-11-26T21:31:31Z: `api/v1/appapi_apps.json` id `findling_backend`
+      führt 1.7.0 (neben 1.6.5 und älteren); `api/v1/apps.json` antwortete
+      ohne `-L` nur mit 302 (Weiterleitung auf garm3.nextcloud.com).
+    - 2026-11-26T21:41:40Z und 21:51:45Z: `api/v1/apps.json` (mit `-L`,
+      HTTP 200 von garm3.nextcloud.com) führt für id `findling` nur 1.6.5.
+    Wie bei 1.6.3 und 1.6.4 hält der Zwischenspeicher der App-Liste die neue
+    Begleit-App-Version zurück, obwohl die Einreichung HTTP 201 meldete.
+    Weitere Abfragen hat Claude nach B9 nicht gestellt; offen ist der Blick
+    des Owners auf die Store-Seite (apps.nextcloud.com/apps/findling) bzw.
+    eine spätere Abfrage.
+
+Offen bis 45-15: Antworten in #45, #56, #57, #59 und #25, Bitte in #53,
+Nachtrag der Release-Threats T-45-47 bis T-45-54, Phasenabschluss.
+
 # Release 1.6.3 (12.11.2026)
 
 Store-Text und Release-Notiz sind die am 11.11.2026 abgenommene Fassung oben

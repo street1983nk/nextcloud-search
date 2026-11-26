@@ -98,3 +98,13 @@ Tag v1.7.0 annotiert ("Findling 1.7.0") auf 22f98ef260fb12f8b55844b76d8070e64f44
 ```
 
 `gh release view v1.7.0`: isImmutable true; Assets findling.tar.gz, findling.tar.gz.sig, findling_backend.tar.gz, findling_backend.tar.gz.sig, findling-1.7.0-source.tar.gz und die Quellarchive libde265-1.1.3, libheif-1.23.6, pillow_heif-1.8.1, x265_4.3. Release-Notiz (Freigabe ReleaseEdit 45-14) als englische Faktenliste gesetzt, Titel "Findling 1.7.0". Dispatch deploy-harp mit release_tag=v1.7.0 (Freigabe Dispatch 45-14): Lauf 45896004205.
+
+## Store-Einreichung
+
+Freigabe Store 45-14 ("Ok", 2026-11-26 21:10). `store-submit.yml` mit tag=v1.7.0, ein Lauf, 45898491529, success. Belege aus dem Log wörtlich:
+
+```
+2026-11-26T21:29:53.0822261Z php.yml run 45895636004 on v1.7.0: success; job 'Store update in one process (issue 51)': success
+2026-11-26T21:29:54.6411110Z release findling v1.7.0: HTTP 201
+2026-11-26T21:29:56.1472371Z release findling_backend v1.7.0: HTTP 201
+```
