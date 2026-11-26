@@ -81,3 +81,20 @@ Befehlsfertig:
 git tag -a v1.7.0 -m "Findling 1.7.0" 22f98ef260fb12f8b55844b76d8070e64f441a4d
 git push origin v1.7.0
 ```
+
+## Release-Lauf
+
+Tag v1.7.0 annotiert ("Findling 1.7.0") auf 22f98ef260fb12f8b55844b76d8070e64f441a4d, gepusht 2026-11-26 21:05 UTC (Freigabe Tag 45-14, Option a). Release-Lauf 45895635994 (push auf v1.7.0), Ergebnis success, Commit des Laufs = Tag-Kopf. Belege aus dem Log wörtlich:
+
+```
+2026-11-26T21:07:16.6194974Z php/appinfo/info.xml is 18490 bytes, the store limit is 524288
+2026-11-26T21:07:17.4955595Z appinfo/signature.json was written and is not empty
+2026-11-26T21:07:17.7128412Z dist/findling.tar.gz is 808542 bytes, the store limit is 20971520
+2026-11-26T21:07:17.7530379Z Verified OK
+2026-11-26T21:07:17.7927575Z backend/appinfo/info.xml is 35054 bytes, the store limit is 524288
+2026-11-26T21:07:17.8298444Z dist/findling_backend.tar.gz is 52368 bytes, the store limit is 20971520
+2026-11-26T21:07:17.8698611Z Verified OK
+2026-11-26T21:07:17.9053598Z dist/findling.tar.gz: carries appinfo/signature.json, as the integrity check of the instance requires
+```
+
+`gh release view v1.7.0`: isImmutable true; Assets findling.tar.gz, findling.tar.gz.sig, findling_backend.tar.gz, findling_backend.tar.gz.sig, findling-1.7.0-source.tar.gz und die Quellarchive libde265-1.1.3, libheif-1.23.6, pillow_heif-1.8.1, x265_4.3. Release-Notiz (Freigabe ReleaseEdit 45-14) als englische Faktenliste gesetzt, Titel "Findling 1.7.0". Dispatch deploy-harp mit release_tag=v1.7.0 (Freigabe Dispatch 45-14): Lauf 45896004205.
