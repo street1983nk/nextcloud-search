@@ -3589,8 +3589,8 @@ Belegkette:
    PHP and store metadata gates 45895636004, Python gates 45895636062,
    Integration 45895635907, Resilience 45895635843, Multi-arch image
    45895636060, Workflow security lint 45895635893, alle success. HaRP deploy
-   auf dem Tag (45895635939) lief beim Abschluss von 45-14 noch: drei von vier
-   Jobs success (stable33, stable34 arm64, stable35), stable34 amd64 in Arbeit.
+   auf dem Tag (45895635939) ist ebenfalls success (alle vier Jobs, nach dem
+   Abschluss von 45-14 nachgeprüft).
 3. Aus dem Log des Release-Laufs 45895635994: zweimal `Verified OK`,
    `dist/findling.tar.gz is 808542 bytes, the store limit is 20971520`,
    `dist/findling_backend.tar.gz is 52368 bytes, the store limit is 20971520`.
@@ -3637,9 +3637,8 @@ Belegkette:
       HTTP 200 von garm3.nextcloud.com) führt für id `findling` nur 1.6.5.
     Wie bei 1.6.3 und 1.6.4 hält der Zwischenspeicher der App-Liste die neue
     Begleit-App-Version zurück, obwohl die Einreichung HTTP 201 meldete.
-    Weitere Abfragen hat Claude nach B9 nicht gestellt; offen ist der Blick
-    des Owners auf die Store-Seite (apps.nextcloud.com/apps/findling) bzw.
-    eine spätere Abfrage.
+    Weitere Abfragen hat Claude nach B9 nicht gestellt. Der Owner meldet am
+    26.11.2026 im Chat: "1.7 ist im Store" (Store-Seite apps.nextcloud.com/apps/findling).
 
 Offen bis 45-15: Antworten in #45, #56, #57, #59 und #25, Bitte in #53,
 Nachtrag der Release-Threats T-45-47 bis T-45-54, Phasenabschluss.

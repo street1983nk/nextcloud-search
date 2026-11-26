@@ -58,7 +58,7 @@ Findling 1.7.0 ist für beide Apps eingereicht (zweimal HTTP 201, Lauf 458984915
 
 - Store-API nennt 1.7.0 bisher nur für findling_backend; für findling bestätigt erst der Owner auf der Store-Seite oder eine spätere Abfrage (Erfolgskriterium 5, Teil "Store-API nennt 1.7.0 für beide Apps").
 - Push der Belegdokumente nur mit `Freigabe Push 45-14: ... Entscheid: ja` (Frage stellt der Koordinator), danach `git pull --rebase origin main`, Push, head_green.sh "Security scans".
-- HaRP deploy auf dem Tag (45895635939) lief beim Abschluss noch (drei von vier Jobs success).
+- HaRP deploy auf dem Tag (45895635939): success, alle vier Jobs (nachgeprüft nach dem Abschluss). Owner meldet "1.7 ist im Store".
 - 45-15: Antworten in #45, #56, #57, #59, #25, Bitte in #53, Nachtrag der Release-Threats T-45-47 bis T-45-54, Phasenabschluss.
 
 ## Self-Check: PASSED
