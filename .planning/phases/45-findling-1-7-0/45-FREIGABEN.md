@@ -198,3 +198,6 @@ Freigabe Dispatch 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-C
 
 Freigabe Store 45-14: "Ok" (2026-11-26 21:10, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: genau ein `gh workflow run store-submit.yml --ref main -f tag=v1.7.0` (beide Apps, kein register), erst nach grünem deploy-harp-Lauf 45896004205 aus dem Release. Kein Kommentar.
+
+Freigabe Push 45-14: "Ja" (2026-11-26 22:11, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Doku- und Planungs-Commits über origin/main 22f98ef2 (Belege 45-12 bis 45-16 und 45-14, store-listing.md) auf main, ein Warter auf Security scans. Kein Code, kein Tag, kein Kommentar.
