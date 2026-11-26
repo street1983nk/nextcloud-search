@@ -6817,24 +6817,31 @@ def test_the_coloured_sentences_outrank_the_muted_paragraphs_of_a_settings_secti
 # the settings page scrolled sideways at every width. server.css of Nextcloud
 # sets `table { white-space: nowrap }`, which every cell, paragraph and button
 # of the table inherits; overflow-wrap cannot break a line that may not wrap.
-WRAPPING_TABLES = ("findling-errors",)
+# Once the table wraps, the verdict chip of a row inherits the
+# overflow-wrap: anywhere of its cell and broke mid-word at 375 px
+# ("Übersp" / "rungen"), so the chip keeps its word whole on its own.
+WRAPPING_RULES: tuple[tuple[str, str, str], ...] = (
+    (r"(?:table)?\.findling-errors", "white-space", "normal"),
+    (r"\.findling-errors \.findling-chip", "white-space", "nowrap"),
+)
 
 
 def scan_stylesheet_for_unwrapped_tables(name: str, source: str) -> list[str]:
-    """Findings: a table of the page that keeps the nowrap Nextcloud gives every table."""
+    """Findings: the error list keeps the nowrap of Nextcloud, or its chip breaks mid-word."""
     without_comments = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    rules = [
+        (match.group("selectors"), match.group("body"))
+        for match in re.finditer(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", without_comments)
+    ]
     findings: list[str] = []
-    for css_class in WRAPPING_TABLES:
-        wraps = any(
-            re.search(r"(?<![\w-])white-space:\s*normal\s*(?:;|$)", match.group("body")) is not None
-            for match in re.finditer(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", without_comments)
-            if any(
-                re.fullmatch(rf"(?:table)?\.{re.escape(css_class)}", part.strip()) is not None
-                for part in match.group("selectors").split(",")
-            )
+    for selector, prop, value in WRAPPING_RULES:
+        declared = any(
+            re.search(rf"(?<![\w-]){prop}:\s*{value}\s*(?:;|$)", body) is not None
+            for selectors, body in rules
+            if any(re.fullmatch(selector, part.strip()) is not None for part in selectors.split(","))
         )
-        if not wraps:
-            findings.append(f"{name}: .{css_class} keeps white-space: nowrap from server.css of Nextcloud")
+        if not declared:
+            findings.append(f"{name}: no rule {selector} sets {prop}: {value} against server.css of Nextcloud")
     return findings
 
 
@@ -6846,16 +6853,19 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
     scroll sideways at 1280 and at 375.
     """
     assert scan_stylesheet_for_unwrapped_tables(STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8")) == []
-    # Red on the shape the page shipped with and on a reset that sits on a cell
-    # or in another property only; green on the table rule.
+    # Red on the shape the page shipped with (both rules missing), on a reset
+    # that sits on a cell only or is commented out, and on a fixed table whose
+    # chip may break; green with both rules.
     shipped = ".findling-errors {\n\twidth: 100%;\n}\n.findling-errors td {\n\toverflow-wrap: anywhere;\n}\n"
-    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", shipped)) == 1
-    on_a_cell = shipped + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", shipped)) == len(WRAPPING_RULES)
+    chip = ".findling-errors .findling-chip {\n\twhite-space: nowrap;\n}\n"
+    on_a_cell = shipped + chip + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", on_a_cell)) == 1
-    commented = shipped.replace("width: 100%;", "width: 100%;\n\t/* white-space: normal; */")
+    commented = shipped.replace("width: 100%;", "width: 100%;\n\t/* white-space: normal; */") + chip
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", commented)) == 1
-    fixed = shipped.replace("width: 100%;", "width: 100%;\n\twhite-space: normal;")
-    assert scan_stylesheet_for_unwrapped_tables("sample.css", fixed) == []
+    table_only = shipped.replace("width: 100%;", "width: 100%;\n\twhite-space: normal;")
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", table_only)) == 1
+    assert scan_stylesheet_for_unwrapped_tables("sample.css", table_only + chip) == []
 
 
 # Finding V-45-10-05 of the full test 45-10 (owner "Ok" 2026-11-25 17:23 UTC,
