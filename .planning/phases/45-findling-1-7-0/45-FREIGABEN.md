@@ -195,3 +195,6 @@ Freigabe Tag 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-C
 Hinweis: Zeit in UTC. Option a: Claude setzt den annotierten Tag v1.7.0 auf 22f98ef2 und pusht ihn vor 00:00 UTC (Datum im CHANGELOG 2026-11-26); ein Warter auf den Release-Lauf. Keine Store-Einreichung ohne eigene Freigabe.
 Freigabe ReleaseEdit 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-Chat) Entscheid: ja
 Freigabe Dispatch 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-Chat) Entscheid: ja
+
+Freigabe Store 45-14: "Ok" (2026-11-26 21:10, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: genau ein `gh workflow run store-submit.yml --ref main -f tag=v1.7.0` (beide Apps, kein register), erst nach grünem deploy-harp-Lauf 45896004205 aus dem Release. Kein Kommentar.
