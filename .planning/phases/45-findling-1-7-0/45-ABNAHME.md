@@ -42,3 +42,22 @@ Bedingungen:
 - Freigabe Changelog 45-08: ja
 - Freigabe Storetext 45-11: ja
 - Freigabe Push 45-12: ja
+
+## Signatur-Probe
+
+Freigabe Signatur 45-13 "Ja". `gh workflow run release.yml --ref main -f create_release=false`, Lauf 45892161829 (workflow_dispatch), Commit des Laufs 22f98ef260fb12f8b55844b76d8070e64f441a4d = Tag-Kopf, Ergebnis success (`gh run watch --exit-status` 0). Belege aus dem Log wörtlich:
+
+```
+2026-11-26T20:36:36.4872667Z php/appinfo/info.xml is 18490 bytes, the store limit is 524288
+2026-11-26T20:36:37.3469871Z appinfo/signature.json was written and is not empty
+2026-11-26T20:36:37.5800136Z dist/findling.tar.gz is 808546 bytes, the store limit is 20971520
+2026-11-26T20:36:37.6062634Z the release signature is 684 base64 characters
+2026-11-26T20:36:37.6270227Z Verified OK
+2026-11-26T20:36:37.6937186Z backend/appinfo/info.xml is 35054 bytes, the store limit is 524288
+2026-11-26T20:36:37.7372970Z dist/findling_backend.tar.gz is 52371 bytes, the store limit is 20971520
+2026-11-26T20:36:37.7570765Z the release signature is 684 base64 characters
+2026-11-26T20:36:37.7759706Z Verified OK
+2026-11-26T20:36:37.8137460Z dist/findling.tar.gz: carries appinfo/signature.json, as the integrity check of the instance requires
+```
+
+Beide Release-Signaturen "Verified OK", Code-Signatur der Companion-App geschrieben und im Archiv, beide Archive unter 20 971 520 B (808 546 und 52 371). Kein Release angelegt: `gh release view v1.7.0` endet mit Exit 1, vor und nach dem Lauf.
