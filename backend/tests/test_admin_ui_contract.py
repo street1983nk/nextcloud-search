@@ -6832,6 +6832,13 @@ WRAPPING_RULES: tuple[tuple[str, str, str], ...] = (
     # A shrunk column takes the narrowest width of its head, so the heads keep
     # their single word whole ("Fichiers" stood one letter per line at 375 px).
     (r"\.findling-errors thead th", "white-space", "nowrap"),
+    # On a phone the cells take half the inline padding, which leaves the label
+    # room for "reconnaissable" at 375 px (read inside the media rule below).
+    (r"\.findling-errors td", "padding-inline", r"calc\(var\(--default-grid-baseline\) \* 2\)"),
+)
+NARROW_ERROR_LIST = re.compile(
+    r"@media \(max-width: 512px\) \{\s*\.findling-errors th,\s*\.findling-errors td \{"
+    r"\s*padding-inline: calc\(var\(--default-grid-baseline\) \* 2\);\s*\}\s*\}"
 )
 
 
@@ -6862,6 +6869,8 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
     scroll sideways at 1280 and at 375.
     """
     assert scan_stylesheet_for_unwrapped_tables(STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8")) == []
+    # The half padding holds on a phone only, the wide page keeps the full one.
+    assert NARROW_ERROR_LIST.search(re.sub(r"/\*.*?\*/", "", STYLESHEET.read_text(encoding="utf-8"), flags=re.DOTALL))
     # The two narrow columns carry the classes the rules size.
     template = TEMPLATE.read_text(encoding="utf-8")
     assert 'class="findling-errors__count"' in template
@@ -6876,6 +6885,7 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
         ".findling-errors__count,\n.findling-errors__state {\n\twidth: 1%;\n}\n"
         ".findling-errors th,\n.findling-errors td {\n\thyphens: auto;\n}\n"
         ".findling-errors thead th {\n\twhite-space: nowrap;\n}\n"
+        ".findling-errors td {\n\tpadding-inline: calc(var(--default-grid-baseline) * 2);\n}\n"
     )
     on_a_cell = shipped + chip + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", on_a_cell)) == 1
