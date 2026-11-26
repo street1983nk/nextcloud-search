@@ -276,10 +276,15 @@
 
 /* -- the error list -------------------------------------------------------- */
 
+/* server.css of Nextcloud gives every table white-space: nowrap, which each
+   cell, remedy and button below inherits; a remedy of several hundred
+   characters then stayed on one line and the page scrolled sideways
+   (V-45-10-07). The table takes the normal wrapping back for all of it. */
 .findling-errors {
 	width: 100%;
 	border-collapse: collapse;
 	margin-block: calc(var(--default-grid-baseline) * 4);
+	white-space: normal;
 }
 
 .findling-errors th,
@@ -288,11 +293,26 @@
 	text-align: start;
 	vertical-align: top;
 	/* A label and a count wrap rather than push the table wider than the
-	   content column of a settings block. */
+	   content column of a settings block. A browser with hyphenation for the
+	   page language splits a long word at a syllable first; overflow-wrap is
+	   the safety net below 375 px. */
+	hyphens: auto;
 	overflow-wrap: anywhere;
 }
 
+/* On a phone the cells take half the inline padding, which leaves the label
+   room for a long word such as "reconnaissable" at 375 px. */
+@media (max-width: 512px) {
+	.findling-errors th,
+	.findling-errors td {
+		padding-inline: calc(var(--default-grid-baseline) * 2);
+	}
+}
+
+/* A shrunk column takes the narrowest width of its head, so each head keeps
+   its single word whole. */
 .findling-errors thead th {
+	white-space: nowrap;
 	font-size: 13px;
 	background-color: var(--color-background-hover);
 	color: var(--color-text-maxcontrast);
@@ -309,6 +329,22 @@
 
 .findling-errors__count {
 	font-weight: bold;
+}
+
+/* The count and the verdict shrink to their content, so the label of the row
+   gets the rest and a long word such as "reconnaissable" fits whole at
+   375 px. */
+.findling-errors__count,
+.findling-errors__state {
+	width: 1%;
+	white-space: nowrap;
+}
+
+/* The verdict is one word next to an icon; it keeps that word whole instead
+   of taking the overflow-wrap of its cell and breaking it at 375 px. */
+.findling-errors .findling-chip {
+	white-space: nowrap;
+	overflow-wrap: normal;
 }
 
 /* The remedy, the expand button and the examples share one cell under the group

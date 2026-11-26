@@ -890,7 +890,7 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 					<tr class="findling-errors__group">
 						<th scope="row" class="findling-errors__label"><?php p(is_string($group['label'] ?? null) ? $group['label'] : ''); ?></th>
 						<td class="findling-errors__count" id="findling-errors-count-<?php p($state . '-' . $reason); ?>"><?php p($count($whole($group['count'] ?? 0))); ?></td>
-						<td>
+						<td class="findling-errors__state">
 							<span class="findling-chip findling-chip--<?php p($chipKind); ?>">
 								<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($chipIcon); ?>"/></svg>
 								<span><?php p($chipLabel); ?></span>
