@@ -6829,17 +6829,6 @@ COUNTED_NOUN_EXCEPTIONS: dict[str, str] = {
     "At most %s patterns are allowed.": "the bound of the list, a constant of 32",
     "OCR with %s slots": "the label of two slots and more, one slot has a sentence of its own",
 }
-# Two more sentences the gate found that the owner's approval of V-45-10-05 does
-# not cover; they can read "1" only under a deploy option an admin sets
-# (FINDLING_OCR_MAX_PAGES=1, FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1). Finding
-# V-45-10-06, held open here by name until their wording is approved.
-COUNTED_NOUN_AWAITING_OWNER: dict[str, str] = {
-    "OCR limit %1$s pages per file, set by %2$s": "V-45-10-06, FINDLING_OCR_MAX_PAGES=1",
-    (
-        "Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again."
-        ' Run "%2$s" to apply it at once.'
-    ): "V-45-10-06, FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1",
-}
 COUNTED_NOUN_SOURCES = (SCRIPT, TEMPLATE, PAGE_SCRIPT, PAGE_TEMPLATE, REPO_ROOT / "php" / "js" / "unified-search.js")
 
 
@@ -6848,9 +6837,7 @@ def scan_for_counted_nouns_without_plural(name: str, source: str) -> list[str]:
     return [
         f"{name}: {match.group(1)!r} counts a noun without a singular form, use n() or $l->n"
         for match in PLAIN_TRANSLATION_CALL.finditer(source)
-        if match.group(1) not in COUNTED_NOUN_EXCEPTIONS
-        and match.group(1) not in COUNTED_NOUN_AWAITING_OWNER
-        and COUNTED_NOUN.search(match.group(1)) is not None
+        if match.group(1) not in COUNTED_NOUN_EXCEPTIONS and COUNTED_NOUN.search(match.group(1)) is not None
     ]
 
 
@@ -6869,7 +6856,7 @@ def test_no_number_stands_before_a_plural_noun_without_a_singular_form() -> None
     assert findings == []
     # The exceptions are still in the sources, so none of them is a dead entry.
     sources = "".join(path.read_text(encoding="utf-8") for path in COUNTED_NOUN_SOURCES)
-    for sentence in [*COUNTED_NOUN_EXCEPTIONS, *COUNTED_NOUN_AWAITING_OWNER]:
+    for sentence in COUNTED_NOUN_EXCEPTIONS:
         assert f"'{sentence}'" in sources, sentence
     # Positive controls: the shapes of the finding go red, the ratio and n() stay green.
     dirty = (
