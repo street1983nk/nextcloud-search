@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
 status: executing
-stopped_at: "45-16 fertig: secure-phase 45 vor dem Tag ohne offene Threats (Owner \"Ja\"); als Nächstes 45-14 (Tag und Store je mit eigener Freigabe), danach 45-15"
-last_updated: "2026-11-26T21:30:00.000Z"
-last_activity: "2026-11-26, 45-10 bis 45-13 und 45-16 fertig: Fix V-45-10-07 und zweite Sichtprüfung, Store-Texte kurz (Freigabe), Push 22f98ef2 grün, Signatur-Probe 45892161829 Verified OK, 45-SECURITY.md threats_open 0"
+stopped_at: "45-14 fertig: Findling 1.7.0 im Store (Tag v1.7.0 auf 22f98ef2, zweimal HTTP 201, Lauf 45898491529); Belegdokumente lokal, Push-Frage offen; als Nächstes 45-15"
+last_updated: "2026-11-26T21:45:00.000Z"
+last_activity: "2026-11-26, 45-14 fertig: Tag v1.7.0, Release 45895635994 immutable und zweimal Verified OK, Fremdinstallation 45896004205 grün, Store-Einreichung 45898491529 zweimal HTTP 201, Belegkette in docs/store-listing.md"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 37
-  completed_plans: 34
-  percent: 92
+  completed_plans: 36
+  percent: 97
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 ## Current Position
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 abgeschlossen
-Plan: 45-01 bis 45-13, 45-16 und 45-17 bis 45-27 fertig; Tag-Kopf 22f98ef2, audited_head bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d, status_45_09 und status_45_10 passed, secure-phase vor dem Tag erledigt (45-SECURITY.md threats_open 0)
-Status: 45-16 abgeschlossen, nächster Schritt 45-14 (Tag und Store je mit eigener Owner-Freigabe), danach 45-15 mit dem Nachtrag der Release-Threats T-45-47 bis T-45-54 in 45-SECURITY.md und dem Phasenabschluss
-Last activity: 2026-11-26, 45-16 fertig: secure-phase 45 vor dem Tag, Owner "Ja"
+Plan: 45-01 bis 45-14, 45-16 und 45-17 bis 45-27 fertig; 1.7.0 im Store (beide Apps, Tag v1.7.0 auf 22f98ef2), audited_head bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d, status_45_09 und status_45_10 passed, secure-phase vor dem Tag erledigt (45-SECURITY.md threats_open 0)
+Status: 45-14 abgeschlossen, Findling 1.7.0 eingereicht (zweimal HTTP 201); Store-API 26.11. 21:51Z: findling_backend 1.7.0, findling noch 1.6.5 (Zwischenspeicher, Owner-Blick offen); offen: 45-15 (Antworten in #45, #56, #57, #59, #25 und Bitte in #53, Nachtrag der Release-Threats T-45-47 bis T-45-54 in 45-SECURITY.md, Phasenabschluss)
+Last activity: 2026-11-26, 45-14 fertig: 1.7.0 im Store, Belegkette in docs/store-listing.md "# Release 1.7.0 (26.11.2026)"; Push der Belegdokumente wartet auf "Freigabe Push 45-14"
 
 ## Performance Metrics
 
@@ -338,8 +338,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-23T22:40:00.000Z
-Stopped at: 45-20 fertig (lokal, nicht gepusht); als Nächstes 45-21 (Review und audited_head); 45-10 bleibt pausiert bis nach 45-21
+Last session: 2026-11-26T21:45:00.000Z
+Stopped at: 45-14 fertig, 1.7.0 im Store; Belegdokumente lokal, Push nur mit "Freigabe Push 45-14"; als Nächstes 45-15
 Resume file: None
 
 ## Operator Next Steps
