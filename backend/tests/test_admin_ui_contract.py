@@ -6829,6 +6829,9 @@ WRAPPING_RULES: tuple[tuple[str, str, str], ...] = (
     (r"\.findling-errors__count", "width", "1%"),
     (r"\.findling-errors__state", "width", "1%"),
     (r"\.findling-errors th", "hyphens", "auto"),
+    # A shrunk column takes the narrowest width of its head, so the heads keep
+    # their single word whole ("Fichiers" stood one letter per line at 375 px).
+    (r"\.findling-errors thead th", "white-space", "nowrap"),
 )
 
 
@@ -6872,6 +6875,7 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
         ".findling-errors .findling-chip {\n\twhite-space: nowrap;\n}\n"
         ".findling-errors__count,\n.findling-errors__state {\n\twidth: 1%;\n}\n"
         ".findling-errors th,\n.findling-errors td {\n\thyphens: auto;\n}\n"
+        ".findling-errors thead th {\n\twhite-space: nowrap;\n}\n"
     )
     on_a_cell = shipped + chip + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", on_a_cell)) == 1
