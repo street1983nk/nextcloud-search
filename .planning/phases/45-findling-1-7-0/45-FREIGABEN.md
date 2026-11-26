@@ -178,3 +178,6 @@ Hinweis: Zeit in UTC. Gedeckt: ein Push der lokalen Commits über origin/main 31
 
 Abnahme zweite Sichtprüfung V-45-10-07: "Ja" (2026-11-26 16:38, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Fehlerliste DE, EN, FR auf 1280, 375 und 320 ohne waagerechtes Scrollen; Trennungen mitten im Wort nur auf 320 (I-45-10-08, 1.7.1). Kein Push, kein Tag, kein Kommentar.
+
+Freigabe Storetext 45-11: "Ok" (2026-11-26 18:59, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Freigegeben wie vorgelegt in 45-STORE-VORLAGE.md (e859018a): sechs Beschreibungen findling und findling_backend in DE, EN, FR, mit Enterprise-Zeile, RAM- und CPU-Zeile, Texterkennung ohne Sprachliste, Datenschutz als eigene Zeile. Kein Push, kein Tag, kein Kommentar.
