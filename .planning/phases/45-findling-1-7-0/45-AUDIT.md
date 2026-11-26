@@ -2591,3 +2591,20 @@ Nachtrag 26.11.2026:
 | V-45-10-06 OCR-Deckel und Abgleichfrist | LOW | a73e13a5 (Freigaben, auch `Freigabe Push 45-10 Fix`), fb57b51f (RED), 9965e30b (GREEN) | nur templates/admin.php (zwei Aufrufe `$l->n` mit `$counted`), 18 Kataloge, sechs Sprachtabellen, Tests; keine Logzeile, keine Route; die Abgleichfrist kommt aus der Konstante 24 (`AdminViewService::RECONCILE_INTERVAL_HOURS`), die Einzahl ist dort Absicherung; drei Mutationen rot; Live je Sprache HTTP 200, Wert 1 und Wert größer 1 richtig |
 
 Gates am Endstand 9965e30b (seriell): ruff, ruff format (261), pyright latest 0/0/0, vulture ohne Fund; pytest in zehn Teilen 7422 passed, 305 skipped; PHPUnit `OK (1451 tests, 9087 assertions)`; `php_gates_docker.sh all` EXIT=0 (Psalm-Taint 3 x 0, php-cs-fixer 0/145, zizmor und actionlint grün). PHP-Baumhash 7c52b1f4/148 (Rezept und Pipeline gleich, Positivkontrolle git archive fb57b51f = b7faf372).
+
+Push nach "Freigabe Push 45-10 Fix" am 2026-11-26: `8c02b706..dd92da51  main -> main` (ohne Tag, Arbeitsbaum sauber, origin/main vorher unverändert, kein Rebase). Ein CI-Warter, `scripts/ci/head_green.sh dd92da51fd22a33ab8a0ff0f60e9a18a73baea5f "Python gates" "PHP and store metadata gates" "HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans"`, Exit 0, nach einem Rerun:
+
+```
+45741403354 OpenSSF Scorecard success
+45741403101 Security scans success
+45741403223 Multi-arch image success
+45741403128 PHP and store metadata gates success
+45741403174 Python gates success
+45741403229 Resilience success
+45741403102 HaRP deploy success
+45741403207 Integration success
+```
+
+Rerun: Im ersten Versuch von Integration 45741403207 lief der Job `team-folder-acl (stable34, 8.2)` in sein Zeitlimit (25 min) und wurde abgebrochen. Er hing 24 min ohne jede Ausgabe im Schritt "Install the German dictionary the analyzer reads" (02:17:59 bis 02:42:33 UTC). Das ist ein Netzwerkhänger beim Download. Mit dem Push hat er nichts zu tun: Er änderte keine Workflow-Datei, und die übrigen 11 Jobs waren grün. Neu gestartet wurde nur dieser Job (`gh run rerun --failed`), danach success. Workflow security lint lief nicht (paths-Filter).
+
+Befund I-45-10-07 (LOW, CI-Robustheit, nach 1.7.0): Der Schritt mit dem Wörterbuch-Download hat kein eigenes Zeitlimit und keinen Wiederholversuch. Ein Hänger kostet deshalb das ganze Job-Limit. Für die Register-Durchsicht in 45-16 vorgemerkt.
