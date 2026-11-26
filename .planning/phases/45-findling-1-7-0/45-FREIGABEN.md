@@ -190,3 +190,8 @@ Hinweis: Zeit in UTC. Gedeckt: genau ein Lauf `gh workflow run release.yml --ref
 
 Abschluss Security 45-16: "Ja" (2026-11-26 20:50, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. 45-SECURITY.md status verified, threats_open 0 am Tag-Kandidaten 22f98ef2; T-45-74 als akzeptiertes Risiko (Entscheid a4) dem Owner ausdrücklich genannt; T-45-47 bis T-45-54 nach dem Release in 45-15. Kein Tag, kein Push, kein Kommentar.
+
+Freigabe Tag 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Option a: Claude setzt den annotierten Tag v1.7.0 auf 22f98ef2 und pusht ihn vor 00:00 UTC (Datum im CHANGELOG 2026-11-26); ein Warter auf den Release-Lauf. Keine Store-Einreichung ohne eigene Freigabe.
+Freigabe ReleaseEdit 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-Chat) Entscheid: ja
+Freigabe Dispatch 45-14: "Go machen wir es vor 0:00" (2026-11-26 21:05, Claude-Code-Chat) Entscheid: ja
