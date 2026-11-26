@@ -5,6 +5,7 @@ Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit S
 audited_head: bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d
 status_45_21: passed
 status_45_09: passed
+status_45_10: passed
 
 ## Umfang
 
@@ -2615,7 +2616,7 @@ Code-Delta seit 9965e30b: `php/css/admin.css` (Tabelle der Fehlerliste mit `whit
 
 PHP-Baumhash a46fd501/148 (bb4c0bc8; Rezept und unabhängige Pipeline gleich, Kontrolle 293ce570 = 7c52b1f4). Voller Backend-Lauf lokal am Kopf: 7423 passed, 305 skipped (834 s). Zweite Sichtprüfung DE/EN/FR auf 1280, 375 und 320 vom Owner abgenommen (45-VOLLTEST.md, 45-FREIGABEN.md).
 
-audited_head steht damit auf bb4c0bc8 (letzter Commit außerhalb .planning, zuvor 9965e30b).
+audited_head steht damit auf bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d (letzter Commit außerhalb .planning, zuvor 9965e30b).
 
 Push nach "Freigabe Push 45-10 V-07" am 2026-11-26: `dd92da51..1db01d02  main -> main` (ohne Tag). Ein CI-Warter, `scripts/ci/head_green.sh 1db01d02fa3a0001a94ef686adeae1f75a3a1900 "Python gates" "PHP and store metadata gates" "HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans"`, Exit 0, kein Rerun nötig:
 
