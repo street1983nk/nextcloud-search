@@ -169,3 +169,6 @@ Hinweis: Zeit in UTC, wie vom Koordinator übergeben. Zwei weitere Sätze mit ei
 
 Freigabe Push 45-10 Fix: "Ok" (2026-11-26 01:44, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC, wie vom Koordinator übergeben; dasselbe "Ok" wie oben. Gedeckt: ein Push der lokalen Commits über origin/main 8c02b706 mit den Fixes V-45-10-04, V-45-10-05 und V-45-10-06 samt Planungs-Commits auf main, ausgeführt vom Koordinator, ein CI-Warter, höchstens ein Rerun fehlgeschlagener Jobs. Kein Tag, keine Store-Aktion, kein Kommentar.
+
+Abnahme Härtung 45-10: "Ok" (2026-11-26 14:40, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Abgenommen mit Änderung V-45-10-07 (langer Detailhinweis der Fehlerliste einzeilig, Seite scrollt waagerecht); der Fix folgt in Task 3, danach eine kurze zweite Sichtprüfung. I-45-10-04 und I-45-10-06 für 1.7.1. Kein Push, kein Tag, kein Kommentar.

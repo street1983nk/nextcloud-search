@@ -183,6 +183,9 @@ Vorfilter `grep -nE "(ae|oe|ue)[a-z]|ss[^a-z]"` über die in v1.6.5..HEAD hinzug
 | I-45-10-03 | INFO | Unter M1 (S3-Rückfall) zeigen auch Treffer auf externen Admin-Speichern keinen Ausschnitt | testuser vt45lokal mit Pfad als Unterzeile | zugelassen nach `Entscheid E3-Weg 45-22` |
 | I-45-10-04 | INFO | Hilfesatz der Ordnerliste nennt "Beispiel: Backups" (DE, FR ebenso), der Platzhalter ist seit 45-25 übersetzt ("Sicherungen", "Sauvegardes") | r01, Regelblock-Kopf | UI-SPEC lässt den Hilfesatz bewusst unverändert; "Backups" ist auch im Deutschen üblich; zur Kenntnis |
 | I-45-10-05 | INFO | deploy-harp.yml Z. ~4054 und ~5576 werten den repeatedly_stuck-Bestand aus (Hinweis aus 45-27) | lokal kein Auslösen des Backstops; im Log des HaRP-deploy-Laufs 45644218559 am Kopf 8c02b706 keine echte Zeile "part A candidate" oder "part B candidate", Treffer nur in den mitgeloggten Skriptquellen (Auswertung des Koordinators) | kein Befund |
+| V-45-10-07 | MEDIUM (Owner: "Fixen Aufjdenfall") | Der Detailhinweis "Für die gefragten Nutzer nicht lesbar" in `.findling-errors` (565 Zeichen) bleibt einzeilig, rund 3800 px breit; die Admin-Seite scrollt waagerecht auf jeder Breite (1280 und 375). Ursache: `table { white-space: nowrap }` aus core/css/server.css von Nextcloud. Im Volltest-Bild `bilder/de/a01-abschnitt-findling-errors.png` schon sichtbar, aber nicht erkannt | `abn/02-fehlerliste.png`, `abn/13-zhtw-375-dunkel.png` | offen, Fix in Task 3 per TDD (`white-space: normal` für die Detailzeilen), dazu neue Prüfung: kein waagerechtes Scrollen auf allen Breiten |
+| I-45-10-06 | INFO | Enter im Eingabefeld der Ordner- und Musterliste fügt keinen Eintrag hinzu, nur der Knopf | gemeinsame Abnahme Schritt 2 | für 1.7.1 vorgemerkt (Owner "Ok" zur Empfehlung) |
+| I-45-10-07 | INFO | Ein leeres, gesperrtes Kästchen (Hauptschalter aus) erscheint als gefülltes graues Quadrat | `abn/05-hauptschalter-aus.png` | Darstellung aus Nextcloud selbst, kein Befund von Findling |
 | V-45-10-06 | LOW | Zwei weitere Sätze mit einer Zahl vor einem Nomen im Plural, die die Freigabe von V-45-10-05 nicht deckte: "OCR limit %1$s pages per file, set by %2$s" (zeigt 1 unter `FINDLING_OCR_MAX_PAGES=1`) und "Removing an entry takes effect within %1$s hours, ...". Korrektur zu meinem Bericht: die Stunden des zweiten Satzes kommen in 1.7.0 aus der Konstante `AdminViewService::RECONCILE_INTERVAL_HOURS = 24` und nicht aus `FINDLING_RECONCILE_MIN_INTERVAL_HOURS`; eine 1 ist dort heute nicht erreichbar, die Einzahl sichert eine spätere Änderung ab | Gate ohne Ausnahme (RED fb57b51f, 2 Funde) | behoben nach `Freigabe Texte V-45-10-06` (Owner "Ok" 2026-11-26 01:44 UTC): 9965e30b, `%n` und `$counted` wie bei V-45-10-05, 18 Kataloge, sechs Sprachtabellen, keine eigene CHANGELOG-Zeile; drei Mutationen rot (OCR-Satz zurück auf `$l->t`, Abgleichsatz ohne `%n`, Abgleichsatz zurück auf `$l->t`) |
 
 ## Nachtrag
@@ -211,3 +214,21 @@ Dazu je Sprache, 1280 hell: Satz bei stummem Backend (Backend kurz gestoppt) "..
 Format der Zahl gegengeprüft (eigene Probe, nicht das Muster des Gates): Skript `counted` mit Intl de-DE "12345 Dateien sind durchsuchbar." -> "12.345 Dateien sind durchsuchbar.", fr-FR "1234 fichiers, dont 1234 ..." -> "1 234 fichiers, dont 1234 ..." (nur die Zahl am %n), Platzhalter `%1$s`/`%2$s` unberührt; Template `$counted` mit NumberFormatter de_DE in der Instanz "12345 Dateien, davon 12345 mit OCR." -> "12.345 Dateien, davon 12345 mit OCR." (`scratchpad/pw/zahlform.js`, `scratchpad/vt/zahlform.php`).
 
 Stand der Saat nach den Proben: `excluded_external_mounts` = `[2]` (Speicher 2 ausgeschlossen, für die gemeinsame Abnahme Schritt 3 bereit), `/Projektablage` zugelassen; Backend-Umgebung `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1`, `FINDLING_RECONCILE_HOUR=18`.
+
+## Owner-Abnahme
+
+Gemeinsam per Playwright am 2026-11-26, 06:00 bis 14:35 UTC, Stand dd92da51 (audited_head 9965e30b), Admin-Sprache DE, Bilder `scratchpad/abn/01` bis `14`.
+
+| Schritt | Ergebnis |
+|---|---|
+| 1 Speicherliste | Typ und ID je Speicher sichtbar, Bestätigung bei doppeltem Einhängepunkt, Hauptschalter aus sperrt die Liste: erwartet |
+| 2 Zähler, Feldfehler, Markierung, no_wildcard | Zähler bis 0 mit Warnfarbe, Feldfehler in Fehlerfarbe, Markierung alter Ordnereinträge, Meldung zu Platzhaltern beim Speichern: erwartet |
+| 3 Ausschließen und Wiederzulassen | Speicher 2 ausgeschlossen: testuser `vt45markupa` 0 Treffer, alice `vt45markupb` 1 Treffer (Kontrolle). Wieder zugelassen gegen 07:12 UTC, Abgleich 08:31:03 UTC (mounts 8 -> 9), danach testuser "Bericht-A.txt", alice "Bericht-B.txt": erwartet |
+| 4 EN, FR, zh_TW 375 dunkel | Texte richtig; Zahlen im Format fr_FR, da das Admin-Konto diese Locale hat (gewollt); waagerechtes Scrollen auch auf 375, gleiche Ursache wie V-45-10-07 |
+| 5 Neuerungen seit 45-17 | E3 unter M1: alice nur Dateiname bei `vt45e3ohne`/`vt45e3mit`, bob Ausschnitt. policy_blocked live: "Durch eine Regel blockiert", 1 Fehlgeschlagen, Hinweis samt "vt45e3tag.odt (ID 146)". Hinweis #25 live in DE. Platzhalter Diagnose "alice/files/Verträge/Miete.pdf", "Sicherungen", "*.photoslibrary". P-LCK aus dem Volltest (`bilder/zustand/lck-apcu-*`) |
+
+Befunde: V-45-10-07 (MEDIUM, Fix beschlossen), I-45-10-04 und I-45-10-06 für 1.7.1, I-45-10-07 aus Nextcloud selbst.
+
+Panne in der Testumgebung: Um `vt45e3tag.odt` neu einlesen zu lassen, lud der Koordinator die Datei als bob per curl herunter und wieder hoch. Der Download war unter Secure View gesperrt (403), so ersetzte der Fehlertext den Inhalt. Sofort über die Versionen wiederhergestellt (`MOVE .../versions/146/1795621942` nach `restore/target`, 201; 786 Bytes, ODT). Die Version 1795677254 mit dem Fehlertext steht weiter im Verlauf. Nur Testdaten betroffen; Wasserzeichen danach zurück auf M1 (`watermark_allTags` no).
+
+Entscheid des Owners: abgenommen mit Änderung V-45-10-07 ("Ok", 2026-11-26 14:40 UTC). Nach dem Fix folgt eine kurze zweite Sichtprüfung.
