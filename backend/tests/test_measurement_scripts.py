@@ -1614,8 +1614,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # No file came or went. The recipe gave 7c52b1f4; the independent pipeline gave 7c52b1f4 as well;
 # the recipe and the pipeline over git archive of fb57b51f, the last commit before this change,
 # gave b7faf372 with 148 files (positive control).
+# Moved on 2026-11-26 a second time by plan 45-10 (finding V-45-10-07 of the joint acceptance,
+# owner: fix it): the state cell of a group row in templates/admin.php carries the class
+# findling-errors__state, so css/admin.css can shrink it to its chip. No file came or went. The
+# recipe gave a46fd501; the independent pipeline of find, sort, sed (CRLF to LF) and sha256sum
+# gave a46fd501 as well; the recipe and the pipeline over git archive of 293ce570, the last commit
+# before this change, gave 7c52b1f4 with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "7c52b1f488dedb7281e6c858048a8ee20607b319e45fa03df4862100ded039ee"
+PHP_TREE_HASH_TODAY = "a46fd501cfbdd98c11c72fab4eaa8d83905cd8010f89cd85a817c671fc4aa811"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
