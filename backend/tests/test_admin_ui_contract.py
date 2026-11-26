@@ -6819,10 +6819,16 @@ def test_the_coloured_sentences_outrank_the_muted_paragraphs_of_a_settings_secti
 # of the table inherits; overflow-wrap cannot break a line that may not wrap.
 # Once the table wraps, the verdict chip of a row inherits the
 # overflow-wrap: anywhere of its cell and broke mid-word at 375 px
-# ("Übersp" / "rungen"), so the chip keeps its word whole on its own.
+# ("Übersp" / "rungen"), so the chip keeps its word whole on its own. The
+# count and the state column shrink to their content, so the label gets the
+# rest of the row and a long word such as "reconnaissable" fits whole at
+# 375 px; overflow-wrap stays the safety net below that.
 WRAPPING_RULES: tuple[tuple[str, str, str], ...] = (
     (r"(?:table)?\.findling-errors", "white-space", "normal"),
     (r"\.findling-errors \.findling-chip", "white-space", "nowrap"),
+    (r"\.findling-errors__count", "width", "1%"),
+    (r"\.findling-errors__state", "width", "1%"),
+    (r"\.findling-errors th", "hyphens", "auto"),
 )
 
 
@@ -6853,18 +6859,26 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
     scroll sideways at 1280 and at 375.
     """
     assert scan_stylesheet_for_unwrapped_tables(STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8")) == []
-    # Red on the shape the page shipped with (both rules missing), on a reset
+    # The two narrow columns carry the classes the rules size.
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert 'class="findling-errors__count"' in template
+    assert re.search(r'<td class="findling-errors__state">\s*<span class="findling-chip', template) is not None
+    # Red on the shape the page shipped with (every rule missing), on a reset
     # that sits on a cell only or is commented out, and on a fixed table whose
     # chip may break; green with both rules.
     shipped = ".findling-errors {\n\twidth: 100%;\n}\n.findling-errors td {\n\toverflow-wrap: anywhere;\n}\n"
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", shipped)) == len(WRAPPING_RULES)
-    chip = ".findling-errors .findling-chip {\n\twhite-space: nowrap;\n}\n"
+    chip = (
+        ".findling-errors .findling-chip {\n\twhite-space: nowrap;\n}\n"
+        ".findling-errors__count,\n.findling-errors__state {\n\twidth: 1%;\n}\n"
+        ".findling-errors th,\n.findling-errors td {\n\thyphens: auto;\n}\n"
+    )
     on_a_cell = shipped + chip + ".findling-errors__detail td {\n\twhite-space: normal;\n}\n"
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", on_a_cell)) == 1
     commented = shipped.replace("width: 100%;", "width: 100%;\n\t/* white-space: normal; */") + chip
     assert len(scan_stylesheet_for_unwrapped_tables("sample.css", commented)) == 1
     table_only = shipped.replace("width: 100%;", "width: 100%;\n\twhite-space: normal;")
-    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", table_only)) == 1
+    assert len(scan_stylesheet_for_unwrapped_tables("sample.css", table_only)) == len(WRAPPING_RULES) - 1
     assert scan_stylesheet_for_unwrapped_tables("sample.css", table_only + chip) == []
 
 
