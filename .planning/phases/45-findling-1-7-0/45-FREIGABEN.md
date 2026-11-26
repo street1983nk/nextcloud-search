@@ -187,3 +187,6 @@ Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 1db01d
 
 Freigabe Signatur 45-13: "Ja" (2026-11-26 19:55, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: genau ein Lauf `gh workflow run release.yml --ref main -f create_release=false` auf dem Tag-Kopf, nachdem die CI von 45-12 grün ist; baut und signiert beide Archive, veröffentlicht nichts. Kein Tag, keine Store-Aktion, kein Kommentar.
+
+Abschluss Security 45-16: "Ja" (2026-11-26 20:50, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. 45-SECURITY.md status verified, threats_open 0 am Tag-Kandidaten 22f98ef2; T-45-74 als akzeptiertes Risiko (Entscheid a4) dem Owner ausdrücklich genannt; T-45-47 bis T-45-54 nach dem Release in 45-15. Kein Tag, kein Push, kein Kommentar.
