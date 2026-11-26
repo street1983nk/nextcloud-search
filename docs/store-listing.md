@@ -3357,6 +3357,215 @@ Nicht geprüft: die Fremdinstallation aus den Release-Assets als eigener
 Dispatch von `deploy-harp.yml` mit `release_tag=v1.6.4`; der HaRP-Lauf auf
 dem Tag (43210900560) ist grün.
 
+# Entwurf v1.7.0 (Store-Texte kurz), Stand 26.11.2026
+
+**Entwurf, dem Owner noch nicht abgenommen.** Plan 45-11, STORE-03, nach der
+Abnahme der Härtung 45-10. Grundlage: D-45-13 (Entwurf kurz vor dem Release,
+Einbau erst nach Freigabe), D-45-14 (Kern bleibt: Datenschutz-Satz,
+Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku; Messzahl, die fünf
+Grenzen, Formatliste, Share-Satz und "Similar documents" wandern in die
+READMEs aller drei Sprachen) und die Owner-Regeln "Store-Texte kurz, Link auf
+GitHub-Doku" und "Produkttexte = Faktenliste, Entwurf vor Release zeigen".
+Vorlage für den Owner mit Längenvergleich und Diff-Auszug:
+`.planning/phases/45-findling-1-7-0/45-STORE-VORLAGE.md`.
+
+Aufbau jeder Beschreibung: ein Satz, was die App tut; Kernpunkte als Liste
+(höchstens fünf); Datenschutz-Satz, Connector-Satz und Umstiegs-Link wörtlich
+wie in 1.6.5 (Link auf `blob/v1.7.0`); Anforderungen; Link auf das README der
+eigenen Sprache auf `blob/v1.7.0`; Enterprise-Zeile wie bisher. Namen und
+Summaries bleiben unverändert.
+
+Länge (Zeichen der Beschreibung, Store-API abgefragt am 2026-11-26T18:42:31Z):
+context_chat 610 (en), files_fulltextsearch_tesseract 357 (en),
+fulltextsearch 62 (en), recognize 3148 (en); Findling 1.6.5 im Store 2517 (en),
+2662 (de), 2884 (fr). Entwurf findling 1279 (en), 1329 (de), 1473 (fr);
+findling_backend 1212 (en), 1215 (de), 1375 (fr).
+
+## Teil 1: `findling`, en (ohne `lang`)
+
+```
+Full text, OCR and semantic search for your Nextcloud files, in the normal search bar and without configuration.
+
+What Findling does:
+- Full text search in the normal Nextcloud search bar
+- OCR for scanned PDFs and images
+- Semantic search: finds documents through paraphrases
+- Every result is permission-checked by Nextcloud
+- No configuration: the first index run starts on its own
+
+Privacy: everything runs locally, no telemetry, nothing leaves your server
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI (HaRP as the deploy target), Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough
+- CPU: 2 cores are enough, amd64 and arm64
+
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.en.md)
+
+Documentation: [README on GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.en.md)
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+```
+
+## Teil 2: `findling`, de
+
+```
+Volltextsuche, Texterkennung und semantische Suche für Ihre Nextcloud-Dateien, in der normalen Suchleiste und ohne Konfiguration.
+
+Was Findling kann:
+- Volltextsuche über die normale Nextcloud-Suchleiste
+- Texterkennung für gescannte PDFs und Bilder
+- Semantische Suche: findet Dokumente auch über Umschreibungen
+- Jeder Treffer wird von Nextcloud rechtegeprüft
+- Keine Konfiguration: der erste Indexlauf startet von selbst
+
+Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI (HaRP als Deploy-Ziel), Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.md)
+
+Dokumentation: [README auf GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.md)
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+```
+
+## Teil 3: `findling`, fr
+
+```
+Recherche plein texte, OCR et recherche sémantique pour vos fichiers Nextcloud, dans la barre de recherche normale et sans configuration.
+
+Ce que Findling sait faire :
+- Recherche plein texte dans la barre de recherche normale de Nextcloud
+- Reconnaissance optique pour les PDF numérisés et les images
+- Recherche sémantique : trouve les documents par des périphrases
+- Chaque résultat est vérifié par Nextcloud selon vos droits
+- Aucune configuration : la première indexation démarre d'elle-même
+
+Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI (HaRP comme cible de déploiement), Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.fr.md)
+
+Documentation : [README sur GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.fr.md)
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+```
+
+## Teil 4: `findling_backend`, en (ohne `lang`)
+
+```
+The External App behind the Findling search app: text extraction, OCR and the search index.
+
+What Findling Backend is:
+- Runs entirely inside your own instance and does nothing without the Findling app
+- Never modifies your files
+- Performance profile and search model are chosen on the admin page of the Findling app
+
+Privacy: everything runs locally, no telemetry, nothing leaves your server
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI (HaRP as the deploy target), Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough
+- CPU: 2 cores are enough, amd64 and arm64
+
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.en.md)
+
+Documentation: [README on GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.en.md)
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+```
+
+## Teil 5: `findling_backend`, de
+
+```
+Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex.
+
+Was Findling Backend ist:
+- Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
+- Verändert nie Ihre Dateien
+- Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
+
+Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI (HaRP als Deploy-Ziel), Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.md)
+
+Dokumentation: [README auf GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.md)
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+```
+
+## Teil 6: `findling_backend`, fr
+
+```
+L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index.
+
+Ce qu'est Findling Backend :
+- Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
+- Ne modifie jamais vos fichiers
+- Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
+
+Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI (HaRP comme cible de déploiement), Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.fr.md)
+
+Documentation : [README sur GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.fr.md)
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+```
+
+## Liste der Verlagerungen
+
+Was die Beschreibungen abgeben, steht seit Plan 45-07 in allen drei READMEs
+(README.md, README.en.md, README.fr.md) und wird dort geprüft:
+
+| Inhalt (bisher im Store-Text) | README-Abschnitt de / en / fr | Gate (backend/tests) |
+|---|---|---|
+| Filter nach Dateityp oder Ordner | Was Findling kann / What Findling does / Ce que Findling sait faire | keiner (README-Liste) |
+| Texterkennung: zehn Sprachen, drei voreingestellt | wie oben | keiner (README-Liste) |
+| Ähnliche Dokumente | wie oben | test_the_similar_documents_line_stands_once_in_every_readme (test_store_metadata.py), test_the_similar_documents_line_stands_in_all_six_descriptions_and_the_changelog (test_phase36_audit.py, liest die READMEs) |
+| Ordner oder Muster ausschließen | wie oben | keiner (README-Liste) |
+| Leistungsprofile, Suchmodell int8/fp32 | wie oben | keiner (README-Liste) |
+| Suchsprachen | wie oben, letzter Punkt | test_the_language_line_stands_right_before_the_limitations_in_all_three_readmes |
+| Die fünf bekannten Grenzen | Bekannte Grenzen / Known limitations / Limites connues | test_every_readme_carries_the_five_known_limitations_under_its_heading, test_the_english_known_limitations_of_the_readme_stand_verbatim_in_the_doc |
+| Formatliste | Unterstützte Dateitypen / Supported file types / Types de fichiers pris en charge | test_every_readme_names_the_formats_of_1_5_in_its_file_type_section |
+| Messzahl (residenter Speicher nach einem Indexlauf, 2-GB-Grenze) | Anforderungen / Requirements / Prérequis | test_the_measured_figure_stands_once_in_every_readme_in_the_spelling_of_its_language |
+| Share-Satz (Profile Standard und Leistung) | Anforderungen / Requirements / Prérequis | test_the_share_sentence_stands_in_the_readme_of_its_language |
+
+Neu im Store-Text: der einleitende Satz je App, "(HaRP als Deploy-Ziel)" in
+der Anforderungszeile (Wortlaut aus den READMEs) und die Zeile
+"Dokumentation" mit dem README-Link. Der Datenschutz-Satz steht als eigene
+Zeile statt als Listenpunkt, Wortlaut unverändert.
+
 # Release 1.6.3 (12.11.2026)
 
 Store-Text und Release-Notiz sind die am 11.11.2026 abgenommene Fassung oben
