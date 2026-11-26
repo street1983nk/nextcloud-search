@@ -2,7 +2,7 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: b9ace7bd90750834e2c84ddb8e2b6bc9c551c3a1
+audited_head: 9965e30b3330caf1291c246c3c0a993464882a7a
 status_45_21: passed
 status_45_09: passed
 
@@ -2569,7 +2569,7 @@ Der Code-Delta seit dem audited_head von 45-21 ist genau Plan 45-27 (17 Dateien,
 - Keine neue nutzersichtbare Zeichenkette in einem Katalog und keine Routenänderung: `git diff 131b4536 d3e6d76a -- php/l10n backend/appinfo php/appinfo` und `-- backend/src/findling/api` je 0 Zeilen.
 - QueueMapper.php: außer Kommentaren ändert sich nur die Lesung `$dirtyBefore` vor den beiden Updates und ihre Verwendung in der Rückgabezeile (diff ohne Kommentarzeilen: drei Zeilen).
 
-audited_head (oben im Dokument) stand nach diesem Abschnitt auf d3e6d76a047421482af9ea3adcbff42fa0b690d6 und steht seit dem Fix-Durchlauf unten auf b9ace7bd90750834e2c84ddb8e2b6bc9c551c3a1.
+audited_head (oben im Dokument) stand nach diesem Abschnitt auf d3e6d76a047421482af9ea3adcbff42fa0b690d6 und steht seit dem Fix-Durchlauf unten auf 9965e30b3330caf1291c246c3c0a993464882a7a (zuvor b9ace7bd).
 
 ### Fix-Durchlauf
 
@@ -2584,4 +2584,10 @@ Ursache des 500 am Stand 1d832d03, an der Quelle belegt (nextcloud 34.0.3 in der
 
 Gates am Stand b9ace7bd (seriell): ruff `All checks passed!`, ruff format `261 files already formatted`, pyright latest `0 errors, 0 warnings, 0 informations`, vulture ohne Fund; pytest in zehn Teilen 7422 passed, 305 skipped; PHPUnit `OK (1451 tests, 9087 assertions)`; `php_gates_docker.sh all` EXIT=0 (Psalm-Taint 3 x `No errors found!`, `taint findings: 0`; php-cs-fixer `Found 0 of 145 files`; zizmor `No findings to report.`; actionlint grün). PHP-Baumhash b7faf372/148 (Rezept und Pipeline gleich, Positivkontrolle git archive d5efe7cd = 00bf7160).
 
-Offen aus dem Volltest: V-45-10-06 (LOW, zwei weitere Zahlensätze unter Deploy-Optionen, Textfreigabe nötig), siehe 45-VOLLTEST.md.
+Nachtrag 26.11.2026:
+
+| Befund | Schwere | Commits | Delta-Audit (Probe) |
+|---|---|---|---|
+| V-45-10-06 OCR-Deckel und Abgleichfrist | LOW | a73e13a5 (Freigaben, auch `Freigabe Push 45-10 Fix`), fb57b51f (RED), 9965e30b (GREEN) | nur templates/admin.php (zwei Aufrufe `$l->n` mit `$counted`), 18 Kataloge, sechs Sprachtabellen, Tests; keine Logzeile, keine Route; die Abgleichfrist kommt aus der Konstante 24 (`AdminViewService::RECONCILE_INTERVAL_HOURS`), die Einzahl ist dort Absicherung; drei Mutationen rot; Live je Sprache HTTP 200, Wert 1 und Wert größer 1 richtig |
+
+Gates am Endstand 9965e30b (seriell): ruff, ruff format (261), pyright latest 0/0/0, vulture ohne Fund; pytest in zehn Teilen 7422 passed, 305 skipped; PHPUnit `OK (1451 tests, 9087 assertions)`; `php_gates_docker.sh all` EXIT=0 (Psalm-Taint 3 x 0, php-cs-fixer 0/145, zizmor und actionlint grün). PHP-Baumhash 7c52b1f4/148 (Rezept und Pipeline gleich, Positivkontrolle git archive fb57b51f = b7faf372).

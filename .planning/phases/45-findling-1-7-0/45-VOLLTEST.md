@@ -183,9 +183,20 @@ Vorfilter `grep -nE "(ae|oe|ue)[a-z]|ss[^a-z]"` über die in v1.6.5..HEAD hinzug
 | I-45-10-03 | INFO | Unter M1 (S3-Rückfall) zeigen auch Treffer auf externen Admin-Speichern keinen Ausschnitt | testuser vt45lokal mit Pfad als Unterzeile | zugelassen nach `Entscheid E3-Weg 45-22` |
 | I-45-10-04 | INFO | Hilfesatz der Ordnerliste nennt "Beispiel: Backups" (DE, FR ebenso), der Platzhalter ist seit 45-25 übersetzt ("Sicherungen", "Sauvegardes") | r01, Regelblock-Kopf | UI-SPEC lässt den Hilfesatz bewusst unverändert; "Backups" ist auch im Deutschen üblich; zur Kenntnis |
 | I-45-10-05 | INFO | deploy-harp.yml Z. ~4054 und ~5576 werten den repeatedly_stuck-Bestand aus (Hinweis aus 45-27) | lokal kein Auslösen des Backstops; im Log des HaRP-deploy-Laufs 45644218559 am Kopf 8c02b706 keine echte Zeile "part A candidate" oder "part B candidate", Treffer nur in den mitgeloggten Skriptquellen (Auswertung des Koordinators) | kein Befund |
-| V-45-10-06 | LOW | Das Gate fand zwei weitere Sätze mit einer Zahl vor einem Nomen im Plural, die die Freigabe von V-45-10-05 nicht deckt: "OCR limit %1$s pages per file, set by %2$s" und "Removing an entry takes effect within %1$s hours, ...". Sie zeigen "1" nur unter einer Deploy-Option des Admins (`FINDLING_OCR_MAX_PAGES=1`, `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1`) | `COUNTED_NOUN_AWAITING_OWNER` im Gate, namentlich offen gehalten | offen, Owner-Entscheid und Textfreigabe nötig |
+| V-45-10-06 | LOW | Zwei weitere Sätze mit einer Zahl vor einem Nomen im Plural, die die Freigabe von V-45-10-05 nicht deckte: "OCR limit %1$s pages per file, set by %2$s" (zeigt 1 unter `FINDLING_OCR_MAX_PAGES=1`) und "Removing an entry takes effect within %1$s hours, ...". Korrektur zu meinem Bericht: die Stunden des zweiten Satzes kommen in 1.7.0 aus der Konstante `AdminViewService::RECONCILE_INTERVAL_HOURS = 24` und nicht aus `FINDLING_RECONCILE_MIN_INTERVAL_HOURS`; eine 1 ist dort heute nicht erreichbar, die Einzahl sichert eine spätere Änderung ab | Gate ohne Ausnahme (RED fb57b51f, 2 Funde) | behoben nach `Freigabe Texte V-45-10-06` (Owner "Ok" 2026-11-26 01:44 UTC): 9965e30b, `%n` und `$counted` wie bei V-45-10-05, 18 Kataloge, sechs Sprachtabellen, keine eigene CHANGELOG-Zeile; drei Mutationen rot (OCR-Satz zurück auf `$l->t`, Abgleichsatz ohne `%n`, Abgleichsatz zurück auf `$l->t`) |
 
 ## Nachtrag
+
+### Kurzprobe V-45-10-06 (2026-11-26, 02:10 bis 02:20 UTC, Admin-Seite je Sprache HTTP 200, Konsole leer)
+
+| Zustand | DE | EN | FR |
+|---|---|---|---|
+| `FINDLING_OCR_MAX_PAGES=1` (Deploy-Option) | "OCR-Deckel 1 Seite je Datei, gesetzt durch FINDLING_OCR_MAX_PAGES" | "OCR limit 1 page per file, set by FINDLING_OCR_MAX_PAGES" | "Limite OCR 1 page par fichier, définie par FINDLING_OCR_MAX_PAGES" |
+| `FINDLING_OCR_MAX_PAGES=2` | "OCR-Deckel 2 Seiten je Datei, ..." | "OCR limit 2 pages per file, ..." | "Limite OCR 2 pages par fichier, ..." |
+| Abgleichsatz mit 24 (Normalbetrieb) | "... innerhalb von 24 Stunden, ..." | "... within 24 hours, ..." | "... sous 24 heures, ..." |
+| Abgleichsatz mit 1, SIMULATION (Konstante `RECONCILE_INTERVAL_HOURS` kurz auf 1, 02:14:38 bis 02:15:12 UTC, Datei per SHA-256 byte-gleich zurück, e0eaa943) | "... innerhalb von 1 Stunde, ..." | "... within 1 hour, ..." | "... sous 1 heure, ..." |
+
+Bilder `bilder/plural/sechs-<zustand>-<lang>.png`. Danach Abnahmestand wiederhergestellt: `FINDLING_OCR_MAX_PAGES` entfernt (Zeile verborgen), Backend-Umgebung `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1`, `FINDLING_RECONCILE_HOUR=18`, Admin-Sprache DE, Stapel gestoppt, Volumes erhalten.
 
 ### Proben P-PLU nach dem Fix V-45-10-05 (2026-11-25, 18:05 bis 18:15 UTC, Admin-Seite HTTP 200)
 
