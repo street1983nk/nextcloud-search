@@ -2,7 +2,7 @@
 
 Stand: 2026-11-22. Muster: Delta-Audit 43-27 (Prüfpunkt mit Probe, Befund mit Schwere, Fixes ab MEDIUM per TDD, audited_head).
 
-audited_head: 9965e30b3330caf1291c246c3c0a993464882a7a
+audited_head: bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d
 status_45_21: passed
 status_45_09: passed
 
@@ -2608,3 +2608,24 @@ Push nach "Freigabe Push 45-10 Fix" am 2026-11-26: `8c02b706..dd92da51  main -> 
 Rerun: Im ersten Versuch von Integration 45741403207 lief der Job `team-folder-acl (stable34, 8.2)` in sein Zeitlimit (25 min) und wurde abgebrochen. Er hing 24 min ohne jede Ausgabe im Schritt "Install the German dictionary the analyzer reads" (02:17:59 bis 02:42:33 UTC). Das ist ein Netzwerkhänger beim Download. Mit dem Push hat er nichts zu tun: Er änderte keine Workflow-Datei, und die übrigen 11 Jobs waren grün. Neu gestartet wurde nur dieser Job (`gh run rerun --failed`), danach success. Workflow security lint lief nicht (paths-Filter).
 
 Befund I-45-10-07 (LOW, CI-Robustheit, nach 1.7.0): Der Schritt mit dem Wörterbuch-Download hat kein eigenes Zeitlimit und keinen Wiederholversuch. Ein Hänger kostet deshalb das ganze Job-Limit. Für die Register-Durchsicht in 45-16 vorgemerkt.
+
+### Fix V-45-10-07 (Task 3 von 45-10)
+
+Code-Delta seit 9965e30b: `php/css/admin.css` (Tabelle der Fehlerliste mit `white-space: normal` gegen das `nowrap` aus server.css; Chip, Köpfe und schmale Spalten bleiben ganz; halbe Zellpolster unter 512 px), `php/templates/admin.php` (Klasse `findling-errors__state` an der Zustandszelle) und die Tests. RED 33c41cd1, 972f90ab, 12107b50, 8ba59d82, 293ce570; GREEN 2751fc1f; Gate `test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_table` mit Positivkontrolle und Mutationen (9 von 9 rot). Kein PHP-Logikpfad, keine neue Eingabe, kein Rechte- oder Datenpfad berührt: CSS und eine Klasse im Template, Ausgabe weiter über `p()`.
+
+PHP-Baumhash a46fd501/148 (bb4c0bc8; Rezept und unabhängige Pipeline gleich, Kontrolle 293ce570 = 7c52b1f4). Voller Backend-Lauf lokal am Kopf: 7423 passed, 305 skipped (834 s). Zweite Sichtprüfung DE/EN/FR auf 1280, 375 und 320 vom Owner abgenommen (45-VOLLTEST.md, 45-FREIGABEN.md).
+
+audited_head steht damit auf bb4c0bc8 (letzter Commit außerhalb .planning, zuvor 9965e30b).
+
+Push nach "Freigabe Push 45-10 V-07" am 2026-11-26: `dd92da51..1db01d02  main -> main` (ohne Tag). Ein CI-Warter, `scripts/ci/head_green.sh 1db01d02fa3a0001a94ef686adeae1f75a3a1900 "Python gates" "PHP and store metadata gates" "HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans"`, Exit 0, kein Rerun nötig:
+
+```
+45857375666 OpenSSF Scorecard success
+45857375726 Security scans success
+45857375729 Multi-arch image success
+45857375762 PHP and store metadata gates success
+45857375869 Python gates success
+45857375687 Integration success
+45857375721 Resilience success
+45857375858 HaRP deploy success
+```
