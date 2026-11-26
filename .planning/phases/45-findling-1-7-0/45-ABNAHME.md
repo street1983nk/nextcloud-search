@@ -61,3 +61,23 @@ Freigabe Signatur 45-13 "Ja". `gh workflow run release.yml --ref main -f create_
 ```
 
 Beide Release-Signaturen "Verified OK", Code-Signatur der Companion-App geschrieben und im Archiv, beide Archive unter 20 971 520 B (808 546 und 52 371). Kein Release angelegt: `gh release view v1.7.0` endet mit Exit 1, vor und nach dem Lauf.
+
+## Vorprüfung Tag
+
+Stand 2026-11-26, Tag-Kopf 22f98ef260fb12f8b55844b76d8070e64f441a4d.
+
+- Code am Tag-Kopf gleich origin/main (`git diff --quiet <tk> origin/main -- . ':!.planning'`: 0): ja
+- Diff audited_head bb4c0bc8..Tag-Kopf außerhalb .planning genau die in 45-12 erlaubten Dateien: CHANGELOG.de.md, CHANGELOG.fr.md, CHANGELOG.md (nur Datumszeile), backend/appinfo/info.xml, backend/tests/test_store_metadata.py, docs/store-listing.md, php/appinfo/info.xml: ja
+- CHANGELOG `## [1.7.0] - 2026-11-26` gleich dem heutigen Datum (UTC): ja. Wird der Tag erst nach 00:00 UTC gesetzt, liegt das Datum einen Tag zurück (Befund an den Owner).
+- head_green.sh sieben Workflows am Tag-Kopf: grün (Läufe oben, ein Rerun HaRP deploy, I-45-12-01)
+- Signatur-Probe 45892161829 auf dem Tag-Kopf: grün, zweimal Verified OK
+- Kein Tag v1.7.0 auf origin (`git ls-remote --tags origin v1.7.0`: 0 Zeilen), kein Release (`gh release view v1.7.0`: Exit 1): ja
+- Alle blob/v1.7.0-Pfade der beiden info.xml existieren am Tag-Kopf (`git cat-file -e`): README.md, README.en.md, README.fr.md, docs/migrate-from-fulltextsearch.md, .en.md, .fr.md: ja
+- Security: 45-SECURITY.md threats_open 0, Abschluss Security 45-16 "Ja": ja
+
+Befehlsfertig:
+
+```
+git tag -a v1.7.0 -m "Findling 1.7.0" 22f98ef260fb12f8b55844b76d8070e64f441a4d
+git push origin v1.7.0
+```
