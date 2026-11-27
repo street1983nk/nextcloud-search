@@ -270,6 +270,18 @@ async def snippets(
             until=body.until,
         )
     )
-    return SnippetsResponse(
-        snippets={str(one.file_id): Snippet(text=one.text, highlights=one.highlights) for one in cut}
-    )
+    return SnippetsResponse(snippets=wire_snippets(cut))
+
+
+def wire_snippets(cut: list[index_search.SnippetText]) -> dict[str, Snippet]:
+    """The excerpts that go over the wire: only those with text (issue #63).
+
+    The cut answers an empty text when it found nothing to quote, for example
+    when the hit is the file name only. Such an entry made the unified search
+    show an empty line instead of the path, because the companion takes the
+    path only for a hit without an entry. A blank text is left out here, and
+    the companion of 1.7.1 does the same on its side for older containers.
+    """
+    return {
+        str(one.file_id): Snippet(text=one.text, highlights=one.highlights) for one in cut if one.text.strip() != ""
+    }

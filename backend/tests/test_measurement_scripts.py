@@ -1624,8 +1624,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # templates/admin.php repeats the state chip in the row head of a group. No file came or went.
 # The recipe gave 7ce0ad5c; the recipe over git archive of e6932901, the last commit before this
 # change, gave a46fd501 with 148 files (positive control).
+# Moved on 2026-11-27 by plan 46-07 (issue #63, owner: in 1.7.1): ExAppService::filterSnippets
+# keeps no excerpt whose text is empty or blank, and tests/Unit/ExAppServiceTest.php holds it.
+# No file came or went. The recipe gave 623f4735; the recipe over git archive of f141c23a, the
+# last commit before this change, gave 7ce0ad5c with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda992097c"
+PHP_TREE_HASH_TODAY = "623f4735568ce4166d5ffca486fd1704271974bc35fb4975bccb136f72fd556e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -3180,8 +3184,13 @@ PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda
 # tree: d031ba6c... both ways, and the recipe and the same pipeline over git
 # archive of 2a7befdc, the last commit before this change, gave 961cd6ae...
 # with 83 files (positive control).
+#
+# Moved on 2026-11-27 by plan 46-07 (issue #63, owner: in 1.7.1): api/snippets.py sends no excerpt
+# whose text is empty or blank (wire_snippets). No file came or went, so PACKAGE_FILES_TODAY stays
+# at 83. The recipe gave 5495490c; the recipe over git archive of f141c23a, the last commit before
+# this change, gave d031ba6c with 83 files (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "d031ba6c76651582db17eb55754cece37426ed0062e7881955ae0c5f4bea6325"
+PACKAGE_TREE_HASH_TODAY = "5495490c21dcbe39bbcdfe447944e187ee5e128eeeb8d246a6cfd0196431855c"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
