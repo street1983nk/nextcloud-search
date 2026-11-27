@@ -5431,6 +5431,80 @@ def test_the_folder_field_refuses_a_wildcard_and_keeps_what_was_typed() -> None:
     assert "    refreshSlots()\n  }" in script
 
 
+# I-45-10-06 (plan 46-02): Enter in the field of either rule list adds the entry
+# the way the button does. One helper hangs the key on a field; it leaves an
+# Enter alone while an input method composes (Zhuyin for zh_TW sends Enter to
+# confirm a word, with isComposing set or keyCode 229), and an Enter with a
+# modifier, and it calls the very function the click of the button calls, so
+# there is one check and one set of messages for both ways.
+ENTER_HELPER_START = "  function addOnEnter (field, addEntry) {"
+ENTER_HELPER_PARTS = (
+    "field.addEventListener('keydown', function (event) {",
+    "event.key !== 'Enter'",
+    "event.isComposing",
+    "event.keyCode === 229",
+    "event.shiftKey",
+    "event.ctrlKey",
+    "event.altKey",
+    "event.metaKey",
+    "event.preventDefault()",
+    "addEntry()",
+)
+# Per list: where its setup starts and ends, and the two calls that tie the
+# button and the key to the same function.
+ENTER_LISTS = (
+    (
+        "  function setupExclusionList () {",
+        "  /** Remove the row a remove button sits in",
+        ("add.addEventListener('click', addFolderEntry)", "addOnEnter(field, addFolderEntry)"),
+    ),
+    (
+        "  function setupPatternList () {",
+        "   * The effect line, shown while something is unsaved.",
+        ("add.addEventListener('click', addPatternEntry)", "addOnEnter(field, addPatternEntry)"),
+    ),
+)
+
+
+def enter_findings(script: str) -> list[str]:
+    """What keeps Enter in either rule field from taking the way of its button."""
+    findings: list[str] = []
+    if script.count(ENTER_HELPER_START) != 1:
+        findings.append("the helper addOnEnter is missing or defined twice")
+    else:
+        helper = script[script.index(ENTER_HELPER_START) :]
+        helper = helper[: helper.index("\n  }\n")]
+        findings.extend(f"addOnEnter lacks {part}" for part in ENTER_HELPER_PARTS if part not in helper)
+    for start, end, calls in ENTER_LISTS:
+        if script.count(start) != 1 or script.count(end) != 1:
+            findings.append(f"{start.strip()}: the setup cannot be found")
+            continue
+        body = script[script.index(start) : script.index(end)]
+        findings.extend(f"{start.strip()}: lacks {call}" for call in calls if call not in body)
+    return findings
+
+
+def test_enter_in_either_rule_field_takes_the_way_of_its_button() -> None:
+    """EXCL-08: one keydown helper with Enter, input method and modifier guard, same function as the button."""
+    assert enter_findings(SCRIPT.read_text(encoding="utf-8")) == []
+
+
+def test_the_enter_gate_sees_a_missing_guard() -> None:
+    """Positive control: a helper without the input method guard and a list without the key are findings."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    # The script of 1.7.0 had no key at all: the helper is missing and neither
+    # list ties its field to the function of its button.
+    assert len(enter_findings(script.replace(ENTER_HELPER_START, "  function gone () {"))) >= 1
+    if enter_findings(script):
+        pytest.skip("the gate above is red already")
+    no_guard = script.replace("event.isComposing", "event.repeat", 1)
+    assert enter_findings(no_guard) == ["addOnEnter lacks event.isComposing"]
+    folder_only = script.replace("addOnEnter(field, addPatternEntry)", "", 1)
+    assert enter_findings(folder_only) == ["function setupPatternList () {: lacks addOnEnter(field, addPatternEntry)"]
+    no_prevent = script.replace("event.preventDefault()\n      addEntry()", "addEntry()", 1)
+    assert enter_findings(no_prevent) == ["addOnEnter lacks event.preventDefault()"]
+
+
 def test_both_halves_name_every_refusal_code_of_both_lists_alike() -> None:
     """Success criterion 3: every code of either list is a sentence on the page."""
     findings = [
