@@ -2628,6 +2628,15 @@ if [ -n "${OLD_BACKEND_DIR}" ]; then
   companion_updated=0
   nc_occ config:app:set findling installed_version --value=1.6.2 > /dev/null
   start_backend "${OLD_BACKEND_DIR}"
+  # The head wrote its own version as the recorded version of the other half,
+  # and a 1.6.2 companion answers every search with no hit while major and
+  # minor of that record differ from its own (D-11). In 1.6.2 only the admin
+  # overview, the request the admin page polls, writes the record again; an
+  # admin who rolls back opens that page, and so does this step, once, before
+  # the changed file (V-46-06-03, run 45973279674 on the 1.7 head).
+  overview || fail "the admin overview of the 1.6.2 companion did not answer 200"
+  recorded=$(nc_occ config:app:get findling backend_app_version || true)
+  check "rollback: version of the other half the admin overview of 1.6.2 records" 1.6.2 "${recorded}"
   has_column=$(statedb "SELECT COUNT(*) FROM pragma_table_info('files') WHERE name = 'doc_key';")
   has_index=$(statedb "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'files_storage_doc_key';")
   before_at=$(statedb "SELECT COALESCE(indexed_at, 0) FROM files WHERE file_id = ${notiz};")
