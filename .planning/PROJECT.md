@@ -12,9 +12,22 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 **Shipped:** Findling 1.7.0 im Nextcloud App Store (beide Apps, eingereicht 26.11.2026, store-submit 45898491529, 2x HTTP 201, Tag v1.7.0 auf 22f98ef2, Store-API 27.11. beide Apps 1.7.0). Milestone v1.7 am 27.11.2026 geschlossen und archiviert (.planning/milestones/v1.7-*): Phasen 44 und 45, 37 Pläne, alle 15 Anforderungen erfüllt. Antworten in #45, #53, #59, #25 und PRs #56, #57, #60 gepostet 27.11. Kein v1.7-MILESTONE-AUDIT; Nachweise: 44-SECURITY.md, 45-SECURITY.md (91 IDs, threats_open 0), 45-AUDIT.md, 45-ABNAHME.md, 45-VOLLTEST.md, docs/store-listing.md. Nächster Schritt: /gsd:new-milestone (Owner-Entscheid offen).
 
-## Next Milestone Goals (Kandidaten, Owner entscheidet)
+## Current Milestone: v1.8 Findling 1.7.1
 
-1. **Findling 1.7.1:** I-45-10-04 ("Beispiel: Backups" statt "Sicherungen"), I-45-10-06 (Enter fügt keinen Eintrag hinzu), I-45-10-07 (Wörterbuch-Download in CI ohne Zeitlimit), I-45-10-08 (Wortumbruch bei 320 px), I-45-12-01 (HaRP Schritt 2b wartet nicht auf die leere Queue).
+**Goal:** Findling 1.7.1 räumt die fünf kleinen Befunde aus Phase 45 ab (drei auf der Admin-Seite, zwei in der CI) und geht nach Volltest DE/EN/FR, secure-phase und je eigener Owner-Freigabe in den Store.
+
+**Target features:**
+- Hilfesatz der Ordnerliste nennt in jedem Katalog dasselbe Beispiel wie der Platzhalter (I-45-10-04)
+- Enter im Eingabefeld der Ordner- und der Musterliste fügt den Eintrag hinzu wie der Knopf (I-45-10-06)
+- Fehlerliste der Admin-Seite bricht bei 320 px kein Wort mitten im Wort um (I-45-10-08)
+- CI: Wörterbuch-Download mit Zeitlimit und Wiederholversuch (I-45-10-07 aus 45-AUDIT.md; nicht die gleichnamige ID aus 45-VOLLTEST.md)
+- CI: HaRP-Deploy Schritt 2b wartet auf die leere Queue, bevor er urteilt (I-45-12-01)
+
+**Key context:** Patch-Release ohne Migration und ohne Schemawechsel, Upgrade ab 1.7.0. Keine Domain-Recherche. Phase 46, Release-Ablauf wie 45-12 bis 45-15.
+
+## Next Milestone Goals (Kandidaten nach v1.8, Owner entscheidet)
+
+1. **Findling 1.7.1 (jetzt Milestone v1.8):** I-45-10-04 ("Beispiel: Backups" statt "Sicherungen"), I-45-10-06 (Enter fügt keinen Eintrag hinzu), I-45-10-07 (Wörterbuch-Download in CI ohne Zeitlimit), I-45-10-08 (Wortumbruch bei 320 px), I-45-12-01 (HaRP Schritt 2b wartet nicht auf die leere Queue).
 2. **body_zh (#53, PR #60 von foolfitz):** Merge nach Rebase und Prüfung, Schema 3 auf 4 ohne erzwungenen Neuaufbau; danach OCR chi_tra und Messbericht.
 3. **Rückmeldungen:** #45, #59, #25 schließen nach Bestätigung der Melder (nur mit Owner-Freigabe).
 4. **Weiter offen:** Dedup Weg B (D-39-02).
@@ -110,8 +123,9 @@ Damalige Ziele v1.7:
 
 ### Active
 
-Noch keine Anforderungen für den nächsten Milestone (frische REQUIREMENTS.md mit /gsd:new-milestone). Kandidaten:
-- Findling 1.7.1 mit I-45-10-04, I-45-10-06, I-45-10-07, I-45-10-08, I-45-12-01
+Milestone v1.8 Findling 1.7.1 (.planning/REQUIREMENTS.md): EXCL-07, EXCL-08, ADM-05, PRUEF-05, PRUEF-06, REL-08 in Phase 46.
+
+Kandidaten danach:
 - body_zh (#53, PR #60 von foolfitz), danach OCR chi_tra und Messbericht
 - Dedup Weg B (vertagt aus v1.6, D-39-02); Merkliste aus deferred-items.md der Phase 40 sichten
 
@@ -319,4 +333,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-27 after v1.7 milestone*
+*Last updated: 2026-11-27 after v1.7 milestone; Milestone v1.8 Findling 1.7.1 gestartet 2026-11-27*

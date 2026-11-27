@@ -10,6 +10,7 @@
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
 - [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026, Archiv: .planning/milestones/v1.6-ROADMAP.md)
 - [x] **v1.7 Findling 1.7.0** -- Shipped 2026-11-26 (Phasen 44 bis 45; 1.7.0 eingereicht 26.11., im Store 27.11. bestätigt, Archiv: .planning/milestones/v1.7-ROADMAP.md)
+- [ ] **v1.8 Findling 1.7.1** -- in Planung seit 2026-11-27 (Phase 46; Patch-Release mit den fünf Befunden aus Phase 45)
 
 ## Phases
 
@@ -120,6 +121,43 @@ Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
 
 </details>
 
+### v1.8 Findling 1.7.1 (Phase 46) -- in Planung
+
+- [ ] Phase 46: Findling 1.7.1 (0/12 Pläne)
+
+## Phase Details
+
+### Phase 46: Findling 1.7.1
+
+**Goal**: Findling 1.7.1 (findling und findling_backend in gleicher Version) steht im Store: der Hilfesatz der Ordnerliste nennt in jeder Sprache das Beispiel seines Feldes, Enter fügt in beiden Regel-Listen einen Eintrag hinzu, die Fehlerliste bricht bei 320 px kein Wort mitten im Wort um, und zwei CI-Schritte werden nicht mehr durch Netzhänger oder ein Rennen rot; das Release ist nach Volltest DE/EN/FR, secure-phase und je eigener Owner-Freigabe draußen.
+**Depends on**: Phase 45 (Findling 1.7.0 im Store)
+**Requirements**: EXCL-07, EXCL-08, ADM-05, PRUEF-05, PRUEF-06, REL-08
+**Success Criteria** (what must be TRUE):
+
+  1. Admin liest im Hilfesatz der Ordnerliste in allen neun Sprachen dasselbe Beispiel wie im Feld (DE "Sicherungen", FR "Sauvegardes"), und Enter im Ordner- und im Musterfeld fügt den Eintrag hinzu wie der Knopf, ohne eine IME-Eingabe zu stören; im Volltest in DE, EN, FR und zh_TW belegt.
+  2. Die Fehlerliste der Admin-Seite zeigt bei 320 px hell und dunkel in DE, EN und FR kein mitten im Wort umbrochenes Wort und keine waagerechte Scrollleiste; 375 und 1280 px wie in 1.7.0.
+  3. Der Wörterbuch-Download der Test-Jobs gibt nach einem Zeitlimit auf und versucht es erneut (I-45-10-07 aus 45-AUDIT.md; die gleichnamige ID aus 45-VOLLTEST.md ist kein Befund), und "Store upgrade 2b" urteilt erst nach der leeren Queue (I-45-12-01); beides mit Gate und Positivkontrolle und am Kandidaten in echter CI grün.
+  4. Beide Apps tragen 1.7.1, Upgrade ab 1.7.0 ohne Migration belegt, CHANGELOG EN/DE/FR und README-Faktencheck aller Sprachen freigegeben, Umlaut-Audit und Volltest ohne offenen Befund, secure-phase vor dem Tag mit threats_open 0, Owner-Abnahme per Playwright.
+  5. Push, Signatur, Tag, Store und jeder Kommentar sind je einzeln vom Owner freigegeben; der Tag sitzt auf dem CI-geprüften Tag-Kopf, die Store-API nennt 1.7.1 für beide Apps.
+
+**Plans**: 12 plans
+
+Plans:
+- [ ] 46-01-PLAN.md: Owner-Entscheide E-46-01 bis E-46-08, Hilfesatz gleich Platzhalter in 18 Katalogen, Doku-Tabellen, Gate (EXCL-07)
+- [ ] 46-02-PLAN.md: Enter in Ordner- und Musterfeld über den Weg des Knopfs, IME-Schutz, Gate (EXCL-08)
+- [ ] 46-03-PLAN.md: Fehlerliste unter 360 px, zwei Varianten mit Playwright-Bildern, Owner-Wahl, Gate und Messung (ADM-05)
+- [ ] 46-04-PLAN.md: apt_install.sh mit Zeitlimit und Wiederholung, Store upgrade 2b wartet auf die leere Queue, Gates (PRUEF-05, PRUEF-06)
+- [ ] 46-05-PLAN.md: Version 1.7.1, Update-Probe ab 1.7.0, CHANGELOG EN/DE/FR, Store-Links, README-Faktencheck, je eigene Freigabe (REL-08)
+- [ ] 46-06-PLAN.md: Delta-Audit, Push mit Freigabe, sieben Workflows grün, CI-Belege, audited_head
+- [ ] 46-07-PLAN.md: Volltest DE/EN/FR, Playwright 1280/375/320 hell und dunkel, impeccable, Umlaut-Audit, gemeinsame Owner-Abnahme
+- [ ] 46-08-PLAN.md: Push der Belege mit Freigabe, CI-geprüfter Tag-Kopf
+- [ ] 46-09-PLAN.md: Signatur-Probe mit eigener Freigabe
+- [ ] 46-10-PLAN.md: secure-phase 46 VOR dem Tag, threats_open 0
+- [ ] 46-11-PLAN.md: Tag und Store-Einreichung je mit eigener Freigabe, Belegkette
+- [ ] 46-12-PLAN.md: Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss
+  Reihenfolge: streng 46-01 bis 46-12, jeder Plan einzeln (ein Executor, B4); Docker-Schritte nur im bestätigten Fenster (E-46-08).
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -132,6 +170,7 @@ Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44-45 (Archiv) | v1.7 | 37/37 | Complete | 2026-11-26 |
+| 46 | v1.8 | 0/12 | Planned | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -150,4 +189,4 @@ Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter
 Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
 
 ---
-*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21. v1.7 bereit für complete-milestone: 2026-11-27. v1.7 archiviert: 2026-11-27.*
+*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21. v1.7 bereit für complete-milestone: 2026-11-27. v1.7 archiviert: 2026-11-27. v1.8-Roadmap: 2026-11-27.*

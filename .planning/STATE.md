@@ -1,34 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: Findling 1.7.0
-status: archived
-stopped_at: "v1.7 archiviert 2026-11-27 (.planning/milestones/v1.7-*); nächster Milestone offen für den Owner (/gsd:new-milestone)"
-last_updated: "2026-11-27T04:05:00.000Z"
-last_activity: "2026-11-27, 45-15 fertig: Antworten in PR #60, #45, PR #56, PR #57, #53, #59, #25 gepostet (nichts geschlossen), Nachtrag Release-Threats, Phase 45 und Milestone v1.7 abgeschlossen"
+milestone: v1.8
+milestone_name: Findling 1.7.1
+status: planning
+stopped_at: "Phase 46 geplant (12 Pläne), Ausführung wartet auf die Owner-Entscheide E-46-01 bis E-46-08 (46-01 Task 1)"
+last_updated: "2026-11-27T06:00:00.000Z"
+last_activity: "2026-11-27, Milestone v1.8 Findling 1.7.1 angelegt (REQUIREMENTS.md, ROADMAP Phase 46), Phase 46 geplant"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 37
-  completed_plans: 37
-  percent: 100
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 12
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONES.md (v1.0 bis v1.6).
+Siehe .planning/PROJECT.md (Stand nach v1.7, 27.11.2026, Current Milestone v1.8) und .planning/MILESTONES.md (v1.0 bis v1.7).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Milestone v1.7 Findling 1.7.0 (PHP-Sicherheits-Gates, dann Release 1.7.0 mit #45, PRs #56/#57, kurzen Store-Texten)
+**Current focus:** Milestone v1.8 Findling 1.7.1 (Patch-Release mit I-45-10-04, I-45-10-06, I-45-10-08, I-45-10-07 aus 45-AUDIT.md und I-45-12-01)
 
 ## Current Position
 
-Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 und Phase 45 abgeschlossen (Phase 45 am 2026-11-27)
-Plan: 45-01 bis 45-27 fertig (27/27); 1.7.0 im Store (beide Apps, Tag v1.7.0 auf 22f98ef2), audited_head bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d, status_45_09 und status_45_10 passed, secure-phase vor dem Tag erledigt (45-SECURITY.md threats_open 0)
-Status: Milestone v1.7 fertig und archiviert 2026-11-27 (milestones/v1.7-ROADMAP.md, v1.7-REQUIREMENTS.md; REQUIREMENTS.md entfällt bis zum nächsten Milestone). 1.7.0 im Store (Store-API 27.11. 00:18 und 00:29 UTC: beide Apps 1.7.0); Antworten gepostet 2026-11-27 03:56 UTC, offen bleiben #45, #59, #25 (Rückmeldung der Melder), #53 (Sammel-Issue) und PR #60 (Rebase body_zh); nächster Schritt offen für den Owner (complete-milestone v1.7, 1.7.1 mit I-45-10-04/06/07/08 und I-45-12-01)
-Last activity: 2026-11-27, 45-15 fertig: Antworten gepostet, Release-Threats nachgeprüft, Phase 45 abgeschlossen
+Phase: 46 (Findling 1.7.1), einzige Phase des Milestones v1.8
+Plan: 0 von 12 fertig; 46-01-PLAN.md bis 46-12-PLAN.md geplant am 2026-11-27
+Status: Bereit zur Ausführung, sobald der Owner E-46-01 bis E-46-08 bestätigt hat (46-CONTEXT.md, 46-01 Task 1); Docker-Schritte nur im bestätigten Fenster (E-46-08)
+Last activity: 2026-11-27, Milestone v1.8 gestartet und Phase 46 geplant
 
 ## Performance Metrics
 
