@@ -2,17 +2,28 @@
 
 ## What This Is
 
-Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Seit v1.3 beherrscht die lexikalische Suche neben Deutsch und Englisch auch Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Sprachwechsel per Re-Analyse-Umbau statt Vollreindex), die Oberflaeche spricht acht Sprachen (EN/DE/FR/ES/IT/NL/pt_PT/pt_BR). Seit v1.5 (Umsteiger-Release) kommen Tschechisch, sechs neue Dateitypen (DOC, XLS, Mails, ZIP-Inhalte, HEIC/HEIF), Typ- und Ordnerfilter direkt in der Unified Search, Ausschlussmuster, eine Aehnliche-Dokumente-Ansicht und ein dokumentierter Umstiegsweg vom fulltextsearch-Framework dazu. Seit v1.6 heißt die App im Store "Findling Search", übersteht den HaRP-Zertifikatswechsel ohne Re-Register, hat einen Backup-Pause-Schalter und zählt die Abdeckung pro Dokument über die Freigabe-Identität. Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
+Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Seit v1.3 beherrscht die lexikalische Suche neben Deutsch und Englisch auch Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Sprachwechsel per Re-Analyse-Umbau statt Vollreindex), die Oberflaeche spricht acht Sprachen (EN/DE/FR/ES/IT/NL/pt_PT/pt_BR). Seit v1.5 (Umsteiger-Release) kommen Tschechisch, sechs neue Dateitypen (DOC, XLS, Mails, ZIP-Inhalte, HEIC/HEIF), Typ- und Ordnerfilter direkt in der Unified Search, Ausschlussmuster, eine Aehnliche-Dokumente-Ansicht und ein dokumentierter Umstiegsweg vom fulltextsearch-Framework dazu. Seit v1.6 heißt die App im Store "Findling Search", übersteht den HaRP-Zertifikatswechsel ohne Re-Register, hat einen Backup-Pause-Schalter und zählt die Abdeckung pro Dokument über die Freigabe-Identität. Seit v1.7 schließt der Admin einzelne externe Speicher vom Index aus, die Oberfläche spricht Traditional Chinese, Dateien unter dem Wasserzeichen von Nextcloud Office werden als Besitzer gelesen, ohne eine Sperre zu umgehen, und der Abgleich lässt sich weder von einer Nachzählung noch von einer langen Warteschlange dauerhaft aufhalten. Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
 
 ## Core Value
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach v1.6, 2026-11-21)
+## Current State (nach v1.7, 2026-11-27)
 
-**Shipped:** Findling 1.6.5 im Nextcloud App Store (beide Apps, 16.11.2026, store-submit 43801394739, 2x HTTP 201, Tag v1.6.5 auf 06a0d7c8; Sicherheits-Update opentelemetry-api). Milestone v1.6 am 21.11.2026 geschlossen und archiviert (.planning/milestones/v1.6-*): Phasen 37 bis 43, 63 Pläne, alle 11 Anforderungen erfüllt, Releases 1.6.0 (29.10.), 1.6.1 (02.11., pypdf), 1.6.2 (04.11.), 1.6.3 (12.11.), 1.6.4 (12.11., Fix #51) und 1.6.5 (16.11.); 1.6.4 und 1.6.5 ohne eigene Phase. Kein v1.6-MILESTONE-AUDIT; Nachweise: Phase-VERIFICATIONs 41/42, 40-NACHAUDIT, Store-Belege docs/store-listing.md. Nächster Schritt: /gsd:new-milestone v1.7.
+**Shipped:** Findling 1.7.0 im Nextcloud App Store (beide Apps, eingereicht 26.11.2026, store-submit 45898491529, 2x HTTP 201, Tag v1.7.0 auf 22f98ef2, Store-API 27.11. beide Apps 1.7.0). Milestone v1.7 am 27.11.2026 geschlossen und archiviert (.planning/milestones/v1.7-*): Phasen 44 und 45, 37 Pläne, alle 15 Anforderungen erfüllt. Antworten in #45, #53, #59, #25 und PRs #56, #57, #60 gepostet 27.11. Kein v1.7-MILESTONE-AUDIT; Nachweise: 44-SECURITY.md, 45-SECURITY.md (91 IDs, threats_open 0), 45-AUDIT.md, 45-ABNAHME.md, 45-VOLLTEST.md, docs/store-listing.md. Nächster Schritt: /gsd:new-milestone (Owner-Entscheid offen).
 
-## Next Milestone Goals (v1.7)
+## Next Milestone Goals (Kandidaten, Owner entscheidet)
+
+1. **Findling 1.7.1:** I-45-10-04 ("Beispiel: Backups" statt "Sicherungen"), I-45-10-06 (Enter fügt keinen Eintrag hinzu), I-45-10-07 (Wörterbuch-Download in CI ohne Zeitlimit), I-45-10-08 (Wortumbruch bei 320 px), I-45-12-01 (HaRP Schritt 2b wartet nicht auf die leere Queue).
+2. **body_zh (#53, PR #60 von foolfitz):** Merge nach Rebase und Prüfung, Schema 3 auf 4 ohne erzwungenen Neuaufbau; danach OCR chi_tra und Messbericht.
+3. **Rückmeldungen:** #45, #59, #25 schließen nach Bestätigung der Melder (nur mit Owner-Freigabe).
+4. **Weiter offen:** Dedup Weg B (D-39-02).
+
+## Früherer Stand (nach v1.6, 2026-11-21)
+
+**Shipped:** Findling 1.6.5 im Nextcloud App Store (beide Apps, 16.11.2026, store-submit 43801394739, 2x HTTP 201, Tag v1.6.5 auf 06a0d7c8; Sicherheits-Update opentelemetry-api). Milestone v1.6 am 21.11.2026 geschlossen und archiviert (.planning/milestones/v1.6-*): Phasen 37 bis 43, 63 Pläne, alle 11 Anforderungen erfüllt, Releases 1.6.0 (29.10.), 1.6.1 (02.11., pypdf), 1.6.2 (04.11.), 1.6.3 (12.11.), 1.6.4 (12.11., Fix #51) und 1.6.5 (16.11.); 1.6.4 und 1.6.5 ohne eigene Phase. Kein v1.6-MILESTONE-AUDIT; Nachweise: Phase-VERIFICATIONs 41/42, 40-NACHAUDIT, Store-Belege docs/store-listing.md. Nächster Schritt (damals): /gsd:new-milestone v1.7.
+
+Damalige Ziele v1.7:
 
 1. **Phase PHP-Sicherheits-Gates** (zuerst, vor Findling 1.7.0; Zusage aus Phase 42, Kriterium 3): Psalm mit Taint-Analyse, php-cs-fixer, zizmor und actionlint.
 2. **Findling 1.7.0:**
@@ -89,19 +100,20 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 - ✓ Store-Einreichung 1.6.0 mit Audit-Gate und Upgrade-Strecke ab v1.5.0 (REL-06), v1.6
 - ✓ Backup-Pause-Schalter (#37), Backup-Doku, Routen-Attribut-Gate der PHP-App, Zählung pro Dokument (#25) in 1.6.2 und 1.6.3 (ohne REQ-ID, Owner-GO), v1.6
 
+- ✓ PHP-Sicherheits-Gates Psalm Taint (OCP 33/34/35), php-cs-fixer, zizmor, actionlint (PRUEF-02..04), v1.7
+- ✓ Traditional Chinese: zh_TW-Katalog (#56) und dreiteilige Locale (#57) (KAT-03..04), v1.7
+- ✓ Ausschluss je externem Speicher, freie Ausschluss-Plätze, Platzhalter-Hinweise (#45, EXCL-04..06), v1.7
+- ✓ Lesen unter dem Wasserzeichen als Besitzer, policy_blocked, keine Ausschnitte unter Secure View (#59, COMP-05), v1.7
+- ✓ Abgleich ohne Bremse durch Nachzählung und lange Warteschlange, Rückfallsicherung OCR-Übergaben (#25, IDX-09..11), v1.7
+- ✓ Kurze Store-Texte beider Apps, Pflichtinhalte in README/Doku (STORE-03..04), v1.7
+- ✓ Release 1.7.0 nach Launch-Härtung und Volltest DE/EN/FR (REL-07), v1.7
+
 ### Active
 
-v1.7 (Findling 1.7.0), Anforderungen in REQUIREMENTS.md:
-
-- PRUEF-02 bis 04: PHP-Sicherheits-Gates Psalm Taint, php-cs-fixer, zizmor, actionlint (Zusage aus Phase 42)
-- KAT-03, KAT-04: Fork-PRs #56 (zh_TW-Katalog) und #57 (dreiteilige Locale) von foolfitz
-- EXCL-04 bis 06: Ausschluss je externem Speicher, freie Ausschluss-Plätze, bessere Platzhalter-Meldung (Issue #45)
-- STORE-03, STORE-04: kurze Store-Texte beider Apps, Pflichtinhalte in README/Doku
-- REL-07: Release 1.7.0 nach Volltest und Launch-Härtung
-
-Später:
-- Dedup Weg B (vertagt aus v1.6, D-39-02); v1.7-Merkliste aus deferred-items.md der Phase 40 sichten
-- body_zh (#53) wartet auf foolfitz' eigenen PR
+Noch keine Anforderungen für den nächsten Milestone (frische REQUIREMENTS.md mit /gsd:new-milestone). Kandidaten:
+- Findling 1.7.1 mit I-45-10-04, I-45-10-06, I-45-10-07, I-45-10-08, I-45-12-01
+- body_zh (#53, PR #60 von foolfitz), danach OCR chi_tra und Messbericht
+- Dedup Weg B (vertagt aus v1.6, D-39-02); Merkliste aus deferred-items.md der Phase 40 sichten
 
 Vorlaeufig spaeter: granite-Wechsel (nur mit Bedingung, Verdikt 35-11), kleiner Reranker, CLIP-Bildsuche (SigLIP2, Lizenz je Modell), whisper.cpp-Transkription als Opt-in.
 
@@ -120,7 +132,7 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 
 ## Context
 
-- Stand 21.11.2026: sieben Milestones geliefert, v1.6 mit sechs Store-Releases 1.6.0 bis 1.6.5 (29.10. bis 16.11.); Community-Beiträge von foolfitz (zh_TW, Locale-Fix) als Fork-PRs offen; PHPUnit läuft lokal über scripts/dev/phpunit_docker.sh (Phase 42).
+- Stand 27.11.2026: acht Milestones geliefert, v1.7 mit Findling 1.7.0 (26.11. eingereicht, PHP-Sicherheits-Gates, #45, #59, #25, zh_TW); foolfitz liefert body_zh als PR #60. Stand 21.11.2026: sieben Milestones geliefert, v1.6 mit sechs Store-Releases 1.6.0 bis 1.6.5 (29.10. bis 16.11.); Community-Beiträge von foolfitz (zh_TW, Locale-Fix) als Fork-PRs offen; PHPUnit läuft lokal über scripts/dev/phpunit_docker.sh (Phase 42).
 - Stand 28.10.2026: sechs Milestones geliefert (v1.0 am 07.09., v1.1 am 11.09., v1.2 am 21.09., v1.3 am 27.09., v1.4 am 06.10., v1.5 am 21.10. eingereicht / 28.10. geschlossen), Backend Python 3.13/Tantivy (onnxruntime/tokenizers direkt), Companion PHP, ~6.400 Python-Tests + PHP-Suite (846 Tests), 8 CI-Workflows inkl. Fremdinstallations- und Upgrade-Strecke (deploy-harp), Messberichte unter docs/measurements/.
 - ZenDiS hat den Schwester-Connector installiert und praesentiert ihn auf der Smart Country Convention; ISV-Call mit Nextcloud (Fabrice Mous) am 14.09.2026, Findling + Backend + Connector tragen das Enterprise-Flag im Store.
 - Kill-Kriterium weiter aktiv: Nextcloud GmbH hat fulltextsearch am 12.08.2026 reaktiviert; kündigt sie eine Elasticsearch-freie Volltextsuche mit OCR an (Nextcloud Conference September), wird neu bewertet. Die Differenzierer bleiben: kein Elasticsearch, OCR eingebaut, Semantik, kleines RAM-Budget, deutsche Komposita, Ergebnisseite.
@@ -180,8 +192,13 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | Nachaudit statt Durchwinken der Verifikationslücke Phase 40 | Audit hatte 10 Produkt-Commits nicht gesehen | ✓ Good, F-40N-01..04 in 1.6.2 behoben |
 | Routen-Gate fragt den Router des Servers als Orakel statt eigener Nachbildung (Phase 42) | Eigene Nachbildung lässt Fälle aus (Schreibweise, Docblocks) | ✓ Good, 14/14 Vektoren, Kriterium 3 als eigene Phase |
 | Zählung pro Dokument über Freigabe-Identität (Format 2), kein rc.2 (D-43-15, D-43-17) | Meldungen von mbozem: gleiche Freigabe mit verschiedenen Wurzeln und Schreibweisen | ✓ Good, 1.6.3 im Store, #25 wartet auf Bestätigung |
+| Secure-phase VOR dem Tag als blockierender Checkpoint, Release-Threats nach dem Tag (E4, Phase 45) | Kein Tag mit offenen Threats; Gegenstand der Release-Threats existiert erst nach dem Tag | ✓ Good, 91 IDs threats_open 0 am Kandidaten, acht Release-Threats am 27.11. geschlossen |
+| #59: erneutes Öffnen als Besitzer nur bei belegter Secure-View-Ablehnung, sonst policy_blocked (E1, E2) | Lesen ja, Sperre umgehen nie | ✓ Good, live über den Update-Weg 1.6.5 auf 1.7.0 belegt |
+| #25 F3 eingedämmt vor den Melder-Daten (OCR_HANDOVER_LIMIT 3, Owner 24.11.) | Schutz gegen endloses Kreisen, harmlos für gesunde Dateien | , Pending, Logs zeigten echten OCR-Rückstand, Sicherung bleibt |
+| Tag-Kopf = CI-geprüfter Kopf 22f98ef2 statt Code-Commit c1cb767c | CI läuft nur auf gepushten Köpfen, Code identisch | ✓ Good, sieben Gates grün auf dem Tag-Kopf |
 
-## Current Milestone: v1.7 Findling 1.7.0
+<details>
+<summary>Archiv: Milestone-Beschreibung v1.7 (abgeschlossen 2026-11-27)</summary>
 
 **Goal:** Findling 1.7.0 mit Ausschluss je externem Speicher (#45), Traditional Chinese (PRs #56, #57) und kurzen Store-Texten; vorher die PHP-Sicherheits-Gates aus Phase 42 Kriterium 3.
 
@@ -191,6 +208,10 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 - zh_TW-Katalog und Admin-Seite bei dreiteiliger Locale (PRs #56, #57 von foolfitz)
 - Store-Texte beider Apps kurz mit Link auf die GitHub-Doku
 - Release 1.7.0 nach Volltest und Launch-Härtung
+
+**Ergebnis:** Alles geliefert, dazu #59 (COMP-05) und #25 (IDX-09 bis 11) aus Melder-Fällen während des Milestones. 1.7.0 am 26.11.2026 eingereicht (2x HTTP 201, Lauf 45898491529, Tag v1.7.0 auf 22f98ef2), im Store bestätigt am 27.11. Benannte Vorbehalte: fünf LOW/INFO-Punkte für 1.7.1, body_zh (PR #60) nach dem Rebase, Dedup Weg B weiter offen. Details: .planning/milestones/v1.7-ROADMAP.md und MILESTONES.md.
+
+</details>
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.6 (abgeschlossen 2026-11-21)</summary>
@@ -298,4 +319,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-21, Milestone v1.7 gestartet*
+*Last updated: 2026-11-27 after v1.7 milestone*

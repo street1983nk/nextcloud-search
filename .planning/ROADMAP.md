@@ -9,7 +9,7 @@
 - [x] **v1.4 Leistungsprofile** -- Shipped 2026-10-06 (Phasen 24 bis 29, Archiv: .planning/milestones/v1.4-ROADMAP.md)
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
 - [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026, Archiv: .planning/milestones/v1.6-ROADMAP.md)
-- [x] **v1.7 Findling 1.7.0** -- fertig 2026-11-27 (Phasen 44 bis 45: PHP-Sicherheits-Gates, dann Release 1.7.0 mit #45, PRs #56/#57 und kurzen Store-Texten)
+- [x] **v1.7 Findling 1.7.0** -- Shipped 2026-11-26 (Phasen 44 bis 45; 1.7.0 eingereicht 26.11., im Store 27.11. bestätigt, Archiv: .planning/milestones/v1.7-ROADMAP.md)
 
 ## Phases
 
@@ -108,116 +108,17 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 
 </details>
 
-### v1.7 Findling 1.7.0 (fertig 2026-11-27, Phasen 44-45)
+<details>
+<summary>v1.7 Findling 1.7.0 (Phasen 44-45) -- SHIPPED 2026-11-26 (im Store bestätigt 2026-11-27)</summary>
 
-- [x] **Phase 44: PHP-Sicherheits-Gates** - Psalm mit Taint-Analyse, php-cs-fixer und zizmor/actionlint als rote CI-Gates (Kriterium 3 aus Phase 42)
-- [x] **Phase 45: Findling 1.7.0** - Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57), kurze Store-Texte, Launch-Härtung und Store-Release beider Apps -- completed 2026-11-27
+- [x] Phase 44: PHP-Sicherheits-Gates (10/10 Pläne) -- completed 2026-11-21, Psalm-Taint, php-cs-fixer, zizmor und actionlint als rote CI-Gates, 44-SECURITY.md threats_open 0
+- [x] Phase 45: Findling 1.7.0 (27/27 Pläne) -- completed 2026-11-27, Tag v1.7.0 auf 22f98ef2, Store-Einreichung 45898491529 (2x HTTP 201), 45-SECURITY.md threats_open 0 (91 IDs)
 
-## Phase Details
+Kein v1.7-MILESTONE-AUDIT; Nachweise: 44-SECURITY.md, 45-SECURITY.md, 45-AUDIT.md, 45-ABNAHME.md, 45-VOLLTEST.md, Store-Belege docs/store-listing.md. Phasenordner 44 und 45 bleiben unter .planning/phases/ (Verweise aus Code, Tests, CI und Doku).
 
-### Phase 44: PHP-Sicherheits-Gates
+Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
 
-**Goal**: Die PHP-Companion-App und die Workflows haben die noch offenen Sicherheits- und Stil-Gates aus Phase 42 (Kriterium 3): ein Taint-Befund, ein Stilverstoß oder ein Workflow-Befund ab Medium macht CI rot, bevor Findling 1.7.0 gebaut wird.
-**Depends on**: Nichts (erste Phase des Milestones; baut auf den Gates der Phase 42 auf)
-**Requirements**: PRUEF-02, PRUEF-03, PRUEF-04
-**Success Criteria** (what must be TRUE):
-
-  1. Ein CI-Job führt Psalm mit Taint-Analyse gegen OCP 33, 34 und 35 aus, zählt die Befunde selbst aus der SARIF-Ausgabe und wird bei mindestens einem offenen Befund rot; eine absichtlich eingebaute Taint-Strecke (Negativtest) färbt ihn nachweislich rot.
-  2. Zum Phasenabschluss meldet der Psalm-Job 0 offene Befunde, oder zu jedem verbleibenden Befund liegt eine dokumentierte Owner-Entscheidung vor.
-  3. php-cs-fixer mit nextcloud/coding-standard läuft in CI als dry-run und ist auf dem Phasenkopf grün; ein Stilverstoß macht ihn rot.
-  4. zizmor und actionlint prüfen jeden Workflow unter .github/workflows in CI; jeder Befund ab Medium ist behoben oder mit Begründung akzeptiert, und ein neuer Befund ab Medium macht den Job rot.
-  5. Alle neuen Gates laufen auch lokal grün (Rezept dokumentiert), ein Strukturgate verhindert ihr stilles Entfernen aus den Workflows, und die secure-phase der Phase schließt ohne offene Threats.
-
-**Plans**: 10 plans
-
-Plans:
-**Wave 1**
-
-- [x] 44-01-PLAN.md: Owner-Entscheidungen E-01 bis E-08 und Paketfreigabe (Checkpoint)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 44-02-PLAN.md: Psalm-Taint-Gate: Tool-Projekt, erster Lauf mit bedingtem Owner-Checkpoint, Gate-Skript und Matrix-Job
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 44-03-PLAN.md: Psalm-Taint-Gate: lokales Rezept und drei lokale Rotläufe
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 44-04-PLAN.md: Formatierungs-Commit und php-cs-fixer-dry-run-Gate
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 44-05-PLAN.md: zizmor/actionlint-Ist-Lauf mit bedingtem Owner-Checkpoint, artipacked beheben
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [x] 44-06-PLAN.md: cooldown, Dependabot-Tool-Einträge, cache-poisoning und shellcheck nach Owner-Schwelle
-
-**Wave 7** *(blocked on Wave 6 completion)*
-
-- [x] 44-07-PLAN.md: workflow-lint.yml mit zizmor und actionlint als Gate
-
-**Wave 8** *(blocked on Wave 7 completion)*
-
-- [x] 44-08-PLAN.md: Strukturgate test_php_static_gates.py, Trigger nach E-06, Doku
-
-**Wave 9** *(blocked on Wave 8 completion)*
-
-- [x] 44-09-PLAN.md: Push nach Owner-Freigabe, CI-Kopf grün mit Log-Belegen
-
-**Wave 10** *(blocked on Wave 9 completion)*
-
-- [x] 44-10-PLAN.md: Rot-Beweis aller vier Gates nach E-08, Phasen-Schlussprüfung für secure-phase
-
-### Phase 45: Findling 1.7.0
-
-**Goal**: Findling 1.7.0 (findling und findling_backend in gleicher Version) steht im Store: Admins schließen einzelne externe Speicher vom Index aus, Findling spricht Traditional Chinese, die Store-Texte sind kurz und verweisen auf die Doku, und das Release ist nach Launch-Härtung und Volltest DE/EN/FR vom Owner freigegeben.
-**Depends on**: Phase 44
-**Requirements**: KAT-03, KAT-04, EXCL-04, EXCL-05, EXCL-06, STORE-03, STORE-04, REL-07, COMP-05, IDX-09, IDX-10, IDX-11
-**Success Criteria** (what must be TRUE):
-
-  1. Admin kann auf der Admin-Seite neben dem Schalter für externe Speicher einzelne externe Speicher ausschließen; bereits indexierte Inhalte eines ausgeschlossenen Speichers verschwinden aus den Suchtreffern, ein wieder zugelassener Speicher wird nachindexiert. Die Seite zeigt die freien Ausschluss-Plätze für Ordner und für Muster, und ein Platzhalterzeichen im Ordnerfeld führt zu einer Fehlermeldung, die auf das Musterfeld verweist, in allen 18 Katalogdateien. Beleg: 45-02 bis 45-06, 45-19, Volltest 45-10 (45-VOLLTEST.md), seit 26.11. mit 1.7.0 im Store; erledigt.
-  2. Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW aus PR #56); die Admin-Seite funktioniert unter der dreiteiligen Locale zh_Hant_TW auch im Rückfall auf root.lang (PR #57); PRODUCT.md und CHANGELOG nennen die Sprache. Beleg: 45-01 (PRs #56 und #57 gemergt), Volltest 45-10, mit 1.7.0 im Store; erledigt.
-  3. Die Store-Beschreibungen beider Apps sind in DE, EN und FR kurz (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku) und wurden erst nach Owner-Freigabe des Entwurfs eingebaut; die verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku aller drei Sprachen, die bisherigen Gates prüfen sie dort, und die READMEs aller Sprachen sind auf aktuelle Fakten geprüft. Beleg: 45-07, 45-11 (Freigabe Storetext 45-11 "Ok"), Links blob/v1.7.0 in beiden info.xml je HTTP 200 (45-14); erledigt.
-  4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen. Beleg: 45-SECURITY.md (status verified, threats_open 0 am Tag-Kandidaten 22f98ef2, Owner "Ja" 26.11.); Tag erst nach 45-16, erledigt. Release-Lauf 45895635994 (zweimal Verified OK, Release immutable), Store-Einreichung 45898491529 (45-14).
-  5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56, #57 und #59. Stand 45-14: Freigaben Tag, Signatur und Store liegen vor (45-FREIGABEN.md), zweimal HTTP 201 (Lauf 45898491529); Store-API 27.11. 00:18:47 und 00:29:04 UTC: beide Apps 1.7.0 (45-ANTWORTEN.md); danach Antworten in #45, #56, #57, #59, #25, #53 und PR #60 gepostet 2026-11-27 03:56 UTC mit Freigabe je Thread (45-15); erledigt.
-  6. COMP-05 (#59): Eine Datei unter dem Wasserzeichen von Nextcloud Office wird als ihr Besitzer oder als andere berechtigte Person gelesen (erneutes Öffnen in actAs nur bei Secure-View-Ablehnung, E1), Findling umgeht keine Sperre (E2, eigener Grund policy_blocked), Treffer unter Secure View zeigen keinen Textausschnitt (E3); vorher und nachher auf echter Instanz über den Update-Weg 1.6.5 -> 1.7.0 belegt, der ganze Release-Diff unabhängig geprüft. Beleg: 45-17, 45-18, 45-20, 45-21, 45-22, mit 1.7.0 im Store; erledigt.
-  7. IDX-09 und IDX-10 (#25): Eine Nachzählung des Nenners hält den Abgleich nicht mehr auf (nur ein echter Crawl zählt als unfertig), Nachzählungen haben einen Mindestabstand von etwa sechs Stunden, und eine lange Warteschlange hält den Abgleich höchstens zweimal sein Intervall auf, nie läuft er neben einem Crawl; die Admin-Seite zeigt die Wartezeit; beides auf echter Instanz mit Gegenkontrollen belegt. IDX-11 (F3-Eindämmung): keine Datei kreist endlos zwischen den Warteschlangen, nach drei Übergaben derselben Bytes an die OCR-Spur endet sie sichtbar als failed(repeatedly_stuck), und die requeued-Zahl des Passes zählt nur echte Spurwechsel. Beleg: 45-23 bis 45-27, Live-Proben #25 in 45-AUDIT.md, mit 1.7.0 im Store, Antwort in #25 (45-15); erledigt.
-
-**Plans**: 27 plans
-
-Plans:
-- [x] 45-01-PLAN.md: PRs #56 und #57 prüfen, je nach Owner-Freigabe mergen, root.lang-Nit, PRODUCT.md, CHANGELOG (KAT-03, KAT-04)
-- [x] 45-02-PLAN.md: Ausschluss je Admin-Speicher in SettingsService und StorageService, sofort ohne Gnadenfrist (EXCL-04)
-- [x] 45-03-PLAN.md: ExternalMountService, POST /admin/rules mit excludedExternalMounts, rules() und Template-Parameter (EXCL-04)
-- [x] 45-04-PLAN.md: Zähler freier Plätze, Code wildcard mit Duldung alter Einträge, neuer no_wildcard-Satz, alle Kataloge (EXCL-05, EXCL-06)
-- [x] 45-05-PLAN.md: Speicherliste unter dem Hauptschalter, Inline-Bestätigung, Senden, alle Kataloge (EXCL-04)
-- [x] 45-06-PLAN.md: Integrationsstrecke M-45-01, Push mit Owner-Freigabe, grüner Kopf
-- [x] 45-07-PLAN.md: READMEs DE/EN/FR mit verlagerten Pflichtinhalten und Faktenprüfung, Gates auf READMEs (STORE-04)
-- [x] 45-08-PLAN.md: Version 1.7.0, CHANGELOG, Update-Probe ab 1.6.5, je eigene Owner-Freigabe (REL-07)
-- [x] 45-09-PLAN.md: Launch-Härtung und Audit, Digest-Gate, Push, audited_head (REL-07)
-- [x] 45-10-PLAN.md: Volltest DE/EN/FR komplett neu nach 45-21 (Push-Freigabe vorab), Playwright 3 Breiten hell/dunkel, impeccable, Umlaut-Audit, neue Proben V-45-10-02/03, policy_blocked, E3, gemeinsame Owner-Abnahme (REL-07, COMP-05)
-- [x] 45-11-PLAN.md: Kurze Store-Texte beider Apps, Entwurf kurz vor dem Release, Einbau nach Freigabe (STORE-03)
-- [x] 45-12-PLAN.md: Push der Store-Texte mit Freigabe, Tag-Kopf
-- [x] 45-13-PLAN.md: Signatur-Probe mit eigener Owner-Freigabe
-- [x] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette (erst nach 45-16, E4)
-- [x] 45-15-PLAN.md: Antworten in #45, #56, #57, #59, #25 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
-- [x] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-27 (T-45-01 bis T-45-91); Release-Threats im Nachtrag von 45-15 (REL-07)
-- [x] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
-- [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
-- [x] 45-19-PLAN.md: Volltest-Befunde V-45-10-02 (ID in der Bestätigung) und V-45-10-03 (Platzhalter aus dem Katalog) (EXCL-04, REL-07)
-- [x] 45-22-PLAN.md: E3 keine Textausschnitte unter Secure View, Quellenbericht, Owner-Entscheid, SnippetPolicy (läuft vor 45-20) (COMP-05, REL-07)
-- [x] 45-23-PLAN.md: #25 F1 Owner-Checkpoint Texte und Entscheide für 45-23 und 45-24, Marker-Lock: eine Nachzählung ist kein unfertiger Crawl, Mindestabstand der Nachzählung, Doku, CHANGELOG (IDX-09, REL-07)
-- [x] 45-24-PLAN.md: #25 F2 Rückhalt: der Abgleich läuft nach zweimal seinem Intervall trotz langer Warteschlange, nie neben einem Crawl, Zeitpunkt im Zustandsspeicher, Warnzeile, Hinweis in 18 Katalogen, Doku, CHANGELOG (IDX-10, REL-07)
-- [x] 45-25-PLAN.md: Dateisperren, die Hintergrundjobs nicht trennen, nach `Entscheid Locking 45-23` (l1: Hinweis auf der Admin-Seite für APCu oder ArrayCache als Locking-Cache, Noop mit Verweis auf die Einrichtungsprüfung von Nextcloud, Doku; l2: Doku; l3: Vermerk), früher 45-24 Task 4; dazu Task 2: Platzhalter des Ordnerfelds der Regeln aus dem Katalog, I-45-19-01 (IDX-09, REL-07)
-- [x] 45-26-PLAN.md: Release-Blocker: Migration des Minor-Schritts 1.7 (Version001700... löscht backend_app_version, sonst sucht 1.7.0 nach dem Update leer, bis die Einstellungsseite offen war), ohne Klasse der App; I-45-23-07 nach Owner-Entscheid m1|m2; I-45-26-01 (Update aus 1.3.x über Version001500); Probe im Job "Store update in one process (issue 51)" mit Kontrolle 2 (REL-07, IDX-09)
-- [x] 45-20-PLAN.md: #59 Gegenprobe über den echten Update-Weg 1.6.5 -> 1.7.0 in den Modi M1 bis M5, files_accesscontrol, E1 und E3 echt, Live-Proben #25 (F1, F2), CI mit richdocuments, CHANGELOG, Doku (COMP-05, REL-07, IDX-09, IDX-10)
-- [x] 45-21-PLAN.md: Unabhängiger Review des ganzen Release-Diffs v1.6.5..HEAD, Befunde beheben, Delta-Audit inklusive #25, neuer audited_head (COMP-05, REL-07, IDX-09, IDX-10)
-- [x] 45-27-PLAN.md: #25 F3-Eindämmung: ehrliche requeued-Zahl in requeueAs, Logzeile mit handed_ocr/handed_embed, Backstop nach drei identischen Übergaben als failed(repeatedly_stuck), Deckungsgrad zählt den Backstop-Bestand nicht doppelt (judged ohne failed/repeatedly_stuck), CHANGELOG; H1-Ursache, OCR-Reserve im Claim und Give-up-Semantik dokumentiert offen (IDX-11, REL-07)
-  Reihenfolge: 45-17, 45-18, 45-19, 45-22, 45-23, 45-24, 45-25, 45-26, 45-20, 45-21, dann 45-27 (#25 F3-Eindämmung), dann 45-10 komplett neu, 45-11, 45-12, 45-13, 45-16 (secure-phase vor dem Tag), 45-14, 45-15; jeden Plan einzeln ausführen; der Abhängigkeitsgraph trägt diese Reihenfolge (45-23 depends_on [45-22], wave 13; 45-24 depends_on [45-23], wave 14; 45-25 depends_on [45-24], wave 15; 45-26 depends_on [45-25], wave 16; 45-20 depends_on [45-26], wave 17; 45-27 depends_on [45-21], wave 19; 45-10 depends_on [45-27], wave 20; 45-14 depends_on [45-16])
-**UI hint**: yes
+</details>
 
 ## Progress
 
@@ -230,8 +131,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
-| 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 27/27 | Complete | 2026-11-27 |
+| 44-45 (Archiv) | v1.7 | 37/37 | Complete | 2026-11-26 |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -250,4 +150,4 @@ Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter
 Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
 
 ---
-*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21. v1.7 bereit für complete-milestone: 2026-11-27.*
+*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21. v1.7 bereit für complete-milestone: 2026-11-27. v1.7 archiviert: 2026-11-27.*

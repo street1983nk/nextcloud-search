@@ -239,6 +239,31 @@
 - Phase 43 lief bis 29 Pläne mit abgelösten und gestrichenen Plänen; rc-Testbuilds an Melder brauchen eine feste Abbruchregel
 - Kein Milestone-Audit; Nachweise liegen verstreut in Phasen-VERIFICATIONs, Nachaudit und Store-Belegen
 
+## Milestone: v1.7, Findling 1.7.0
+
+**Shipped:** 2026-11-26 (im Store bestätigt 2026-11-27; geschlossen 2026-11-27)
+**Phases:** 2 | **Plans:** 37 | **Commits:** 240
+
+### What Was Built
+
+- PHP-Sicherheits-Gates (Psalm-Taint, php-cs-fixer, zizmor, actionlint) je mit Positivkontrolle, eingelöst aus Phase 42 Kriterium 3
+- Ausschluss je externem Speicher mit freien Plätzen und Platzhalter-Hinweisen (#45); Traditional Chinese aus zwei Fork-PRs (#56, #57)
+- Lesen unter dem Wasserzeichen als Besitzer ohne Umgehung einer Sperre, eigener Grund policy_blocked (#59)
+- Abgleich ohne Bremse durch Nachzählung und lange Warteschlange, Rückfallsicherung gegen kreisende Dateien (#25); kurze Store-Texte
+
+### What Worked
+
+- Secure-phase VOR dem Tag als blockierender Checkpoint (E4), Release-Threats getrennt nach dem Tag nachgeprüft: kein Threat musste nach dem Release nachgebessert werden
+- Eigene Freigabezeile je Schritt (Signatur, Tag, Store, Push, je Kommentar) machte die Belegkette lückenlos und jeden Schritt einzeln stoppbar
+- Melder-Fälle zuerst auf echter Instanz nachgebaut (Wasserzeichen-Modi M1 bis M5, Live-Proben #25) statt gegen Annahmen zu fixen
+- Der zweite Volltest nach den späten Fixes fand noch echte Befunde (V-45-10-07), bevor der Tag gesetzt war
+
+### What Did Not Work / Lessons
+
+- Phase 45 wuchs von 16 auf 27 Pläne, weil #59 und #25 (F1 bis F3) mitten im Release dazukamen; ein Schnitt nach dem Kernumfang hätte das Release früher gemacht
+- CI läuft nur auf gepushten Köpfen: der Tag-Kopf war der CI-geprüfte Doku-Commit (22f98ef2), nicht der Code-Commit; Pläne sollten den Tag-Kopf von Anfang an so definieren
+- F3 ("JPG-Schleife") wurde vorsorglich eingedämmt, die Melder-Logs zeigten später echten OCR-Rückstand; vor einer Eindämmung lohnt die Datenabfrage, auch wenn die Sicherung harmlos ist
+- Wenig RAM auf der Entwicklerbox (Full-pytest und Docker gekillt) kostete Wiederholläufe; Docker strikt seriell bleibt Pflicht
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -252,6 +277,7 @@
 | v1.4 | 6 (24-29) | 78 | Community-Issue (#18) als Release-Treiber; Checkpoint-Woertlichkeit; serielle src-Wellen gegen die Baumhash-Ratsche |
 | v1.5 | 7 (30-36) | 79 | Schema-Buendelung in der ersten Phase; Angriffs-Korpus als xfail(strict)-Treppe; Wortlaut-Plaene vor dem Bau; Review+Verifier nach Release, vor Close |
 | v1.6 | 7 (37-43) | 63 | Remote-Owner-Runde mit Empfehlung je Punkt; Nachaudit bei Verifikationslücke; Orakel-Gates gegen den Server; Nachtrags-Releases ohne Phase |
+| v1.7 | 2 (44-45) | 37 | secure-phase vor dem Tag, Release-Threats nach dem Tag; Freigabezeile je Schritt und je Kommentar; Melder-Fälle live nachgebaut |
 
 ### Cumulative Quality
 
@@ -264,6 +290,7 @@
 | v1.4 | ~5.000 Python + 666 PHP | Audit 0 CRIT / 0 HIGH (F-29-01 vor Release gefixt); secure-phase 28 = 71/71, 29 = 65/65; Submission 2x HTTP 201 |
 | v1.5 | 6.177 Python + 846 PHP | Audit 36: 0 CRIT/HIGH/MEDIUM; Code-Review 0 Critical; Verifier 5/5; 8 CI-Workflows gruen; Submission 2x HTTP 201 mit Gegenprobe |
 | v1.6 | PHP-Suite 1197 Tests (Phase 43) + Python-Suite | Audit 40 0 CRIT/HIGH/MEDIUM plus Nachaudit; Verifier 41/42 passed; sieben Tag-Läufe grün bei 1.6.0 und 1.6.2; Store-Belege je Release in docs/store-listing.md |
+| v1.7 | PHP-Suite + Python-Suite, neue PHP-Gates (Psalm-Taint 3 OCP, php-cs-fixer, zizmor, actionlint) | sieben CI-Gates grün auf dem Tag-Kopf; secure-phase 91 IDs threats_open 0; zweiter Volltest DE/EN/FR; Store-Belege in docs/store-listing.md |
 
 ### Top Lessons (Verified Across Milestones)
 

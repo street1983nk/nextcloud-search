@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Findling 1.7.0
-status: milestone_complete
-stopped_at: "Phase 45 abgeschlossen 2026-11-27: 45-15 fertig (sieben Antworten gepostet, Release-Threats T-45-47 bis T-45-54 closed, threats_open 0); Milestone v1.7 fertig, nächster Schritt offen für den Owner"
+status: archived
+stopped_at: "v1.7 archiviert 2026-11-27 (.planning/milestones/v1.7-*); nächster Milestone offen für den Owner (/gsd:new-milestone)"
 last_updated: "2026-11-27T04:05:00.000Z"
 last_activity: "2026-11-27, 45-15 fertig: Antworten in PR #60, #45, PR #56, PR #57, #53, #59, #25 gepostet (nichts geschlossen), Nachtrag Release-Threats, Phase 45 und Milestone v1.7 abgeschlossen"
 progress:
@@ -27,7 +27,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.6, 21.11.2026) und .planning/MILESTONE
 
 Phase: 45 (Findling 1.7.0), Milestone-Phasen 44 bis 45; Phase 44 und Phase 45 abgeschlossen (Phase 45 am 2026-11-27)
 Plan: 45-01 bis 45-27 fertig (27/27); 1.7.0 im Store (beide Apps, Tag v1.7.0 auf 22f98ef2), audited_head bb4c0bc8ca9c2b96edacc4de8a846d9d5ccdfe4d, status_45_09 und status_45_10 passed, secure-phase vor dem Tag erledigt (45-SECURITY.md threats_open 0)
-Status: Milestone v1.7 fertig. 1.7.0 im Store (Store-API 27.11. 00:18 und 00:29 UTC: beide Apps 1.7.0); Antworten gepostet 2026-11-27 03:56 UTC, offen bleiben #45, #59, #25 (Rückmeldung der Melder), #53 (Sammel-Issue) und PR #60 (Rebase body_zh); nächster Schritt offen für den Owner (complete-milestone v1.7, 1.7.1 mit I-45-10-04/06/07/08 und I-45-12-01)
+Status: Milestone v1.7 fertig und archiviert 2026-11-27 (milestones/v1.7-ROADMAP.md, v1.7-REQUIREMENTS.md; REQUIREMENTS.md entfällt bis zum nächsten Milestone). 1.7.0 im Store (Store-API 27.11. 00:18 und 00:29 UTC: beide Apps 1.7.0); Antworten gepostet 2026-11-27 03:56 UTC, offen bleiben #45, #59, #25 (Rückmeldung der Melder), #53 (Sammel-Issue) und PR #60 (Rebase body_zh); nächster Schritt offen für den Owner (complete-milestone v1.7, 1.7.1 mit I-45-10-04/06/07/08 und I-45-12-01)
 Last activity: 2026-11-27, 45-15 fertig: Antworten gepostet, Release-Threats nachgeprüft, Phase 45 abgeschlossen
 
 ## Performance Metrics
@@ -301,7 +301,7 @@ Last activity: 2026-11-27, 45-15 fertig: Antworten gepostet, Release-Threats nac
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervorlage):
+Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervorlage); bei den Closes v1.6 (2026-11-21) und v1.7 (2026-11-27) unverändert 13 Einträge, erneut zur Kenntnis genommen:
 
 | Category | Item | Status |
 |----------|------|--------|

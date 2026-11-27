@@ -1,5 +1,29 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.7 Findling 1.7.0 (Shipped: 2026-11-26)
+
+**Delivered:** Findling 1.7.0 im Nextcloud App Store (beide Apps; Tag v1.7.0 auf 22f98ef2, Release 45895635994 immutable mit zweimal Verified OK, store-submit 45898491529 mit 2x HTTP 201, Store-API beide Apps 1.7.0 am 27.11. 00:18 und 00:29 UTC): Ausschluss je externem Speicher mit Anzeige freier Plätze (#45), Traditional Chinese (PRs #56, #57 von foolfitz), Lesen unter dem Wasserzeichen von Nextcloud Office als Besitzer ohne Umgehung der Sperre (#59), Abgleich ohne Bremse durch Nachzählung und lange Warteschlange plus Rückfallsicherung für kreisende Dateien (#25), kurze Store-Texte mit Link auf die Doku; vorher die PHP-Sicherheits-Gates aus Phase 42 Kriterium 3.
+
+**Phases completed:** 44 bis 45 (2 Phasen, 37 Pläne)
+
+**Timeline:** 21.11. bis 27.11.2026 (240 Commits, 274 Dateien, +42.105 / -1.679 Zeilen)
+
+**Key accomplishments:**
+
+- Phase 44: Psalm mit Taint-Analyse gegen OCP 33, 34 und 35 (Befunde aus SARIF selbst gezählt), php-cs-fixer mit nextcloud/coding-standard, zizmor und actionlint, je mit Positivkontrolle rot; Strukturgate gegen stilles Entfernen (PRUEF-02 bis 04)
+- Ausschluss je externem Speicher (nur Admin-Speicher, Nutzerspeicher folgen dem Hauptschalter), freie Plätze für Ordner und Muster, Platzhalter-Hinweise in 18 Katalogen (#45, EXCL-04 bis 06)
+- zh_TW-Katalog und Admin-Seite unter zh_Hant_TW inklusive Rückfall auf root.lang; 33 eigene zh_TW-Sätze zum Gegenlesen an foolfitz (#53, #56, #57, KAT-03/04)
+- #59: Besitzer zuerst, erneutes Öffnen als Besitzer nur bei belegter Secure-View-Ablehnung, eigener Grund policy_blocked ("Blocked by a rule"), keine Textausschnitte unter Secure View; vorher/nachher über den Update-Weg 1.6.5 auf 1.7.0 live belegt (COMP-05)
+- #25: Nachzählung hält den Abgleich nicht mehr auf (Mindestabstand sechs Stunden), Rückhalt höchstens zweimal das Intervall, nie neben einem Crawl; OCR-Übergabe derselben Bytes nach drei Durchläufen als failed(repeatedly_stuck) (IDX-09 bis 11)
+- Kurze Store-Texte DE/EN/FR beider Apps nach Owner-Freigabe, verlagerte Inhalte in README und Doku mit Gates (STORE-03/04); Launch-Härtung, zweiter Volltest DE/EN/FR, secure-phase vor dem Tag (91 Threats, threats_open 0), Release-Threats nach dem Tag nachgeprüft (REL-07)
+
+**Nachweise:** kein v1.7-MILESTONE-AUDIT; Nachweise: 44-SECURITY.md, 45-SECURITY.md, 45-AUDIT.md, 45-ABNAHME.md, 45-VOLLTEST.md, docs/store-listing.md "# Release 1.7.0 (26.11.2026)".
+
+**Vorbehalte:** Phasen 44 und 45 ohne VERIFICATION-Datei (Abnahme über SECURITY, AUDIT, ABNAHME und VOLLTEST); fünf LOW/INFO-Punkte für 1.7.1 (I-45-10-04, I-45-10-06, I-45-10-07, I-45-10-08, I-45-12-01); #45, #59, #25 warten auf Bestätigung der Melder, PR #60 (body_zh) auf den Rebase; Dedup Weg B weiter offen.
+
+Known deferred items at close: 13 (see STATE.md Deferred Items, unverändert seit v1.6)
+
+---
 ## v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (Shipped: 2026-11-16)
 
 **Delivered:** Findling 1.6.0 bis 1.6.5 im Nextcloud App Store (beide Apps; 1.6.0 am 29.10. über store-submit 40868132102 mit 2x HTTP 201, Tag v1.6.0 auf 91a0603f; zuletzt 1.6.5 am 16.11. über 43801394739, Tag v1.6.5 auf 06a0d7c8): Anzeigename "Findling Search" mit discussion-Link und Cross-Promo-Satz zum MCP Connector, Zertifikatsrotation ohne Re-Register und ohne Container-Neustart (#33), Erklärsatz und Stand-Hinweis an den Ausschluss-Zählern, Dedup Weg C, Backup-Pause-Schalter (#37), PHP-Sicherheits-Gates für die Companion-App, Löschlauf unabhängig vom Quiet-Gate und Zählung pro Dokument über die Freigabe-Identität (#25).
