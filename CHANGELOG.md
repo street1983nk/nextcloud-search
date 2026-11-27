@@ -19,6 +19,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   the reason, so no word of the reason breaks in the middle.
 - The messages about * and ? in the fields of the excluded folders and patterns
   name their example in the language of the page.
+- A hit whose excerpt came out empty shows its path below the title in the
+  unified search instead of an empty line.
 
 ## [1.7.0] - 2026-11-26
 

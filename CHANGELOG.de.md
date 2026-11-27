@@ -20,6 +20,8 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   dem Grund, damit kein Wort des Grundes mitten im Wort umbricht.
 - Die Meldungen zu * und ? in den Feldern der ausgeschlossenen Ordner und Muster
   nennen ihr Beispiel in der Sprache der Seite.
+- Ein Treffer mit leerem Ausschnitt zeigt in der Unified Search seinen Pfad
+  unter dem Titel statt einer leeren Zeile.
 
 ## [1.7.0] - 2026-11-26
 

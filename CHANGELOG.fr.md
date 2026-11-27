@@ -21,6 +21,8 @@ dans [CHANGELOG.md](CHANGELOG.md).
   pour qu'aucun mot du motif ne soit coupé au milieu.
 - Les messages sur * et ? dans les champs des dossiers et des motifs exclus
   donnent leur exemple dans la langue de la page.
+- Un résultat dont l'extrait est vide affiche son chemin sous le titre dans
+  la recherche unifiée au lieu d'une ligne vide.
 
 ## [1.7.0] - 2026-11-26
 
