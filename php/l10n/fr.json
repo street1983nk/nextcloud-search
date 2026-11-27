@@ -185,7 +185,7 @@
         "_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._": ["Un processus de traitement détient ce fichier. La réservation expire dans %n seconde si personne ne la confirme.", "Un processus de traitement détient ce fichier. La réservation expire dans %n secondes si personne ne la confirme."],
         "Rules and limits": "Règles et limites",
         "Excluded folders": "Dossiers exclus",
-        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparaison par préfixe sur le chemin tel que les listes de cette page l'affichent, sans caractères génériques. Pour les caractères génériques, utiliser \"Motifs exclus\". Exemple : Backups",
+        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparaison par préfixe sur le chemin tel que les listes de cette page l'affichent, sans caractères génériques. Pour les caractères génériques, utiliser \"Motifs exclus\". Exemple : Sauvegardes",
         "Add exclusion": "Ajouter une exclusion",
         "Backups": "Sauvegardes",
         "Remove exclusion %s": "Supprimer l'exclusion %s",

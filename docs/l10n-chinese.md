@@ -387,7 +387,7 @@ this table cannot break on a wording.
 | `_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._` | Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunde aus, wenn ihn niemand quittiert. / Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunden aus, wenn ihn niemand quittiert. | 某個處理程序正持有這個檔案。若無任何確認，持有權會在 %n 秒後失效。 |
 | `Rules and limits` | Regeln und Grenzen | 規則與限制 |
 | `Excluded folders` | Ausgeschlossene Ordner | 排除的資料夾 |
-| `Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups` | Präfix-Vergleich auf dem Pfad, wie ihn die Listen dieser Seite zeigen, ohne Platzhalter. Für Platzhalter "Ausgeschlossene Muster" verwenden. Beispiel: Backups | 以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：Backups |
+| `Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups` | Präfix-Vergleich auf dem Pfad, wie ihn die Listen dieser Seite zeigen, ohne Platzhalter. Für Platzhalter "Ausgeschlossene Muster" verwenden. Beispiel: Sicherungen | 以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：備份 |
 | `Add exclusion` | Ausschluss hinzufügen | 新增排除項目 |
 | `Backups` | Sicherungen | 備份 |
 | `Remove exclusion %s` | Ausschluss %s entfernen | 移除排除項目 %s |

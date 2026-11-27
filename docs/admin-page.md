@@ -799,7 +799,9 @@ docs/privacy.md).
 
 Platzhalter der Regelfelder (ab 1.7.0): das Ordnerfeld zeigt "Sicherungen"
 (EN "Backups", FR "Sauvegardes"), das Musterfeld in jeder Sprache
-`*.photoslibrary`.
+`*.photoslibrary`. Ab 1.7.1 nennt der Hilfesatz der Ordnerliste in jeder
+Sprache dasselbe Beispiel wie das Feld ("Beispiel: Sicherungen", FR
+"Exemple : Sauvegardes"); bis 1.7.0 stand dort in jeder Sprache "Backups".
 
 Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
 Fix an einer vorhandenen Team-Folder-Datei war dieser Fehler, und es bleibt in

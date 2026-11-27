@@ -186,7 +186,7 @@ OC.L10N.register(
     "_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._": ["Een verwerkingsproces houdt dit bestand vast. De claim verloopt over %n seconde als niemand hem bevestigt.", "Een verwerkingsproces houdt dit bestand vast. De claim verloopt over %n seconden als niemand hem bevestigt."],
     "Rules and limits": "Regels en grenzen",
     "Excluded folders": "Uitgesloten mappen",
-    "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Prefixvergelijking op het pad zoals de lijsten op deze pagina het tonen, zonder jokertekens. Voor jokertekens \"Uitgesloten patronen\" gebruiken. Voorbeeld: Backups",
+    "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Prefixvergelijking op het pad zoals de lijsten op deze pagina het tonen, zonder jokertekens. Voor jokertekens \"Uitgesloten patronen\" gebruiken. Voorbeeld: Back-ups",
     "Add exclusion": "Uitsluiting toevoegen",
     "Backups": "Back-ups",
     "Remove exclusion %s": "Uitsluiting %s verwijderen",

@@ -185,7 +185,7 @@
         "_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._": ["Un proceso de tratamiento retiene este archivo. La reserva caduca en %n segundo si nadie la confirma.", "Un proceso de tratamiento retiene este archivo. La reserva caduca en %n segundos si nadie la confirma.", "Un proceso de tratamiento retiene este archivo. La reserva caduca en %n segundos si nadie la confirma."],
         "Rules and limits": "Reglas y límites",
         "Excluded folders": "Carpetas excluidas",
-        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparación por prefijo sobre la ruta tal como la muestran las listas de esta página, sin comodines. Para comodines, use \"Patrones excluidos\". Ejemplo: Backups",
+        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparación por prefijo sobre la ruta tal como la muestran las listas de esta página, sin comodines. Para comodines, use \"Patrones excluidos\". Ejemplo: Copias de seguridad",
         "Add exclusion": "Añadir exclusión",
         "Backups": "Copias de seguridad",
         "Remove exclusion %s": "Quitar la exclusión %s",

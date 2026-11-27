@@ -186,7 +186,7 @@ OC.L10N.register(
     "_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._": ["Um processo de tratamento tem este ficheiro reservado. A reserva expira em %n segundo se ninguém a confirmar.", "Um processo de tratamento tem este ficheiro reservado. A reserva expira em %n segundos se ninguém a confirmar.", "Um processo de tratamento tem este ficheiro reservado. A reserva expira em %n segundos se ninguém a confirmar."],
     "Rules and limits": "Regras e limites",
     "Excluded folders": "Pastas excluídas",
-    "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparação por prefixo sobre o caminho tal como as listas desta página o mostram, sem caracteres universais. Para caracteres universais, usar \"Padrões excluídos\". Exemplo: Backups",
+    "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "Comparação por prefixo sobre o caminho tal como as listas desta página o mostram, sem caracteres universais. Para caracteres universais, usar \"Padrões excluídos\". Exemplo: Cópias de segurança",
     "Add exclusion": "Adicionar exclusão",
     "Backups": "Cópias de segurança",
     "Remove exclusion %s": "Retirar a exclusão %s",

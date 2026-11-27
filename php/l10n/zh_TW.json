@@ -185,7 +185,7 @@
         "_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._": ["某個處理程序正持有這個檔案。若無任何確認，持有權會在 %n 秒後失效。"],
         "Rules and limits": "規則與限制",
         "Excluded folders": "排除的資料夾",
-        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：Backups",
+        "Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use \"Excluded patterns\". Example: Backups": "以本頁清單所顯示的路徑做開頭比對，不支援萬用字元。需要萬用字元請使用「排除的樣式」。範例：備份",
         "Add exclusion": "新增排除項目",
         "Backups": "備份",
         "Remove exclusion %s": "移除排除項目 %s",
