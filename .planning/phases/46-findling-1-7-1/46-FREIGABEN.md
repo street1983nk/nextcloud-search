@@ -41,3 +41,5 @@ Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 09ca4d
 Freigabe Push 46-06 Fix: "Ok go mit den Empfehlungen" (2026-11-27 09:23, Claude-Code-Chat) Entscheid: ja
 Freigabe Dispatch coverage-e2e 46-06 Fix: "Ok go mit den Empfehlungen" (2026-11-27 09:23, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: Push von e448e02b, 2fa545a9, 3b92228c und dieser Zeile auf main, ohne Tag und Store; ein CI-Warter; genau ein workflow_dispatch von coverage-e2e.yml danach. Kein Kommentar.
+
+Entscheid PHP-Baumhash 46-06: "Ja" (2026-11-27 10:41, Claude-Code-Chat) Entscheid: PHP_TREE_HASH_TODAY auf 7ce0ad5c nachziehen (Folge von 46-03), volle Python-Suite lokal vor dem Push
