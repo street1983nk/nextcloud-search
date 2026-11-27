@@ -1628,8 +1628,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # keeps no excerpt whose text is empty or blank, and tests/Unit/ExAppServiceTest.php holds it.
 # No file came or went. The recipe gave 623f4735; the recipe over git archive of f141c23a, the
 # last commit before this change, gave 7ce0ad5c with 148 files (positive control).
+# Moved on 2026-11-27 a second time by plan 46-07: the blank check of #63 ends at \z instead of
+# $ (the anchor gate of test_phase36_audit.py), and its comment names 1.7.0 as the last container
+# that sends an empty text. No file came or went. The recipe gave bdef3ea9; the recipe over git
+# archive of d8f57d41, the last commit before this change, gave 623f4735 with 148 files
+# (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "623f4735568ce4166d5ffca486fd1704271974bc35fb4975bccb136f72fd556e"
+PHP_TREE_HASH_TODAY = "bdef3ea91af541b13625ac97a9150b4f3ed07d8de760d54f6724f829b22f7083"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

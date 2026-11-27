@@ -1189,12 +1189,12 @@ class ExAppService {
 				continue;
 			}
 
-			// Issue #63: a container up to 1.7.1 answers an empty text when the
+			// Issue #63: a container up to 1.7.0 answers an empty text when the
 			// cut found nothing to quote. That is no excerpt, and it is no
 			// malformed answer either, so it is neither kept nor counted: the
 			// hit goes on without an entry, and the unified search and the
 			// result page show its path, as they do for every hit without one.
-			if (preg_match('/^\s*$/u', $text) === 1) {
+			if (preg_match('/^\s*\z/u', $text) === 1) {
 				continue;
 			}
 
