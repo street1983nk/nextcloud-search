@@ -243,7 +243,7 @@
         "The entry contains a control character.": "De vermelding bevat een besturingsteken.",
         "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.": "Een patroon heeft naast * en ? minstens één ander teken nodig, anders zou het alles uitsluiten.",
         "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Deze vermelding bevat geen * of ?. Hele mappen onder \"Uitgesloten mappen\" invoeren, of een patroon zoals Name* gebruiken.",
-        "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Mappen accepteren geen * of ?. Voor een patroon zoals Backup* \"Uitgesloten patronen\" gebruiken.",
+        "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Mappen accepteren geen * of ?. Voor een patroon zoals Back-up* \"Uitgesloten patronen\" gebruiken.",
         "This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under \"Excluded patterns\".": "Deze vermelding bevat * of ?, wat mappen niet ondersteunen, en komt daarom alleen overeen met precies deze tekst. De vermelding verwijderen en onder \"Uitgesloten patronen\" invoeren.",
         "%1$s of %2$s slots free": "Vrije plaatsen: %1$s van %2$s",
         "1 of %s slots free. This is the last one.": "Vrije plaatsen: 1 van %s. Dit is de laatste.",

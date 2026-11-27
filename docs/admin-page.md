@@ -729,7 +729,7 @@ Zähler folgt also jedem Hinzufügen und Entfernen schon vor dem Speichern.
 ### Ordnerfeld: `*` und `?` werden abgewiesen (ab 1.7.0)
 
 Ein neuer Eintrag unter "Ausgeschlossene Ordner" mit `*` oder `?` wird mit dem
-Code `wildcard` abgewiesen: "Ordner ohne * oder ?. Für Muster wie Backup* das
+Code `wildcard` abgewiesen: "Ordner ohne * oder ?. Für Muster wie Sicherung* das
 Feld "Ausgeschlossene Muster" nutzen." Ein solcher Eintrag, der schon
 gespeichert ist (aus einer älteren Version oder per `occ`), bleibt geduldet und
 wirkt weiter als wörtlicher Text. Die Seite markiert ihn: "Dieser Eintrag
@@ -1001,7 +1001,7 @@ nur den Code und höchstens die Grenzzahl.
 | `too_many` | beide | Mehr als 64 Ordner oder mehr als 32 Muster. |
 | `duplicate` | beide | Der Eintrag steht nach der Vereinheitlichung schon in der Liste. |
 | `traversal` | beide | Ein Ordnername `.` oder `..` im Eintrag; er würde aus dem Pfadraum hinausführen. |
-| `wildcard` | nur Ordner | Ein neuer Eintrag mit `*` oder `?` (ab 1.7.0). Satz an der Liste: "Ordner ohne * oder ?. Für Muster wie Backup* das Feld "Ausgeschlossene Muster" nutzen." Ein schon gespeicherter Eintrag bleibt geduldet und markiert. |
+| `wildcard` | nur Ordner | Ein neuer Eintrag mit `*` oder `?` (ab 1.7.0). Satz an der Liste: "Ordner ohne * oder ?. Für Muster wie Sicherung* das Feld "Ausgeschlossene Muster" nutzen." Ein schon gespeicherter Eintrag bleibt geduldet und markiert. |
 | `double_star` | nur Muster | `**` hat keine eigene Bedeutung, ein einfacher `*` gilt schon über Ordner hinweg. |
 | `unsupported_character` | nur Muster | `[`, `]`, `{`, `}` oder Backslash, oder kein gültiges UTF-8. Nur `*` und `?` sind Platzhalter. |
 | `negation` | nur Muster | Ein führendes `!`. Muster schließen nur aus, eine Ausnahme von einer Regel gibt es nicht. |

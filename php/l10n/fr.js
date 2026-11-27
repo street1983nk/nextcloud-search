@@ -244,7 +244,7 @@ OC.L10N.register(
     "The entry contains a control character.": "L'entrée contient un caractère de contrôle.",
     "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.": "Un motif doit contenir au moins un caractère autre que * et ?, sinon il exclurait tout.",
     "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Cette entrée ne contient ni * ni ?. Ajouter les dossiers entiers sous \"Dossiers exclus\", ou utiliser un motif comme Name*.",
-    "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Les dossiers n'acceptent ni * ni ?. Pour un motif comme Backup*, utiliser \"Motifs exclus\".",
+    "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Les dossiers n'acceptent ni * ni ?. Pour un motif comme Sauvegarde*, utiliser \"Motifs exclus\".",
     "This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under \"Excluded patterns\".": "Cette entrée contient * ou ?, que les dossiers ne prennent pas en charge : elle ne correspond donc qu'à ce texte exact. La supprimer et l'ajouter sous \"Motifs exclus\".",
     "%1$s of %2$s slots free": "Encore %1$s emplacements libres sur %2$s",
     "1 of %s slots free. This is the last one.": "Encore 1 emplacement libre sur %s. C'est le dernier.",
