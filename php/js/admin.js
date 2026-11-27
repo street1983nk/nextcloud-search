@@ -1435,6 +1435,29 @@
   }
 
   /**
+   * Enter in a rule field adds its entry the way the button next to it does
+   * (I-45-10-06): the same function, so the same checks and the same messages.
+   * The fields stand in no form, so without this Enter did nothing at all.
+   *
+   * An Enter that confirms a word of an input method is left alone: Zhuyin for
+   * zh_TW, or any other composition, sends Enter with isComposing set (older
+   * engines with keyCode 229), and adding then would take a half typed entry.
+   * An Enter with a modifier is left alone as well, it is nobody's way to add.
+   */
+  function addOnEnter (field, addEntry) {
+    field.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) {
+        return
+      }
+      if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+        return
+      }
+      event.preventDefault()
+      addEntry()
+    })
+  }
+
+  /**
    * Add and remove, both local and neither of them saved.
    *
    * Remove is wired by delegation on the list, so a row that was cloned a
@@ -1448,7 +1471,7 @@
     const list = document.getElementById(FOLDER_LIST)
 
     if (add !== null && field !== null) {
-      add.addEventListener('click', function () {
+      const addFolderEntry = function () {
         const value = field.value.trim()
         const prefixes = currentPrefixes()
         const maxLength = boundOf(FOLDER_FIELD, 'data-max-length')
@@ -1481,7 +1504,9 @@
         field.focus()
         refreshEmptyState()
         touched()
-      })
+      }
+      add.addEventListener('click', addFolderEntry)
+      addOnEnter(field, addFolderEntry)
     }
 
     if (list !== null) {
@@ -1519,7 +1544,7 @@
     const list = document.getElementById(PATTERN_LIST)
 
     if (add !== null && field !== null) {
-      add.addEventListener('click', function () {
+      const addPatternEntry = function () {
         const value = field.value.trim()
         const patterns = currentPatterns()
         const maxLength = boundOf(PATTERN_FIELD, 'data-max-length')
@@ -1545,7 +1570,9 @@
         field.focus()
         refreshEmptyState()
         touched()
-      })
+      }
+      add.addEventListener('click', addPatternEntry)
+      addOnEnter(field, addPatternEntry)
     }
 
     if (list !== null) {
