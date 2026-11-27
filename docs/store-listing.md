@@ -3585,7 +3585,7 @@ Belegkette:
    threats_open 0 meldet), `git cat-file -t v1.7.0` = tag (annotiert),
    Nachricht "Findling 1.7.0", Tagger street1983nk, gepusht 2026-11-26
    21:05 UTC.
-2. Tag-Läufe auf 22f98ef2: Release archives for the app store 45895635994,
+2. Tag-Läufe auf 22f98ef2: Release-Workflow (release.yml) 45895635994,
    PHP and store metadata gates 45895636004, Python gates 45895636062,
    Integration 45895635907, Resilience 45895635843, Multi-arch image
    45895636060, Workflow security lint 45895635893, alle success. HaRP deploy
@@ -3602,7 +3602,7 @@ Belegkette:
    libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898.
    Release-Notiz mit `gh release edit v1.7.0 --notes-file` gesetzt, Titel
    "Findling 1.7.0".
-5. SHA-256 der Archive, aus dem Release geladen (`gh release download`):
+5. SHA-256 der beiden Pakete, aus dem Release geladen (`gh release download`):
    - findling.tar.gz `67f03ba492e9548cd38bdd222d4dbd4efe880f43b829cd41479688966469d409`
    - findling_backend.tar.gz `21e2c07bbc01cfe024fe0d3681a546847bcefceeade61d9de7a8ad73d2b976d3`
    Beide Werte stehen gleich im Log der Fremdinstallation (Punkt 7).
@@ -3615,7 +3615,7 @@ Belegkette:
 7. Fremdinstallation aus den Release-Assets: `deploy-harp.yml` mit
    `release_tag=v1.7.0`, Lauf 45896004205, alle vier Jobs success (stable33,
    stable34 amd64 und arm64, stable35). Schritt "Store install 1 from the
-   release, load both archives instead of building them" lädt
+   release", der beide Pakete lädt statt sie zu bauen, holt
    `releases/download/v1.7.0/findling.tar.gz` und `findling_backend.tar.gz`
    (808542 und 52368 Bytes) und meldet für findling.tar.gz "carries
    appinfo/signature.json, as the integrity check of the instance requires".
