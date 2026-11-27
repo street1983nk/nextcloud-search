@@ -737,6 +737,63 @@ def test_the_stale_file_follows_the_fixed_order() -> None:
             assert line.lstrip().startswith("#"), line
 
 
+# I-45-12-01 (plan 46-04): the pass that indexes the stale file hands it on to
+# the embed track (``hand_over(..., kind=KIND_EMBED)`` in poller.py of v1.5.0),
+# so its queue row stays until the embed runner takes it. The acceptance once
+# looked right after "indexed/" and found that row (run 45885132945, attempt 1:
+# "requeued=1 embedded=0", then "1 queue row(s)"). It waits for the row now,
+# within what is left of the budget, and only then counts the three log lines
+# and demands no row; a row that never goes keeps the step red.
+QUEUE_WAIT = (
+    "rows=$(q \"SELECT COUNT(*) || ':' || IFNULL(MAX(kind), '') FROM oc_findling_queue WHERE file_id = ${stale_id};\")"
+)
+QUEUE_WAIT_LOOP = 'while [ "$(date +%s)" -lt "${deadline}" ]; do\n  ' + QUEUE_WAIT
+QUEUE_WAIT_DONE = '[ "${rows%%:*}" = "0" ] && break'
+ACCEPTED_GATE = 'if [ -z "${accepted_file}" ]; then'
+ACCEPTANCE_COUNT = "short=$(docker logs"
+
+
+def queue_wait_findings(block: str) -> list[str]:
+    """What keeps the acceptance of the stale file from waiting for its queue row first."""
+    for marker in (ACCEPTED_GATE, ACCEPTANCE_COUNT):
+        if block.count(marker) != 1:
+            return [f"the block carries {marker!r} {block.count(marker)} times, expected once"]
+    findings: list[str] = []
+    if block.count(QUEUE_WAIT_LOOP) != 1:
+        findings.append("no loop within the budget asks for the queue row of the stale file")
+    elif not block.index(ACCEPTED_GATE) < block.index(QUEUE_WAIT_LOOP) < block.index(ACCEPTANCE_COUNT):
+        findings.append("the wait for the queue row does not stand between indexed/ and the acceptance")
+    wait = block[block.index(QUEUE_WAIT_LOOP) :] if QUEUE_WAIT_LOOP in block else ""
+    if QUEUE_WAIT_DONE not in wait[: wait.find("done\n") if "done\n" in wait else len(wait)]:
+        findings.append("the wait does not end on an empty queue")
+    return findings
+
+
+def test_the_acceptance_waits_for_the_queue_row_of_the_stale_file() -> None:
+    """PRUEF-06: indexed/, then the queue row gone within the budget, then 1:1:0 and no row."""
+    assert queue_wait_findings(_new_seed_block()) == []
+
+
+def test_the_queue_wait_gate_sees_the_order_of_1_7_0() -> None:
+    """Positive control: no wait, a wait after the count, and a wait that never ends are findings."""
+    block = _new_seed_block()
+    if queue_wait_findings(block):
+        pytest.skip("the gate above is red already")
+    without = block.replace(QUEUE_WAIT_LOOP, "while false; do\n  :", 1)
+    assert queue_wait_findings(without) == ["no loop within the budget asks for the queue row of the stale file"]
+    wait_start = block.index(QUEUE_WAIT_LOOP)
+    wait_end = block.index("done\n", wait_start) + len("done\n")
+    wait = block[wait_start:wait_end]
+    moved = block.replace(wait, "", 1)
+    count = moved.index(ACCEPTANCE_COUNT)
+    moved = moved[:count] + moved[count:].replace("\n", "\n" + wait, 1)
+    assert queue_wait_findings(moved) == [
+        "the wait for the queue row does not stand between indexed/ and the acceptance"
+    ]
+    endless = block.replace(QUEUE_WAIT_DONE, '[ "${rows%%:*}" -ge 0 ] || break', 1)
+    assert queue_wait_findings(endless) == ["the wait does not end on an empty queue"]
+
+
 def test_the_order_waits_for_the_first_reconcile_cycle_first() -> None:
     # The nought in state.db for the stale file holds only if no cycle comes
     # after the give up, and none comes once the first cycle is finished.
