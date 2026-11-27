@@ -5430,6 +5430,55 @@ def test_the_wildcard_example_gate_sees_the_english_example() -> None:
     assert wildcard_example_findings(german) == []
 
 
+# Owner decision "Entscheid Name-Beispiel 46-07": the message for a pattern
+# without * or ? ends on a pattern example, "Name*", which stood in English in
+# every language. It has no placeholder to stem from, so the word of each
+# language is written down here, as the owner accepted it.
+NAME_EXAMPLE_OF = {
+    "de": "Name",
+    "de_DE": "Name",
+    "es": "Nombre",
+    "fr": "Nom",
+    "it": "Nome",
+    "nl": "Naam",
+    "pt_BR": "Nome",
+    "pt_PT": "Nome",
+    "zh_TW": "名稱",
+}
+
+
+def name_example_findings(language: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """What keeps the message for a pattern without * or ? from naming the example of its language."""
+    sentence = catalogue.get(NO_WILDCARD_SENTENCE)
+    if not isinstance(sentence, str):
+        return ["the message for a pattern without * or ? is missing or not a string"]
+    stems = [stem for stem in _PATTERN_EXAMPLE.findall(sentence) if stem not in ("*", "?")]
+    expected = NAME_EXAMPLE_OF.get(language)
+    if expected is None:
+        return [f"no example is set down for the language {language!r}"]
+    if stems != [expected]:
+        return [f"the message names {stems!r} as pattern example, expected [{expected!r}]"]
+    return []
+
+
+def test_the_pattern_message_names_the_example_of_its_language() -> None:
+    """Every catalogue file names the accepted example of its language before the *."""
+    findings = [
+        f"{path.name}: {finding}"
+        for path in L10N_CATALOGUES
+        for finding in name_example_findings(path.stem, catalogue_of(path))
+    ]
+    assert findings == []
+
+
+def test_the_name_example_gate_sees_the_english_example() -> None:
+    """Positive control: "Name*" in French is a finding, "Nom*" is not, and a language without an entry is one."""
+    french = {NO_WILDCARD_SENTENCE: "... ou utiliser un motif comme Name*."}
+    assert len(name_example_findings("fr", french)) == 1
+    assert name_example_findings("fr", {NO_WILDCARD_SENTENCE: "... ou utiliser un motif comme Nom*."}) == []
+    assert len(name_example_findings("xx", {NO_WILDCARD_SENTENCE: "... Name*."})) == 1
+
+
 def test_the_slots_lines_and_the_row_warning_stand_where_the_ui_spec_puts_them() -> None:
     """EXCL-05, EXCL-06: two slot lines, one marking per stored row and in the row template."""
     template = TEMPLATE.read_text(encoding="utf-8")
