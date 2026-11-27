@@ -17,3 +17,7 @@ Hinweis: Zeit in UTC. Antwort auf "Darf ich alle Empfehlungen für beide Projekt
 Entscheid Reihenfolge 46-04: "Ok" (2026-11-27 06:38, Claude-Code-Chat) Entscheid: 46-04 vor 46-03 ohne Docker; 46-03 folgt, sobald Docker frei ist
 Freigabe Text store-listing 46-05: "Ok" (2026-11-27 06:38, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: Umformulierung genau der drei Zeilen im Abschnitt "# Release 1.7.0" von docs/store-listing.md mit dem gesperrten Wort (I-46-01-01), sofort statt in 46-05; Inhalt und Belege bleiben gleich. Kein Push.
+
+Freigabe Docker-Fenster 46-03: "Ok" (2026-11-27 07:08, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Antwort auf "Docker-Fenster für Findling 46-03 gleich nach der NC35-Messung" (NC35 fertig, docker ps leer). Gedeckt: Dev-Instanz für die Bilder der Layout-Varianten 46-03 Task 1, ein Stack, danach gestoppt; RAM vorher prüfen.
+Entscheid I-46-04-01 46-04: "Ok" (2026-11-27 07:08, Claude-Code-Chat) Entscheid: Backlog (coverage_e2e.sh und smb_acl_measure.sh nicht in 1.7.1)
