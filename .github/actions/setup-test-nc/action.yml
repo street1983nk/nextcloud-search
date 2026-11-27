@@ -388,14 +388,15 @@ runs:
     # process, so the same dictionary has to come from apt. Without it every
     # indexing pass of the armed poller dies in a FileNotFoundError on
     # /usr/share/dict/ngerman before it ever claims a queue row (first run of
-    # the resilience gate).
+    # the resilience gate). The download goes through scripts/ci/apt_install.sh,
+    # which gives each attempt a time budget and tries three times: a hanging
+    # mirror once took the whole job limit here (I-45-10-07 of 45-AUDIT.md).
     - name: Install the German dictionary the analyzer reads
       if: inputs.register-exapp == 'true'
       shell: bash
       run: |
         if [ ! -f /usr/share/dict/ngerman ]; then
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq wngerman
+          bash findling-src/scripts/ci/apt_install.sh wngerman
         fi
         wc -l /usr/share/dict/ngerman
 

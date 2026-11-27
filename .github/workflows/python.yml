@@ -221,12 +221,13 @@ jobs:
       # and harp_connect.sh watches the HaRP tunnel (phase 38). Their tests in
       # tests/test_harp_connect_supervisor.py run on Linux only, which means
       # here, and shellcheck is the static half of that proof. It is installed
-      # when the runner image does not carry it.
+      # when the runner image does not carry it. The apt helper of the test jobs
+      # and its self test (plan 46-04) ride along, they are shell scripts too.
       - name: Shell check of the tunnel scripts
         run: |
           command -v shellcheck || sudo apt-get install -y shellcheck
           shellcheck --version
-          shellcheck docker/harp_connect.sh docker/init.sh
+          shellcheck docker/harp_connect.sh docker/init.sh scripts/ci/apt_install.sh scripts/ci/apt_install_selftest.sh
 
       # The probes of the launch audit 1.6.0 by name (plan 40-01). The tunnel
       # watcher probes need bash, a FIFO and POSIX signals and run here only;
