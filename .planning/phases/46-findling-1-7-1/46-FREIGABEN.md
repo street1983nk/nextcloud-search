@@ -25,3 +25,11 @@ Entscheid I-46-04-01 46-04: "Ok" (2026-11-27 07:08, Claude-Code-Chat) Entscheid:
 Entscheid Layout 46-03: "Ok" (2026-11-27 07:20, Claude-Code-Chat) Entscheid: A
 Freigabe Docker-Fenster 46-03 Messung: "Ok" (2026-11-27 07:20, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Antwort auf "Nehme ich Variante A, und darf der Agent für die Prüfung nach dem Fix noch einmal Docker nutzen?". Gedeckt: Variante A (Chip unter dem Grund unter 360 px, Spalte Zustand ausgeblendet); ein Docker-Fenster für die Messung am GREEN-Stand von 46-03 Task 3, ein Stack, danach gestoppt.
+
+Freigabe Version 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: ja (1.7.1 für findling und findling_backend)
+Freigabe Changelog 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: ja (Wortlaut EN/DE/FR wie vorgelegt, FR zweiter Punkt: "La touche Entrée dans le champ des dossiers ou des motifs exclus ajoute l'élément comme le bouton voisin ; si elle valide un mot d'une méthode de saisie, elle n'ajoute rien.")
+Entscheid Tag-Datum 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: 2026-11-28 vorläufig (anderer Tag: Datumszeile am Tag-Kopf nach 46-08 Fall 2)
+Freigabe Storetext 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: ja (nur Links blob/v1.7.1, Text sonst gleich)
+Freigabe README 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: READMEs unverändert; docs/admin-page.md je ein Satz zu Enter und zur Fehlerliste unter 360 px
+Freigabe Docker-Fenster 46-06: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: ja (PHPUnit und PHP-Gates vor dem Push, ein Stack, danach gestoppt)
+Hinweis: Zeit in UTC. Antwort auf "Gibst du die fünf Punkte so frei, und auch das Docker-Fenster für 46-06?". Kein Push.
