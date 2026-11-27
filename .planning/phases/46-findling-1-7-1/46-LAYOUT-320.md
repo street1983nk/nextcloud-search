@@ -57,3 +57,22 @@ Bilder für den Vergleich: `bilder/layout/base-de-320-light.png`, `A-de-320-ligh
 ## Empfehlung
 
 Beide Varianten erfüllen ADM-05 gleich gut (bare 0, kein Scrollen, 375 und 1280 px unverändert). Empfehlung: **A**. Der Chip sitzt sichtbar eindeutig bei seinem Grund, das Template wächst nur um eine span, und dass der Zustand bei 320 px Teil des Zeilenkopfs wird, ist für einen Screenreader eher hilfreich ("Kein Textinhalt Übersprungen, 7"). Bei B steht der Zustand als lose Zeile ohne Bezug zu ihrem Grund, das ist der schwächere Zustand für Screenreader. Ein Abbruch nach dem Kriterium aus 46-03 (Variante C) ist nicht nötig.
+
+## Entscheid
+
+`Entscheid Layout 46-03` = A (Owner "Ok", 46-FREIGABEN.md).
+
+## Ergebnis
+
+Gebaut wie Variante A, RED e6932901, GREEN siehe 46-03-SUMMARY.md. Messung am GREEN-Stand im Fenster `Freigabe Docker-Fenster 46-03 Messung` (4,3 GiB frei, `docker ps -q` leer, nur der Dienst app, danach gestoppt), ausgeliefertes admin.css mit der neuen Regel per HTTP geprüft, Template-Stand im Accessibility-Baum bestätigt (drei Kopien im Zeilenkopf, bei 320 px sichtbar, bei 1280 px keine).
+
+| Sprache | Thema | bare 320 / 375 / 1280 | Brüche gesamt 320 / 375 / 1280 | waagerechtes Scrollen |
+|---|---|---|---|---|
+| DE | hell | 0 / 0 / 0 | 6 / 10 / 3 | 0 |
+| DE | dunkel | 0 / 0 / 0 | 6 / 10 / 3 | 0 |
+| EN | hell | 0 / 0 / 0 | 2 / 3 / 0 | 0 |
+| EN | dunkel | 0 / 0 / 0 | 2 / 3 / 0 | 0 |
+| FR | hell | 0 / 0 / 0 | 7 / 6 / 1 | 0 |
+| FR | dunkel | 0 / 0 / 0 | 7 / 6 / 1 | 0 |
+
+Accessibility (DE): bei 320 px Zeile "Kein Textinhalt Übersprungen 7", Zeilenkopf "Kein Textinhalt Übersprungen"; bei 1280 px Zeile "Kein Textinhalt 7 Übersprungen", Zeilenkopf "Kein Textinhalt" wie in 1.7.0. "Übersprungen" je Breite gleich oft im Baum wie in 1.7.0, drei Zähler-ids, eindeutig. Bilder `bilder/layout/green-*.png` (18).
