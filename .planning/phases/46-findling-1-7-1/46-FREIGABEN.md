@@ -33,3 +33,7 @@ Freigabe Storetext 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: j
 Freigabe README 46-05: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: READMEs unverändert; docs/admin-page.md je ein Satz zu Enter und zur Fehlerliste unter 360 px
 Freigabe Docker-Fenster 46-06: "Ja" (2026-11-27 07:48, Claude-Code-Chat) Entscheid: ja (PHPUnit und PHP-Gates vor dem Push, ein Stack, danach gestoppt)
 Hinweis: Zeit in UTC. Antwort auf "Gibst du die fünf Punkte so frei, und auch das Docker-Fenster für 46-06?". Kein Push.
+
+Freigabe Push 46-06: "Ja" (2026-11-27 08:30, Claude-Code-Chat) Entscheid: ja
+Freigabe Dispatch coverage-e2e 46-06: "Ja" (2026-11-27 08:30, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 09ca4d23 bis einschließlich dieser Zeile auf main, ohne Tag, ohne Store; ein CI-Warter, höchstens ein Rerun; genau ein workflow_dispatch von coverage-e2e.yml auf main nach dem Push. Kein Kommentar.
