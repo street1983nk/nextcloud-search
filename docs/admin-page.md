@@ -810,6 +810,14 @@ fügt nichts hinzu. Unter 360 px Breite steht in der Fehlerliste der Zustand als
 Chip unter dem Grund statt in einer eigenen Spalte, damit der Grund die ganze
 Breite hat und kein Wort mitten im Wort umbricht.
 
+Versionen der beiden Hälften: Die Begleit-App merkt sich die Version, die der
+Container zuletzt gemeldet hat, und antwortet bei abweichender Major- oder
+Minor-Version mit keinem Treffer. Aufgefrischt wird diese gemerkte Version, wenn
+die Admin-Seite offen ist. Wer beide Apps von Hand über eine Minor-Grenze
+zurücksetzt (etwa von 1.7 auf 1.6), öffnet danach die Admin-Seite einmal; erst
+dann antwortet die Suche wieder (Nextcloud selbst bietet kein Herabstufen einer
+App an).
+
 Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
 Fix an einer vorhandenen Team-Folder-Datei war dieser Fehler, und es bleibt in
 der Tabelle der Nextcloud-Seite stehen. Die Quittung des Containers nimmt nur
