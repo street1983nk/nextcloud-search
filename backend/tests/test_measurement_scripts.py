@@ -1620,8 +1620,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # recipe gave a46fd501; the independent pipeline of find, sort, sed (CRLF to LF) and sha256sum
 # gave a46fd501 as well; the recipe and the pipeline over git archive of 293ce570, the last commit
 # before this change, gave 7c52b1f4 with 148 files (positive control).
+# Moved on 2026-11-27 by plan 46-03 (finding I-45-10-08, owner picked layout A): below 360 px
+# templates/admin.php repeats the state chip in the row head of a group. No file came or went.
+# The recipe gave 7ce0ad5c; the recipe over git archive of e6932901, the last commit before this
+# change, gave a46fd501 with 148 files (positive control).
 PHP_FILES_TODAY = 148
-PHP_TREE_HASH_TODAY = "a46fd501cfbdd98c11c72fab4eaa8d83905cd8010f89cd85a817c671fc4aa811"
+PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda992097c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
