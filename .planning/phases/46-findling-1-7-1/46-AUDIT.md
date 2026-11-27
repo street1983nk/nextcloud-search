@@ -137,3 +137,34 @@ Einordnung: Nextcloud unterstützt kein Herabstufen einer App über den Store, e
 Vorschlag (eigener Fix mit Test zuerst, nur nach Owner-Freigabe, coverage-e2e-Lauf mit eigener Freigabe): im Schritt "rollback to 1.6.2" nach `start_backend "${OLD_BACKEND_DIR}"` die Admin-Seite als admin einmal aufrufen (der Weg, den die Produktdoku für diesen Fall nennt: die Seite nennt beide Versionen und schreibt die des Containers fest), danach `backend_app_version` per occ lesen und auf 1.6.2 prüfen (eigene Vergleichszeile, Positivkontrolle: ohne den Aufruf bleibt 1.7.1 stehen und die Drift-Warnung erscheint). Ersatzweise, falls der Seitenaufruf in der Harness ohne Sitzung nicht geht: `occ config:app:delete findling backend_app_version`, wie es die Migration von 1.7 beim Schritt nach oben tut; dann prüft der Schritt aber nicht mehr den Weg, den ein Admin geht. Zusätzlich ein Satz in docs/admin-page.md (Abschnitt Versionen der beiden Hälften): nach einem Rücksprung über eine Minor-Grenze die Admin-Seite einmal öffnen.
 
 Fix V-46-06-03 nach Owner-"Ja" (Weg 1, vor dem Tag): RED e16c2b56 (`test_the_rollback_refreshes_the_recorded_version_before_it_tests`, Positivkontrolle: Schritt ohne Aufruf und Aufruf nach der Änderung je rot), GREEN 22e13f0a (coverage_e2e.sh: nach dem Start von 1.6.2 einmal `overview` der Admin-Seite, dann `backend_app_version` per occ lesen und als Vergleichszeile "rollback: version of the other half the admin overview of 1.6.2 records" gegen 1.6.2 prüfen, alles vor der Änderung von notiz.txt; `bash -n` grün), Doku 1a0abda0 (docs/admin-page.md, Absatz "Versionen der beiden Hälften"). Lokal: ruff, ruff format, pyright (0 Fehler), vulture grün; volle Python-Suite 7452 passed, 305 skipped (838 s, allein). Beleg in echter CI folgt mit dem einen freigegebenen coverage-e2e-Lauf nach dem Push.
+
+## Nachtrag 46-06: grüner Kandidat
+
+Push durch den Koordinator: origin/main = 6003b35352bb5be89ec0e85a1319129b209debc7, dazu genau ein coverage-e2e-Lauf 45995128241. Dazwischen hatte die Hauptsitzung den PHP-Baumhash nachgezogen (ce8a5021, PHP_TREE_HASH_TODAY 7ce0ad5c nach dem admin.php-Fix von 46-03; Python gates auf a66b016c war daran rot) und auf 1180c9a4 alle Pflichtläufe grün gefahren. Ein CI-Warter auf 6003b353:
+
+```
+45995128241 Coverage end to end success
+45995129242 HaRP deploy success
+45995129221 OpenSSF Scorecard success
+45995129443 Resilience success
+45995129267 Multi-arch image success
+45995129320 Python gates success
+45995129316 Security scans success
+45995129220 Integration success
+exit 0
+```
+
+"PHP and store metadata gates" und "Workflow security lint" liefen auf 6003b353 nicht (paths-Filter: seit a66b016c keine Änderung unter php/ und .github/, `git diff --stat a66b016c 6003b353 -- php .github` leer); beide sind auf a66b016c grün (45973260375 Workflow security lint; PHP and store metadata gates zuletzt mit Code-Änderung unter php/ auf 0deaf620, 45966177569, seither php/ unverändert).
+
+Belege coverage-e2e 45995128241 (alle sieben Beine grün):
+
+- Bein upgrade: `compare rollback: version of the other half the admin overview of 1.6.2 records: expected 1.6.2, shown 1.6.2, equal`, `rollback_1_6_2: ok (doc_key column 1, index 1, a changed file judged and found by 1.6.2)`, `second_upgrade_rename: ok (122 living rows, bound 660 s)`.
+- Bein upgrade-rc1: dieselbe Vergleichszeile equal, `rollback_1_6_2: ok`, `second_upgrade_rename: ok (123 living rows, bound 660 s)`.
+- tesseract über `findling-harness/scripts/ci/apt_install.sh` in allen Beinen: `apt_install: attempt 1 of 3 ended with exit 0 after 4s` bis `22s`.
+- V-46-06-01, V-46-06-02 und V-46-06-03 damit in echter CI belegt; shellcheck der zwei Skripte in "Python gates" grün.
+
+audited_head: 1a0abda0d6e9686d7ecc74e51cc959962cf0fa21
+ci_head: 6003b35352bb5be89ec0e85a1319129b209debc7
+status_46_06: passed
+
+Bedingung `git diff --quiet 1a0abda0 6003b353 -- . ':!.planning'` erfüllt (Code gleich).
