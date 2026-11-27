@@ -347,6 +347,29 @@
 	overflow-wrap: normal;
 }
 
+/* Below 360 px the chip of the state, which never wraps, took the width the
+   reason needs, and a browser without a hyphenation dictionary broke words
+   like "Nutz|er" in the middle (I-45-10-08). There the state column goes and
+   the copy of the chip in the row header stands under the reason; from 360 px
+   on that copy goes. One of the two at any width, so the state is read once.
+   The cells keep their table display, only the column is left out. */
+.findling-errors__state-narrow {
+	display: none;
+}
+
+@media (max-width: 359px) {
+	.findling-errors thead th:last-child,
+	.findling-errors__state {
+		display: none;
+	}
+
+	.findling-errors__state-narrow {
+		display: block;
+		margin-block-start: var(--default-grid-baseline);
+		font-weight: normal;
+	}
+}
+
 /* The remedy, the expand button and the examples share one cell under the group
    row, so the group row itself stays three plain columns. */
 .findling-errors__detail td {

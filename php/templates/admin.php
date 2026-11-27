@@ -886,9 +886,20 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 					// and they are printed escaped all the same.
 					$regionId = 'findling-errors-' . $state . '-' . $reason;
 					[$chipKind, $chipIcon, $chipLabel] = $chip($state, $reason);
+					// Below 360 px the state column goes and this second copy
+					// of the chip stands under the reason (I-45-10-08, plan
+					// 46-03); the stylesheet renders exactly one of the two at
+					// any width, so the state is read once.
 					?>
 					<tr class="findling-errors__group">
-						<th scope="row" class="findling-errors__label"><?php p(is_string($group['label'] ?? null) ? $group['label'] : ''); ?></th>
+						<th scope="row" class="findling-errors__label"><?php p(is_string($group['label'] ?? null) ? $group['label'] : ''); ?>
+							<span class="findling-errors__state-narrow">
+								<span class="findling-chip findling-chip--<?php p($chipKind); ?>">
+									<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($chipIcon); ?>"/></svg>
+									<span><?php p($chipLabel); ?></span>
+								</span>
+							</span>
+						</th>
 						<td class="findling-errors__count" id="findling-errors-count-<?php p($state . '-' . $reason); ?>"><?php p($count($whole($group['count'] ?? 0))); ?></td>
 						<td class="findling-errors__state">
 							<span class="findling-chip findling-chip--<?php p($chipKind); ?>">
