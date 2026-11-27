@@ -73,3 +73,4 @@ Freigabe Push #63 46-07: "Go" (2026-11-27 22:40, Claude-Code-Chat) Entscheid: ja
 Abnahme Härtung 46-07: "Ja" (2026-11-27 23:19, Claude-Code-Chat; gemeinsame Playwright-Abnahme Schritte 1 bis 3 ohne Einwand; Angleichen der Beispiele und #63 umgesetzt, Volltest 7429 grün, CI an a3c94c16 grün) Entscheid: ja
 
 Freigabe Push 46-08: "Ja" (2026-11-27 23:30, Claude-Code-Chat) Entscheid: ja
+Freigabe Signatur 46-09: "Ok" (2026-11-27 23:35, Claude-Code-Chat) Entscheid: ja

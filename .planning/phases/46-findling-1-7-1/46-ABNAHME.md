@@ -33,3 +33,16 @@ Bedingungen:
 - Freigabe Changelog 46-05: ja, dazu Changelog 46-07 (vierter Punkt) und Changelog #63 46-07 (fünfter Punkt)
 - Freigabe Storetext 46-05: ja
 - Freigabe Push 46-08: ja (nur Belegdokumente unter .planning, Code von origin/main bleibt gleich Tag-Kopf)
+
+## Signatur-Probe
+
+Nach `Freigabe Signatur 46-09`: `gh workflow run release.yml --ref main -f create_release=false`, Lauf 46083361339, success. Code von origin/main gleich Tag-Kopf (`git diff --quiet a3c94c16 origin/main -- . ':!.planning'`), release.yml seit v1.7.0 unverändert (T-46-21).
+
+Probe-headSha: 7806e83a7f92369fccac3bbf8affba396b032a28
+
+- `appinfo/signature.json was written and is not empty` (Code-Signatur der Companion-App)
+- `dist/findling.tar.gz is 811859 bytes, the store limit is 20971520`, Release-Signatur: `Verified OK`
+- `dist/findling_backend.tar.gz is 53293 bytes, the store limit is 20971520`, Release-Signatur: `Verified OK`
+- `dist/findling.tar.gz: carries appinfo/signature.json, as the integrity check of the instance requires`
+- `dist/findling_backend.tar.gz: carries no code signature, which is correct for a container half`
+- Kein Release v1.7.1 (`gh release view v1.7.1` ohne Treffer), kein Tag v1.7.1 auf origin (`git ls-remote --tags origin v1.7.1` leer)
