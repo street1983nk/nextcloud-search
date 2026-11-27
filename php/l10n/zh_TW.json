@@ -242,7 +242,7 @@
         "A leading ! is not supported. Patterns only exclude.": "不支援以 ! 開頭。樣式只能用來排除。",
         "The entry contains a control character.": "項目中含有控制字元。",
         "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.": "樣式除了 * 和 ? 之外，至少還需要一個字元，否則會排除所有內容。",
-        "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "此項目沒有 * 或 ?。整個資料夾請加到「排除的資料夾」，或使用像 Name* 這樣的樣式。",
+        "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "此項目沒有 * 或 ?。整個資料夾請加到「排除的資料夾」，或使用像 名稱* 這樣的樣式。",
         "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "資料夾不支援 * 或 ?。像 備份* 這樣的樣式，請使用「排除的樣式」。",
         "This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under \"Excluded patterns\".": "此項目含有 * 或 ?，資料夾不支援這些字元，因此只會比對完全相同的文字。請將它移除，改加到「排除的樣式」。",
         "%1$s of %2$s slots free": "剩餘 %1$s 個空位（共 %2$s 個）",

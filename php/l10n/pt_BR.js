@@ -243,7 +243,7 @@ OC.L10N.register(
     "A leading ! is not supported. Patterns only exclude.": "Um ! inicial não é suportado. Os padrões apenas excluem.",
     "The entry contains a control character.": "A entrada contém um caractere de controle.",
     "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.": "Um padrão precisa de pelo menos um caractere além de * e ?, caso contrário excluiria tudo.",
-    "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Esta entrada não contém * nem ?. Adicionar pastas inteiras em \"Pastas excluídas\" ou usar um padrão como Name*.",
+    "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Esta entrada não contém * nem ?. Adicionar pastas inteiras em \"Pastas excluídas\" ou usar um padrão como Nome*.",
     "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Pastas não aceitam * nem ?. Para um padrão como Backup*, usar \"Padrões excluídos\".",
     "This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under \"Excluded patterns\".": "Esta entrada contém * ou ?, que pastas não suportam, por isso só corresponde exatamente a este texto. Removê-la e adicioná-la em \"Padrões excluídos\".",
     "%1$s of %2$s slots free": "Vagas livres: %1$s de %2$s",

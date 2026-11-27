@@ -242,7 +242,7 @@
         "A leading ! is not supported. Patterns only exclude.": "Un ! iniziale non è supportato. I modelli escludono soltanto.",
         "The entry contains a control character.": "La voce contiene un carattere di controllo.",
         "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.": "Un modello deve contenere almeno un carattere oltre a * e ?, altrimenti escluderebbe tutto.",
-        "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Questa voce non contiene né * né ?. Aggiungere le cartelle intere in \"Cartelle escluse\", oppure usare un modello come Name*.",
+        "This entry has no * or ?. Add whole folders under \"Excluded folders\", or use a pattern like Name*.": "Questa voce non contiene né * né ?. Aggiungere le cartelle intere in \"Cartelle escluse\", oppure usare un modello come Nome*.",
         "Folders take no * or ?. For a pattern like Backup* use \"Excluded patterns\".": "Le cartelle non accettano né * né ?. Per un modello come Backup*, usare \"Modelli esclusi\".",
         "This entry contains * or ?, which folders do not support, so it only matches that exact text. Remove it and add it under \"Excluded patterns\".": "Questa voce contiene * o ?, che le cartelle non supportano, quindi corrisponde solo a questo testo esatto. Rimuoverla e aggiungerla in \"Modelli esclusi\".",
         "%1$s of %2$s slots free": "Posti liberi: %1$s su %2$s",
