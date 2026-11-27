@@ -4548,6 +4548,16 @@ jobs:
             docker logs --since "${restarted}" "${container}" 2>&1 | tail -n 60 || true
             exit 1
           fi
+          # Indexed, the file goes on to the embed track (hand_over, kind
+          # embed), so its row stays until the embed runner takes it; judged
+          # at once it was still there (I-45-12-01). Waited for here, within
+          # the rest of the budget; a row that stays is red below.
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rows=$(q "SELECT COUNT(*) || ':' || IFNULL(MAX(kind), '') FROM oc_findling_queue WHERE file_id = ${stale_id};")
+            [ "${rows%%:*}" = "0" ] && break
+            echo "step 5: ${rows%%:*} queue row(s) of kind '${rows#*:}' left for the stale file, $(( deadline - $(date +%s) ))s of the budget left"
+            sleep 5
+          done
           # The acceptance by its exact log lines: one short answer fetched
           # once more, one acceptance of the same bytes, and never the
           # "stayed short twice" of the old give up path. Counted with grep -c

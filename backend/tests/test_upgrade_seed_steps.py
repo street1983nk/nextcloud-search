@@ -758,12 +758,12 @@ def queue_wait_findings(block: str) -> list[str]:
     for marker in (ACCEPTED_GATE, ACCEPTANCE_COUNT):
         if block.count(marker) != 1:
             return [f"the block carries {marker!r} {block.count(marker)} times, expected once"]
-    findings: list[str] = []
     if block.count(QUEUE_WAIT_LOOP) != 1:
-        findings.append("no loop within the budget asks for the queue row of the stale file")
-    elif not block.index(ACCEPTED_GATE) < block.index(QUEUE_WAIT_LOOP) < block.index(ACCEPTANCE_COUNT):
+        return ["no loop within the budget asks for the queue row of the stale file"]
+    findings: list[str] = []
+    if not block.index(ACCEPTED_GATE) < block.index(QUEUE_WAIT_LOOP) < block.index(ACCEPTANCE_COUNT):
         findings.append("the wait for the queue row does not stand between indexed/ and the acceptance")
-    wait = block[block.index(QUEUE_WAIT_LOOP) :] if QUEUE_WAIT_LOOP in block else ""
+    wait = block[block.index(QUEUE_WAIT_LOOP) :]
     if QUEUE_WAIT_DONE not in wait[: wait.find("done\n") if "done\n" in wait else len(wait)]:
         findings.append("the wait does not end on an empty queue")
     return findings
