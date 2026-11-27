@@ -5341,6 +5341,48 @@ def scan_slots_and_row_warning(block: str) -> list[str]:
     return findings
 
 
+# I-45-10-04 (plan 46-01): the help sentence of the folder list closes on an
+# example, and the field right under it shows its own example as placeholder.
+# Since plan 45-25 the placeholder comes out of the catalogue ("Backups" ->
+# "Sicherungen"), while the help sentence kept the English word, so the page
+# named two different examples for one field. The sentence now ends on the
+# value its own catalogue gives "Backups"; the msgid stays as it is.
+FOLDER_EXAMPLE = "Backups"
+
+
+def folder_help_example_findings(catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """What keeps the help sentence of one catalogue from naming its placeholder."""
+    help_value = catalogue.get(FOLDER_HELP)
+    example = catalogue.get(FOLDER_EXAMPLE)
+    if not isinstance(help_value, str) or not isinstance(example, str):
+        return ["the help sentence or the folder example is missing or not a string"]
+    if not help_value.endswith(example):
+        return [f"the help sentence ends on {help_value[-24:]!r}, the placeholder reads {example!r}"]
+    return []
+
+
+def test_the_folder_help_names_the_example_of_its_own_placeholder() -> None:
+    """EXCL-07: in every catalogue file the help sentence ends on the placeholder of its field."""
+    findings = [
+        f"{path.name}: {finding}"
+        for path in L10N_CATALOGUES
+        for finding in folder_help_example_findings(catalogue_of(path))
+    ]
+    assert findings == []
+
+
+def test_the_folder_help_gate_sees_the_old_english_example() -> None:
+    """Positive control: the help sentence of 1.7.0 next to a translated placeholder is a finding."""
+    old = {
+        FOLDER_HELP: "Präfix-Vergleich auf dem Pfad ... Beispiel: Backups",
+        FOLDER_EXAMPLE: "Sicherungen",
+    }
+    assert len(folder_help_example_findings(old)) == 1
+    assert len(folder_help_example_findings({FOLDER_EXAMPLE: "Sicherungen"})) == 1
+    clean = {FOLDER_HELP: "... Beispiel: Sicherungen", FOLDER_EXAMPLE: "Sicherungen"}
+    assert folder_help_example_findings(clean) == []
+
+
 def test_the_slots_lines_and_the_row_warning_stand_where_the_ui_spec_puts_them() -> None:
     """EXCL-05, EXCL-06: two slot lines, one marking per stored row and in the row template."""
     template = TEMPLATE.read_text(encoding="utf-8")
