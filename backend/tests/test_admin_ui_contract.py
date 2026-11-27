@@ -7012,6 +7012,102 @@ def test_the_error_list_wraps_its_long_sentences_against_the_nowrap_of_every_tab
     assert scan_stylesheet_for_unwrapped_tables("sample.css", table_only + chip) == []
 
 
+# Finding I-45-10-08 (plan 46-03, owner decision "Entscheid Layout 46-03" = A):
+# at 320 px the column of the state, a chip that never wraps, took the width
+# of the reason, and a browser without a hyphenation dictionary broke words
+# such as "Nutz|er" in the middle. Below 360 px the state column goes and a
+# second copy of the chip stands in the row header under the reason; above it
+# that copy goes. Exactly one of the two is rendered at any width, so the state
+# stands once in the accessibility tree, and the count keeps its one id.
+NARROW_STATE_MEDIA = "@media (max-width: 359px)"
+NARROW_STATE_HIDDEN = (".findling-errors thead th:last-child", ".findling-errors__state")
+NARROW_STATE_COPY = ".findling-errors__state-narrow"
+NARROW_STATE_TEMPLATE = re.compile(
+    r'<th scope="row" class="findling-errors__label">.*?'
+    r'<span class="findling-errors__state-narrow">\s*'
+    r'<span class="findling-chip findling-chip--<\?php p\(\$chipKind\); \?>">.*?'
+    r"<\?php p\(\$chipLabel\); \?>.*?</th>",
+    re.DOTALL,
+)
+TABLE_PART = re.compile(r"(?:^|[\s,>])(?:table|tr|th|td)(?:[\s,:.\[{]|$)")
+
+
+def css_rules(css: str) -> list[tuple[str, str, str]]:
+    """(media, selector, body) of every rule, comments removed, one level of @media."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+    rules: list[tuple[str, str, str]] = []
+    position = 0
+    while True:
+        brace = css.find("{", position)
+        if brace == -1:
+            return rules
+        head = css[position:brace].strip()
+        if head.startswith("@media"):
+            depth = 1
+            cursor = brace + 1
+            while depth and cursor < len(css):
+                depth += {"{": 1, "}": -1}.get(css[cursor], 0)
+                cursor += 1
+            inner = css[brace + 1 : cursor - 1]
+            rules.extend((head, selector, body) for _, selector, body in css_rules(inner))
+            position = cursor
+            continue
+        close = css.find("}", brace)
+        rules.append(("", head, css[brace + 1 : close]))
+        position = close + 1
+
+
+def narrow_state_findings(css: str, template: str) -> list[str]:
+    """What keeps the error list from putting the state under the reason below 360 px."""
+    findings: list[str] = []
+    rules = css_rules(css)
+    hidden_below = [s for m, s, b in rules if m == NARROW_STATE_MEDIA and re.search(r"display:\s*none", b)]
+    shown_below = [s for m, s, b in rules if m == NARROW_STATE_MEDIA and re.search(r"display:\s*block", b)]
+    hidden_always = [s for m, s, b in rules if m == "" and re.search(r"display:\s*none", b)]
+    for selector in NARROW_STATE_HIDDEN:
+        if not any(selector in group for group in hidden_below):
+            findings.append(f"{selector} is not hidden below 360 px")
+    if not any(NARROW_STATE_COPY in group for group in shown_below):
+        findings.append(f"{NARROW_STATE_COPY} is not shown below 360 px")
+    if not any(group.strip() == NARROW_STATE_COPY for group in hidden_always):
+        findings.append(f"{NARROW_STATE_COPY} is not hidden from 360 px on")
+    for media, selector, body in rules:
+        if "findling-errors" not in selector or not re.search(r"display:\s*(?:block|grid|flex)", body):
+            continue
+        for part in selector.split(","):
+            last = part.strip().split()[-1] if part.strip() else ""
+            if TABLE_PART.search(" " + last) and not last.startswith("."):
+                findings.append(f"{part.strip()} {media}: a table part loses its table display")
+    if NARROW_STATE_TEMPLATE.search(template) is None:
+        findings.append("the row header carries no second chip from the same $chip() values")
+    if template.count('id="findling-errors-count-') != 1:
+        findings.append("the count of a group is not one element with one id")
+    return findings
+
+
+def test_the_error_list_puts_the_state_under_the_reason_below_360_px() -> None:
+    """ADM-05: one chip per width, the state column gone below 360 px, table parts stay table parts."""
+    assert narrow_state_findings(STYLESHEET.read_text(encoding="utf-8"), TEMPLATE.read_text(encoding="utf-8")) == []
+
+
+def test_the_narrow_state_gate_sees_1_7_0_a_block_cell_and_a_second_id() -> None:
+    """Positive control: the shipped sheet, a cell made a block and a second count id are findings."""
+    css = STYLESHEET.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
+    shipped = re.sub(r"@media \(max-width: 359px\) \{.*?\n\}\n", "", css, flags=re.DOTALL)
+    assert len(narrow_state_findings(shipped, template)) >= 3
+    if narrow_state_findings(css, template):
+        pytest.skip("the gate above is red already")
+    block_cell = css + "\n@media (max-width: 359px) {\n\t.findling-errors td {\n\t\tdisplay: block;\n\t}\n}\n"
+    assert len(narrow_state_findings(block_cell, template)) == 1
+    second_id = template.replace(
+        '<td class="findling-errors__count" id="findling-errors-count-',
+        '<td class="x" id="findling-errors-count-a"></td><td class="findling-errors__count" id="findling-errors-count-',
+        1,
+    )
+    assert narrow_state_findings(css, second_id) == ["the count of a group is not one element with one id"]
+
+
 # Finding V-45-10-05 of the full test 45-10 (owner "Ok" 2026-11-25 17:23 UTC,
 # option a): a number directly in front of a plural noun read "1 files could
 # not be read" and "also removes 1 already indexed documents" in every language
