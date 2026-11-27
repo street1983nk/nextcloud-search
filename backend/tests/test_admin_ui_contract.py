@@ -5383,6 +5383,53 @@ def test_the_folder_help_gate_sees_the_old_english_example() -> None:
     assert folder_help_example_findings(clean) == []
 
 
+# Owner decision at the joint acceptance of 46-07: the refusal of a wildcard in
+# the folder field names its pattern example ("Backup*") in English in every
+# language. The example of a catalogue now stems from the placeholder of the
+# same catalogue: the part before the * is the start of the value of "Backups"
+# ("Sicherung*" next to "Sicherungen", "Sauvegarde*" next to "Sauvegardes").
+# The msgid stays as it is.
+_PATTERN_EXAMPLE = re.compile(r"(\S+)\*")
+
+
+def wildcard_example_findings(catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """What keeps the wildcard refusal of one catalogue from naming its own example."""
+    sentence = catalogue.get(WILDCARD_SENTENCE)
+    example = catalogue.get(FOLDER_EXAMPLE)
+    if not isinstance(sentence, str) or not isinstance(example, str):
+        return ["the wildcard refusal or the folder example is missing or not a string"]
+    stems = [stem for stem in _PATTERN_EXAMPLE.findall(sentence) if stem not in ("*", "?")]
+    if len(stems) != 1:
+        return [f"the wildcard refusal names {len(stems)} pattern examples, expected one"]
+    if not example.startswith(stems[0]):
+        return [f"the pattern example {stems[0]}* does not start the placeholder {example!r}"]
+    return []
+
+
+def test_the_wildcard_refusal_names_the_example_of_its_own_placeholder() -> None:
+    """Every catalogue file names a pattern example that stems from its own folder example."""
+    findings = [
+        f"{path.name}: {finding}"
+        for path in L10N_CATALOGUES
+        for finding in wildcard_example_findings(catalogue_of(path))
+    ]
+    assert findings == []
+
+
+def test_the_wildcard_example_gate_sees_the_english_example() -> None:
+    """Positive control: "Backup*" next to "Sicherungen" is a finding, "Sicherung*" is not."""
+    english = {
+        WILDCARD_SENTENCE: "Ordner ohne * oder ?. Für Muster wie Backup* das Feld nutzen.",
+        FOLDER_EXAMPLE: "Sicherungen",
+    }
+    assert len(wildcard_example_findings(english)) == 1
+    german = {
+        WILDCARD_SENTENCE: "Ordner ohne * oder ?. Für Muster wie Sicherung* das Feld nutzen.",
+        FOLDER_EXAMPLE: "Sicherungen",
+    }
+    assert wildcard_example_findings(german) == []
+
+
 def test_the_slots_lines_and_the_row_warning_stand_where_the_ui_spec_puts_them() -> None:
     """EXCL-05, EXCL-06: two slot lines, one marking per stored row and in the row template."""
     template = TEMPLATE.read_text(encoding="utf-8")
