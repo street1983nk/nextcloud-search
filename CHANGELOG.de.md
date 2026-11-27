@@ -18,6 +18,8 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   bestätigt, fügt nichts hinzu.
 - Unter 360 px zeigt die Liste der nicht indexierten Dateien den Zustand unter
   dem Grund, damit kein Wort des Grundes mitten im Wort umbricht.
+- Die Meldungen zu * und ? in den Feldern der ausgeschlossenen Ordner und Muster
+  nennen ihr Beispiel in der Sprache der Seite.
 
 ## [1.7.0] - 2026-11-26
 

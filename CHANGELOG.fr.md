@@ -19,6 +19,8 @@ dans [CHANGELOG.md](CHANGELOG.md).
   saisie, elle n'ajoute rien.
 - Sous 360 px, la liste des fichiers non indexés affiche l'état sous le motif,
   pour qu'aucun mot du motif ne soit coupé au milieu.
+- Les messages sur * et ? dans les champs des dossiers et des motifs exclus
+  donnent leur exemple dans la langue de la page.
 
 ## [1.7.0] - 2026-11-26
 

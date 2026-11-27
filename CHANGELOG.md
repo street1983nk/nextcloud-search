@@ -17,6 +17,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   input method adds nothing.
 - Below 360 px the list of files that were not indexed shows the state under
   the reason, so no word of the reason breaks in the middle.
+- The messages about * and ? in the fields of the excluded folders and patterns
+  name their example in the language of the page.
 
 ## [1.7.0] - 2026-11-26
 
