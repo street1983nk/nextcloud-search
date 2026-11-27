@@ -13,3 +13,7 @@ Entscheid E-46-06 46-01: "Ja" (2026-11-27 06:16, Claude-Code-Chat) Entscheid: a 
 Entscheid E-46-07 46-01: "Ja" (2026-11-27 06:16, Claude-Code-Chat) Entscheid: a (keine GitHub-Kommentare zu 1.7.1)
 Entscheid E-46-08 46-01: "Ja" (2026-11-27 06:16, Claude-Code-Chat) Entscheid: ja (Docker nur in einzeln freigegebenen Fenstern "Freigabe Docker-Fenster 46-NN")
 Hinweis: Zeit in UTC. Antwort auf "Darf ich alle Empfehlungen für beide Projekte so übernehmen?" (je Punkt mit Empfehlung vorgelegt). Offen: Tag-Datum (CHANGELOG-Datum in 46-05) und Dispatch von coverage-e2e.yml nach dem Push; beide werden am jeweiligen Schritt erneut gefragt.
+
+Entscheid Reihenfolge 46-04: "Ok" (2026-11-27 06:38, Claude-Code-Chat) Entscheid: 46-04 vor 46-03 ohne Docker; 46-03 folgt, sobald Docker frei ist
+Freigabe Text store-listing 46-05: "Ok" (2026-11-27 06:38, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: Umformulierung genau der drei Zeilen im Abschnitt "# Release 1.7.0" von docs/store-listing.md mit dem gesperrten Wort (I-46-01-01), sofort statt in 46-05; Inhalt und Belege bleiben gleich. Kein Push.
