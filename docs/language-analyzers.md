@@ -623,7 +623,7 @@ A Chinese hit therefore gets an empty excerpt in most cases today, and the hit
 stays a hit; `backend/tests/test_chinese_search.py` holds that state. Which of
 the options replaces it is decided after the measurement report.
 
-**Limits.** The first three are held by `backend/tests/test_chinese_search.py`.
+**Limits.** The first four are held by `backend/tests/test_chinese_search.py`.
 
 - No conversion between Traditional and Simplified characters: 天氣 does not
   find 天气.
@@ -631,6 +631,11 @@ the options replaces it is decided after the measurement report.
   今日本店.
 - A search term written without spaces is one exact phrase: 台北天氣 finds
   台北天氣預報 and not 台北的天氣預報. Writing 台北 天氣 finds both.
+- A search line without a space is one term, however long it is, and a line
+  of one term is answered by the word index alone: 颱風農損救助 never reaches
+  the semantic half, 颱風 農損 救助 does. The rule (`carries_one_term`) was
+  measured on German; whether it fits Chinese is a question for the
+  measurement report.
 - Japanese Kana and Korean Hangul are letters and not Han characters, so a run
   of them stays one word: Japanese and Korean are not served by this chain.
 - File names and titles are not split yet: `name` and `title` keep their

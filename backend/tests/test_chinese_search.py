@@ -266,3 +266,13 @@ def test_a_two_character_search_can_match_across_a_word_boundary(limits_index: I
 def test_an_unspaced_term_is_one_exact_phrase(limits_index: Index) -> None:
     assert _found(limits_index, "台北天氣") == {3}
     assert _found(limits_index, "台北 天氣") == {3, 4}
+
+
+def test_an_unspaced_line_is_one_term_and_stays_on_the_word_index(limits_index: Index) -> None:
+    # carries_one_term counts by whitespace, so a Chinese line of any length
+    # without a space is one term, and a line of one term never reaches the
+    # semantic half (api/search.py, lexical_only). Held here so that the limit
+    # in docs/language-analyzers.md stays true until the measurement report
+    # settles the rule for Chinese.
+    assert build_query(limits_index, "颱風農損救助", plan=PLAN_DE_ZH).one_term is True
+    assert build_query(limits_index, "颱風 農損 救助", plan=PLAN_DE_ZH).one_term is False
