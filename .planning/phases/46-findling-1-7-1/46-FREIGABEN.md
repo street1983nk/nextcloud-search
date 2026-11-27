@@ -37,3 +37,7 @@ Hinweis: Zeit in UTC. Antwort auf "Gibst du die fünf Punkte so frei, und auch d
 Freigabe Push 46-06: "Ja" (2026-11-27 08:30, Claude-Code-Chat) Entscheid: ja
 Freigabe Dispatch coverage-e2e 46-06: "Ja" (2026-11-27 08:30, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Commits über origin/main 09ca4d23 bis einschließlich dieser Zeile auf main, ohne Tag, ohne Store; ein CI-Warter, höchstens ein Rerun; genau ein workflow_dispatch von coverage-e2e.yml auf main nach dem Push. Kein Kommentar.
+
+Freigabe Push 46-06 Fix: "Ok go mit den Empfehlungen" (2026-11-27 09:23, Claude-Code-Chat) Entscheid: ja
+Freigabe Dispatch coverage-e2e 46-06 Fix: "Ok go mit den Empfehlungen" (2026-11-27 09:23, Claude-Code-Chat) Entscheid: ja
+Hinweis: Zeit in UTC. Gedeckt: Push von e448e02b, 2fa545a9, 3b92228c und dieser Zeile auf main, ohne Tag und Store; ein CI-Warter; genau ein workflow_dispatch von coverage-e2e.yml danach. Kein Kommentar.
