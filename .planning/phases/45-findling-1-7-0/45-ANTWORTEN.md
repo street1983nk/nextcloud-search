@@ -128,3 +128,14 @@ Release: https://github.com/street1983nk/nextcloud-search/releases/tag/v1.7.0
 Abweichung vom Plan (F3): 45-AUDIT.md führt `Stand F3 (I-45-23-01): offen, wartet auf Logs des Melders`. Die Logs liegen seit 2026-11-24 vor (zwei Kommentare von mbozem), und sie zeigen keinen Schleifen-Auslöser, sondern echten OCR-Rückstand; die Rückfallsicherung steht im CHANGELOG 1.7.0 (#25). Eine erneute Bitte um Logs widerspräche dem Verlauf. Der Entwurf sagt deshalb: keine weiteren Logs nötig, ein Satz zur Rückfallsicherung mit Verweis auf den CHANGELOG. Frage an den Owner, siehe Bericht.
 
 Empfehlung Schließen: nein. Der Owner hatte am 2026-11-11 zugesagt, offen zu lassen, bis mbozem die Abdeckungszahl auf dem Store-Build bestätigt; das steht aus, ebenso sein angebotener Vorher/Nachher-Abgleich nach 1.7.0.
+
+## Gepostet
+
+Gepostet am 2026-11-27 03:56 UTC, wortgleich zu den Entwürfen oben, ohne @-Erwähnung (Freigaben in 45-FREIGABEN.md, 45-15). Nichts geschlossen.
+- PR #60: https://github.com/street1983nk/nextcloud-search/pull/60#issuecomment-7209387577
+- #45: https://github.com/street1983nk/nextcloud-search/issues/45#issuecomment-7209387813
+- PR #56: https://github.com/street1983nk/nextcloud-search/pull/56#issuecomment-7209388070
+- PR #57: https://github.com/street1983nk/nextcloud-search/pull/57#issuecomment-7209388292
+- #53: https://github.com/street1983nk/nextcloud-search/issues/53#issuecomment-7209388521
+- #59: https://github.com/street1983nk/nextcloud-search/issues/59#issuecomment-7209388815
+- #25: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-7209389092

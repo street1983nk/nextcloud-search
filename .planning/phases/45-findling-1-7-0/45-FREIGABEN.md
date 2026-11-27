@@ -201,3 +201,13 @@ Hinweis: Zeit in UTC. Gedeckt: genau ein `gh workflow run store-submit.yml --ref
 
 Freigabe Push 45-14: "Ja" (2026-11-26 22:11, Claude-Code-Chat) Entscheid: ja
 Hinweis: Zeit in UTC. Gedeckt: Push der lokalen Doku- und Planungs-Commits über origin/main 22f98ef2 (Belege 45-12 bis 45-16 und 45-14, store-listing.md) auf main, ein Warter auf Security scans. Kein Code, kein Tag, kein Kommentar.
+
+Freigabe Kommentar PR60 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 45 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 56 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 57 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 53 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 59 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Kommentar 25 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: ja
+Freigabe Schließen 45/59/25 45-15: "Ja" (2026-11-27 03:55, Claude-Code-Chat) Entscheid: nein
+Hinweis: Zeit in UTC. Antwort auf "Darf ich alle 7 Kommentare so posten und noch nichts schließen?". Gedeckt: je ein Kommentar wortgleich zum Entwurf in 45-ANTWORTEN.md, ohne @-Erwähnung. Nichts wird geschlossen, kein Push.
