@@ -7,6 +7,18 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-28
+
+### Behoben
+
+- Der Hilfesatz der ausgeschlossenen Ordner nennt in jeder Sprache dasselbe
+  Beispiel wie das Feld darunter.
+- Enter im Feld der ausgeschlossenen Ordner oder Muster fügt den Eintrag hinzu
+  wie der Knopf daneben; ein Enter, das ein Wort einer Eingabemethode
+  bestätigt, fügt nichts hinzu.
+- Unter 360 px zeigt die Liste der nicht indexierten Dateien den Zustand unter
+  dem Grund, damit kein Wort des Grundes mitten im Wort umbricht.
+
 ## [1.7.0] - 2026-11-26
 
 ### Hinzugefügt

@@ -98,9 +98,9 @@ Requirements:
 - RAM: 4 GB is enough
 - CPU: 2 cores are enough, amd64 and arm64
 
-Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.en.md)
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/docs/migrate-from-fulltextsearch.en.md)
 
-Documentation: [README on GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.en.md)
+Documentation: [README on GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/README.en.md)
 
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></description>
 	<description lang="de"><![CDATA[Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex.
@@ -119,9 +119,9 @@ Anforderungen:
 - RAM: 4 GB genügen
 - CPU: 2 Kerne genügen, amd64 und arm64
 
-Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.md)
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/docs/migrate-from-fulltextsearch.md)
 
-Dokumentation: [README auf GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.md)
+Dokumentation: [README auf GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/README.md)
 
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev]]></description>
 	<description lang="fr"><![CDATA[L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index.
@@ -140,12 +140,12 @@ Prérequis :
 - RAM : 4 Go suffisent
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
-Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/docs/migrate-from-fulltextsearch.fr.md)
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/docs/migrate-from-fulltextsearch.fr.md)
 
-Documentation : [README sur GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.0/README.fr.md)
+Documentation : [README sur GitHub](https://github.com/street1983nk/nextcloud-search/blob/v1.7.1/README.fr.md)
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
-	<version>1.7.0</version>
+	<version>1.7.1</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -246,7 +246,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>1.7.0</image-tag>
+			<image-tag>1.7.1</image-tag>
 		</docker-install>
 		<routes>
 			<!--

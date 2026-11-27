@@ -8,6 +8,18 @@ dans [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-28
+
+### Corrigé
+
+- La phrase d'aide des dossiers exclus donne dans chaque langue le même
+  exemple que le champ en dessous.
+- La touche Entrée dans le champ des dossiers ou des motifs exclus ajoute
+  l'élément comme le bouton voisin ; si elle valide un mot d'une méthode de
+  saisie, elle n'ajoute rien.
+- Sous 360 px, la liste des fichiers non indexés affiche l'état sous le motif,
+  pour qu'aucun mot du motif ne soit coupé au milieu.
+
 ## [1.7.0] - 2026-11-26
 
 ### Ajouté

@@ -6,6 +6,18 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-28
+
+### Fixed
+
+- The help sentence of the excluded folders names the same example as the
+  field under it, in every language.
+- Enter in the field of the excluded folders or of the excluded patterns adds
+  the entry like the button next to it; an Enter that confirms a word of an
+  input method adds nothing.
+- Below 360 px the list of files that were not indexed shows the state under
+  the reason, so no word of the reason breaks in the middle.
+
 ## [1.7.0] - 2026-11-26
 
 ### Added
@@ -422,6 +434,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.7.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.5...v1.7.0
 [1.6.5]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.3...v1.6.4

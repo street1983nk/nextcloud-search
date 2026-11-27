@@ -32,7 +32,7 @@
 #              planted recorded version gone.
 #
 # FROM_TAGS holds the last release of every minor line from 1.3 on and every
-# 1.6 tag from v1.6.2 on: v1.3.2 has neither markScanStale() nor
+# 1.6 tag from v1.6.2 on, then v1.7.0: v1.3.2 has neither markScanStale() nor
 # scan_recounted_at and holds I-45-26-01, v1.4.3 is the way of I-45-23-07,
 # v1.5.1 closes the line 1.5, and the newest tag is the release before the
 # candidate (backend/tests/test_update_in_process_proof.py holds that).
@@ -47,7 +47,7 @@
 # Environment:
 #
 #     FROM_TAGS   releases the candidate is updated from (default "v1.3.2
-#                 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5"); the last word is
+#                 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5 v1.7.0"); the last word is
 #                 the start of control 2
 #     NC_IMAGE    the Nextcloud image (default nextcloud:33-apache, the lower
 #                 bound of the window in php/appinfo/info.xml)
@@ -62,7 +62,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "${SCRIPT_DIR}/../.." && pwd)
 
-FROM_TAGS="${FROM_TAGS:-v1.3.2 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5}"
+FROM_TAGS="${FROM_TAGS:-v1.3.2 v1.4.3 v1.5.1 v1.6.2 v1.6.3 v1.6.4 v1.6.5 v1.7.0}"
 NC_IMAGE="${NC_IMAGE:-nextcloud:33-apache}"
 REPO_SLUG="${REPO_SLUG:-${GITHUB_REPOSITORY:-street1983nk/nextcloud-search}}"
 CONTROL_FROM="v1.6.2"

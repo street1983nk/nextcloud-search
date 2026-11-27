@@ -3682,6 +3682,8 @@ DOC_LINK_BASE = "https://github.com/street1983nk/nextcloud-search/blob/v{version
 DOC_LINK_PAGES = {DEFAULT_LANGUAGE: "README.en.md", "de": "README.md", "fr": "README.fr.md"}
 _DOC_LINK = re.compile(r"https://github\.com/street1983nk/nextcloud-search/blob/([^/\s)]+)/(README(?:\.[a-z]{2})?\.md)")
 _VERSION = re.compile(r"<version>([^<]+)</version>")
+_RELEASE_TAG_IN_LINK = re.compile(r"(github\.com/street1983nk/nextcloud-search/blob/)v\d+\.\d+\.\d+/")
+_ANY_RELEASE_TAG = r"\1<release tag>/"
 # What moved to the READMEs and stays out of every description: the limitation
 # heading and the file type heading of each language, and the format line that
 # opened the list. The measured figure is matched by MEASURED_FIGURE, the share
@@ -3722,6 +3724,11 @@ def scan_short_store_texts(listing: str, infos: dict[str, str]) -> list[str]:
             f"docs/store-listing.md: the heading {heading!r} carries no approval date "
             f"in the form 'abgenommen am TT.MM.JJJJ'"
         )
+    # A patch release moves the tag in its links and nothing else (owner
+    # decision E-46-06 a for 1.7.1): the accepted words are compared with the
+    # tag of every blob link set aside. Which tag each description links is
+    # held by scan_doc_links, read from <version>.
+    section = _RELEASE_TAG_IN_LINK.sub(_ANY_RELEASE_TAG, section)
     for name, source in infos.items():
         descriptions, broken = _descriptions(name, source.replace("\r\n", "\n"))
         violations.extend(broken)
@@ -3729,7 +3736,8 @@ def scan_short_store_texts(listing: str, infos: dict[str, str]) -> list[str]:
             f"{name}: the description for {_named(language)} does not stand character for character "
             f"in the section {SHORT_STORE_TEXTS_1_7_0!r}"
             for language, text in descriptions
-            if f"{_CODE_FENCE}\n{text.strip()}\n{_CODE_FENCE}" not in section
+            if f"{_CODE_FENCE}\n{_RELEASE_TAG_IN_LINK.sub(_ANY_RELEASE_TAG, text.strip())}\n{_CODE_FENCE}"
+            not in section
         )
     return violations
 
