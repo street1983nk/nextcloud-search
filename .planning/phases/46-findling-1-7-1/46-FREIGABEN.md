@@ -47,3 +47,9 @@ Entscheid PHP-Baumhash 46-06: "Ja" (2026-11-27 10:41, Claude-Code-Chat) Entschei
 Freigabe Push 46-06 Baumhash: "Ok" (2026-11-27 11:07, Claude-Code-Chat) Entscheid: ja
 Entscheid coverage-e2e Rücksprung 46-06: "Ok" (2026-11-27 11:07, Claude-Code-Chat) Entscheid: Befund rollback_1_6_2 drain_incomplete (Beine upgrade und upgrade-rc1, Lauf 45973279674; letzter grüner Lauf 43094681914 am 2026-11-11, vor Phase 45; Backend seit v1.7.0 unverändert) vor dem Tag untersuchen
 Hinweis: Zeit in UTC. Gedeckt: Push von f29fe8ae, ce8a5021 und dieser Zeile auf main, ohne Tag und Store; ein CI-Warter; kein Dispatch von coverage-e2e. Kein Kommentar.
+
+Entscheid V-46-06-03 46-06: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: vor dem Tag beheben (Prüfskript ruft nach dem Rücksprung die Admin-Seite einmal auf und prüft backend_app_version = 1.6.2, Test zuerst mit Positivkontrolle; ein Satz in docs/admin-page.md)
+Freigabe Push 46-06 Rücksprung: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: ja (nach grünen Gates und voller Python-Suite lokal)
+Freigabe Dispatch coverage-e2e 46-06 Rücksprung: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: ja (genau ein Lauf nach dem Push)
+Freigabe Docker-Fenster 46-07: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: ja (Volltest DE/EN/FR, nach dem Rücksprung-Fix; RAM-Schwelle 4 GiB, ein Stack, danach gestoppt)
+Hinweis: Zeit in UTC. Antwort auf die drei Fragen (Connector F-04/F-05, Findling Rücksprung vor dem Tag mit coverage-e2e, Docker-Fenster 46-07). Kein Kommentar.
