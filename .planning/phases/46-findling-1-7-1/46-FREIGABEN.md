@@ -59,3 +59,5 @@ Hinweis: Zeit in UTC. Gemeinsame Abnahme 46-07 Schritte 1 bis 3 (Hilfesatz, Ente
 
 Entscheid Name-Beispiel 46-07: "Ok" (2026-11-27 14:13, Claude-Code-Chat) Entscheid: "Name*" in der Meldung zum Musterfeld je Sprache übersetzen (FR Nom*, ES Nombre*, IT Nome*, NL Naam*, pt_BR und pt_PT Nome*, zh_TW 名稱*; DE und EN Name*), Test zuerst mit Zuordnungstabelle
 Freigabe Changelog 46-07: "Ok" (2026-11-27 14:13, Claude-Code-Chat) Entscheid: vierter Punkt unter Fixed/Behoben/Corrigé: EN "The messages about * and ? in the fields of the excluded folders and patterns name their example in the language of the page." DE "Die Meldungen zu * und ? in den Feldern der ausgeschlossenen Ordner und Muster nennen ihr Beispiel in der Sprache der Seite." FR "Les messages sur * et ? dans les champs des dossiers et des motifs exclus donnent leur exemple dans la langue de la page."
+
+Freigabe Push 46-07: "Ja" (2026-11-27 14:53, Claude-Code-Chat) Entscheid: ja (Commits über 6003b353 bis einschließlich dieser Zeile auf main, ohne Tag und Store; ein CI-Warter)
