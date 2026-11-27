@@ -53,3 +53,6 @@ Freigabe Push 46-06 Rücksprung: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entsc
 Freigabe Dispatch coverage-e2e 46-06 Rücksprung: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: ja (genau ein Lauf nach dem Push)
 Freigabe Docker-Fenster 46-07: "Ja" (2026-11-27 11:44, Claude-Code-Chat) Entscheid: ja (Volltest DE/EN/FR, nach dem Rücksprung-Fix; RAM-Schwelle 4 GiB, ein Stack, danach gestoppt)
 Hinweis: Zeit in UTC. Antwort auf die drei Fragen (Connector F-04/F-05, Findling Rücksprung vor dem Tag mit coverage-e2e, Docker-Fenster 46-07). Kein Kommentar.
+
+Entscheid Ablehnungsmeldung 46-07: "Noch angleichen in 1.7.1" (2026-11-27 13:22, Claude-Code-Chat) Entscheid: Meldung "Folders take no * or ?. For a pattern like Backup* use ..." nennt in jeder Sprache das übersetzte Beispiel (DE Sicherung*, FR Sauvegarde*, übrige Kataloge entsprechend dem Platzhalter), Test zuerst
+Hinweis: Zeit in UTC. Gemeinsame Abnahme 46-07 Schritte 1 bis 3 (Hilfesatz, Enter, Fehlerliste 320/375/1280 hell und dunkel, FR, zh_TW) ohne Einwand des Owners; die Zeile "Abnahme Härtung 46-07" folgt nach dem Angleichen und einer kurzen Sichtprüfung.
