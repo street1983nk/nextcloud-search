@@ -32,15 +32,24 @@ SCRIPT = REPO_ROOT / "scripts" / "ci" / "apt_install.sh"
 SELFTEST = REPO_ROOT / "scripts" / "ci" / "apt_install_selftest.sh"
 ACTION = REPO_ROOT / ".github" / "actions" / "setup-test-nc" / "action.yml"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
-CALL = "bash findling-src/scripts/ci/apt_install.sh"
+SCRIPT_PATH = "scripts/ci/apt_install.sh"
+CALL = f"bash findling-src/{SCRIPT_PATH}"
+HARNESS_CALL = f"bash findling-harness/{SCRIPT_PATH}"
 
-# File of the scope, and how many steps in it call the script with which
-# first package.
+# File of the scope, the call it has to use, and how many steps in it call the
+# script with which first package. coverage-e2e.yml checks findling-src out at
+# the tree a leg starts from (matrix.src, as old as v1.6.2), which has no such
+# script; the head of the repository is the harness there (findling-harness).
+# The first push of 46-04 called findling-src in that file and every leg ended
+# with exit 127 (run 45966198418), the reason for checkout_findings below.
 SCOPE = {
-    ACTION: {"wngerman": 1},
-    WORKFLOWS / "integration.yml": {"tesseract-ocr": 3},
-    WORKFLOWS / "coverage-e2e.yml": {"tesseract-ocr": 1},
+    ACTION: (CALL, {"wngerman": 1}),
+    WORKFLOWS / "integration.yml": (CALL, {"tesseract-ocr": 3}),
+    WORKFLOWS / "coverage-e2e.yml": (HARNESS_CALL, {"tesseract-ocr": 1}),
 }
+PYTHON_WORKFLOW = WORKFLOWS / "python.yml"
+SHELLCHECK_STEP = "Shell check of the tunnel scripts"
+NEW_SCRIPTS = (SCRIPT_PATH, "scripts/ci/apt_install_selftest.sh")
 DIRECT_APT = re.compile(r"\bapt-get\s+(?:\S+\s+)*?(update|install)\b")
 ACTION_USE = "./findling-src/.github/actions/setup-test-nc"
 # GitHub ends a job without its own limit after 360 minutes.
@@ -72,13 +81,76 @@ def direct_apt_findings(name: str, text: str) -> list[str]:
     return findings
 
 
-def call_findings(name: str, text: str, expected: dict[str, int]) -> list[str]:
+def call_findings(name: str, text: str, expected: dict[str, int], call: str = CALL) -> list[str]:
     """How often the script is called with which first package, against the scope."""
     findings: list[str] = []
     for package, count in expected.items():
-        found = len(re.findall(re.escape(f"{CALL} {package}") + r"\b", text))
+        found = len(re.findall(re.escape(f"{call} {package}") + r"\b", text))
         if found != count:
             findings.append(f"{name}: {found} call(s) of the script for {package}, {count} expected")
+    return findings
+
+
+def checkout_findings(name: str, document: dict[str, object]) -> list[str]:
+    """A call of the script through a checkout that is not the head of the repository.
+
+    Every job that runs ``bash <dir>/scripts/ci/apt_install.sh`` has to check
+    out ``<dir>`` without a ``ref`` or with ``github.sha``: a tree of an older
+    release has no script, and the step ends with exit 127.
+    """
+    findings: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return findings
+    for job_name, job in jobs.items():
+        steps = job.get("steps") if isinstance(job, dict) else None
+        if not isinstance(steps, list):
+            continue
+        checkouts: dict[str, str] = {}
+        for step in steps:
+            uses = str(step.get("uses", ""))
+            options = step.get("with") or {}
+            if uses.startswith("actions/checkout@") and isinstance(options, dict) and "path" in options:
+                checkouts[str(options["path"])] = str(options.get("ref", ""))
+        for step in steps:
+            for directory in re.findall(r"bash (\S+)/" + re.escape(SCRIPT_PATH), str(step.get("run", ""))):
+                ref = checkouts.get(directory)
+                if ref is None:
+                    findings.append(f"{name}:{job_name}: {directory} is not checked out in this job")
+                elif ref not in ("", "${{ github.sha }}"):
+                    findings.append(f"{name}:{job_name}: {directory} is checked out at {ref}, not at the head")
+    return findings
+
+
+def shellcheck_findings(document: dict[str, object], base: Path) -> list[str]:
+    """Every file the shellcheck step names exists from its working directory."""
+
+    def working_directory(holder: object, fallback: str) -> str:
+        defaults = holder.get("defaults") if isinstance(holder, dict) else None
+        run = defaults.get("run") if isinstance(defaults, dict) else None
+        return str(run.get("working-directory", fallback)) if isinstance(run, dict) else fallback
+
+    top = working_directory(document, ".")
+    findings: list[str] = []
+    jobs = document.get("jobs")
+    found = [
+        (step, working_directory(job, top))
+        for job in (jobs.values() if isinstance(jobs, dict) else [])
+        for step in job.get("steps", [])
+        if step.get("name") == SHELLCHECK_STEP
+    ]
+    if len(found) != 1:
+        return [f"{len(found)} steps named {SHELLCHECK_STEP!r}, expected one"]
+    step, directory = found[0]
+    # The run block also prints "shellcheck --version"; the files stand on the
+    # line that names no option.
+    calls = [text for text in str(step.get("run", "")).splitlines() if text.strip().startswith("shellcheck ")]
+    files = [word for text in calls for word in text.split()[1:] if not text.split()[1].startswith("-")]
+    workdir = base / str(step.get("working-directory", directory))
+    findings.extend(f"{file} does not exist from {workdir.name}/" for file in files if not (workdir / file).is_file())
+    for script in NEW_SCRIPTS:
+        if not any((workdir / file).resolve() == (base / script).resolve() for file in files):
+            findings.append(f"{script} is not checked by shellcheck")
     return findings
 
 
@@ -107,7 +179,9 @@ def job_minutes_of_the_scope() -> dict[str, int]:
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         for job_name, job in (document.get("jobs") or {}).items():
             steps = job.get("steps") or []
-            runs_it = any(str(step.get("uses", "")) == ACTION_USE or CALL in str(step.get("run", "")) for step in steps)
+            runs_it = any(
+                str(step.get("uses", "")) == ACTION_USE or SCRIPT_PATH in str(step.get("run", "")) for step in steps
+            )
             if runs_it:
                 limits[f"{path.name}:{job_name}"] = job.get("timeout-minutes", DEFAULT_JOB_MINUTES)
     return limits
@@ -116,11 +190,42 @@ def job_minutes_of_the_scope() -> dict[str, int]:
 def test_no_step_of_the_scope_calls_apt_get_itself() -> None:
     """E-46-04 a: the dictionary and the OCR engine are installed through the script only."""
     findings: list[str] = []
-    for path, expected in SCOPE.items():
+    for path, (call, expected) in SCOPE.items():
         text = path.read_text(encoding="utf-8")
         findings.extend(direct_apt_findings(path.name, text))
-        findings.extend(call_findings(path.name, text, expected))
+        findings.extend(call_findings(path.name, text, expected, call))
     assert findings == []
+
+
+def test_every_call_of_the_script_goes_through_the_head_of_the_repository() -> None:
+    """A call through a checkout of an older release finds no script (run 45966198418, exit 127)."""
+    findings: list[str] = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        findings.extend(checkout_findings(path.name, yaml.safe_load(path.read_text(encoding="utf-8"))))
+    assert findings == []
+
+
+def test_the_checkout_gate_sees_the_call_of_the_first_push() -> None:
+    """Positive control: coverage-e2e.yml calling through findling-src (matrix.src) is a finding."""
+    path = WORKFLOWS / "coverage-e2e.yml"
+    first_push = path.read_text(encoding="utf-8").replace(HARNESS_CALL, CALL)
+    findings = checkout_findings(path.name, yaml.safe_load(first_push))
+    assert len(findings) == 1
+    assert "matrix.src" in findings[0]
+
+
+def test_shellcheck_reads_the_two_scripts_from_its_working_directory() -> None:
+    """python.yml runs in backend/, so the scripts are ../scripts/ci/... from there (run 45966177681)."""
+    document = yaml.safe_load(PYTHON_WORKFLOW.read_text(encoding="utf-8"))
+    assert shellcheck_findings(document, REPO_ROOT) == []
+
+
+def test_the_shellcheck_gate_sees_the_paths_of_the_first_push() -> None:
+    """Positive control: the paths relative to the root, as the first push had them, are findings."""
+    text = PYTHON_WORKFLOW.read_text(encoding="utf-8").replace("../" + NEW_SCRIPTS[0], NEW_SCRIPTS[0])
+    text = text.replace("../" + NEW_SCRIPTS[1], NEW_SCRIPTS[1])
+    findings = shellcheck_findings(yaml.safe_load(text), REPO_ROOT)
+    assert len([finding for finding in findings if "does not exist" in finding]) == 2
 
 
 def test_the_apt_gate_sees_the_step_of_1_7_0() -> None:
