@@ -5,13 +5,13 @@ Stand: 2026-11-27, lokaler Kopf mit Bump 1.7.1 im Arbeitsbaum (php und backend `
 | Datei | Zeile | Aussage | Beleg | Ergebnis |
 |---|---|---|---|---|
 | README.md | 37 | Ordner oder Muster wie *.photoslibrary vom Index ausschließen | Platzhalter des Musterfelds `*.photoslibrary` (admin.php), Ordnerliste unverändert bis auf Hilfesatz und Enter | stimmt |
-| README.md | 42 bis 45 | Einzelne externe Speicher ausschließen, freie Plätze (ab 1.7.0) | unverändert seit 1.7.0 | stimmt |
-| README.md | 46 bis 48 | Oberfläche in neun Sprachen, darunter Traditionelles Chinesisch (ab 1.7.0) | `ls php/l10n/*.json` ohne de_DE: en (Quelle), de, fr, es, it, nl, pt_PT, pt_BR, zh_TW = neun | stimmt |
-| README.md | 49 bis 50 | Suchsprachen DE und EN voreingestellt, ES, IT, NL, PT, CS verfügbar | kein Container-Code seit 1.7.0 geändert | stimmt |
-| README.md | 70 | Nextcloud 33 bis 35 mit AppAPI | info.xml beider Apps min 33, max 35 | stimmt |
-| README.md | 102 bis 104 | Unterschiedliche Major- oder Minor-Version: Suche antwortet mit nichts | 1.7.0 und 1.7.1 teilen Major und Minor, der Fall greift beim Patch nicht | stimmt |
-| README.en.md | 43 bis 47 | dieselben drei Punkte "from 1.7.0" | wie DE | stimmt |
-| README.fr.md | 46 bis 51 | dieselben drei Punkte "à partir de 1.7.0" | wie DE | stimmt |
+| README.md | 43 bis 46 | Einzelne externe Speicher ausschließen, freie Plätze (ab 1.7.0) | unverändert seit 1.7.0 | stimmt |
+| README.md | 47 bis 49 | Oberfläche in neun Sprachen, darunter Traditionelles Chinesisch (ab 1.7.0) | `ls php/l10n/*.json` ohne de_DE: en (Quelle), de, fr, es, it, nl, pt_PT, pt_BR, zh_TW = neun | stimmt |
+| README.md | 50 bis 51 | Suchsprachen DE und EN voreingestellt, ES, IT, NL, PT, CS verfügbar | kein Container-Code seit 1.7.0 geändert | stimmt |
+| README.md | 73 | Nextcloud 33 bis 35 mit AppAPI | info.xml beider Apps min 33, max 35 | stimmt |
+| README.md | 106 bis 108 | Unterschiedliche Major- oder Minor-Version: Suche antwortet mit nichts | 1.7.0 und 1.7.1 teilen Major und Minor, der Fall greift beim Patch nicht | stimmt |
+| README.en.md | 42 bis 47 | dieselben drei Punkte "from 1.7.0" | wie DE | stimmt |
+| README.fr.md | 45 bis 51 | dieselben drei Punkte "à partir de 1.7.0" | wie DE | stimmt |
 
 Ergebnis: keine falsche oder veraltete Aussage in den drei READMEs. Die drei Fixes von 1.7.1 (Hilfesatz, Enter, Fehlerliste unter 360 px) sind Bedienkorrekturen ohne neue Fähigkeit; nach der Owner-Regel "kurze Faktenliste" gehören sie nicht in die READMEs, sondern nur ins CHANGELOG.
 
