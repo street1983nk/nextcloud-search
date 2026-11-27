@@ -68,3 +68,6 @@ Freigabe Kommentar PR60 und 63 46-07: "Ja" (2026-11-27 15:59, Claude-Code-Chat) 
 
 Freigabe Docker-Fenster 46-07 #63: "Ok" (2026-11-27 16:05, Claude-Code-Chat) Entscheid: ja (PHPUnit RED an 7d365b34 und GREEN am Kopf, Mutation, Psalm-Taint, php-cs-fixer; RAM mindestens 4 GiB vorher, ein Container nach dem anderen, danach leer)
 Freigabe Changelog #63 46-07: "Ok" (2026-11-27 16:05, Claude-Code-Chat) Entscheid: fünfter Punkt ohne Issue-Nummer: EN "A hit whose excerpt came out empty shows its path below the title in the unified search instead of an empty line." DE "Ein Treffer mit leerem Ausschnitt zeigt in der Unified Search seinen Pfad unter dem Titel statt einer leeren Zeile." FR "Un résultat dont l'extrait est vide affiche son chemin sous le titre dans la recherche unifiée au lieu d'une ligne vide."
+
+Freigabe Push #63 46-07: "Go" (2026-11-27 22:40, Claude-Code-Chat) Entscheid: ja (8 Commits bis a3c94c16 auf main, ohne Tag und Store; CI am Kopf grün, alle 8 Workflows)
+Abnahme Härtung 46-07: "Ja" (2026-11-27 23:19, Claude-Code-Chat; gemeinsame Playwright-Abnahme Schritte 1 bis 3 ohne Einwand; Angleichen der Beispiele und #63 umgesetzt, Volltest 7429 grün, CI an a3c94c16 grün) Entscheid: ja

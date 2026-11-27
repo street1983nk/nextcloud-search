@@ -163,8 +163,40 @@ Belege coverage-e2e 45995128241 (alle sieben Beine grün):
 - tesseract über `findling-harness/scripts/ci/apt_install.sh` in allen Beinen: `apt_install: attempt 1 of 3 ended with exit 0 after 4s` bis `22s`.
 - V-46-06-01, V-46-06-02 und V-46-06-03 damit in echter CI belegt; shellcheck der zwei Skripte in "Python gates" grün.
 
-audited_head: 1a0abda0d6e9686d7ecc74e51cc959962cf0fa21
-ci_head: 6003b35352bb5be89ec0e85a1319129b209debc7
+audited_head (46-06, ersetzt): 1a0abda0
+ci_head (46-06, ersetzt): 6003b353
 status_46_06: passed
 
 Bedingung `git diff --quiet 1a0abda0 6003b353 -- . ':!.planning'` erfüllt (Code gleich).
+
+## Nachtrag 46-07
+
+### Fix-Durchlauf
+
+Fixes aus der Abnahme 46-07 und #63, alle Test zuerst, Freigaben in 46-FREIGABEN.md (Hilfesatz, Ablehnungsmeldung, Name-Beispiel, #63, Changelog-Punkte vier und fünf).
+
+Delta-Audit `git diff 1a0abda0 a3c94c16 -- . ':!.planning'` (34 Dateien, +241/-48): Code außerhalb von Tests, Katalogen und Doku nur in zwei Dateien:
+
+- `backend/src/findling/api/snippets.py`: `wire_snippets` lässt Ausschnitte mit leerem Text weg. Kein neuer Eingang, keine neue Ausgabe, nur weniger Einträge in der bestehenden Antwort.
+- `php/lib/Service/ExAppService.php` (`filterSnippets`): leerer Text wird übersprungen, Regex mit `\z` verankert (Audit-Gate test_phase36_audit grün). Kein neuer Eingang, Zähler für fehlerhafte Antworten unverändert.
+- Kataloge `php/l10n/*` und `docs/l10n-*`: nur übersetzte Beispiele in bestehenden Meldungen, Platzhalter unverändert (test_admin_ui_contract mit Zuordnungstabelle).
+- `.github` seit 6003b353 unverändert, daher kein Lauf "Workflow security lint" nötig.
+
+Befund: keine neue Angriffsfläche. Volltest lokal 7429 passed, 333 skipped (Docker aus), ruff, ruff format, vulture, pyright 0 Fehler. PHPUnit RED an 7d365b34, GREEN am Kopf; die Verankerung `\z` in CI geprüft.
+
+Push nach `Freigabe Push #63 46-07`, origin/main = a3c94c1635b2fe13436394524ed3bb3aa05792b5. Ein CI-Warter über alle Workflows, alle grün:
+
+- 46076437121 Python gates success
+- 46076437005 PHP and store metadata gates success
+- 46076437035 HaRP deploy success
+- 46076437149 Integration success
+- 46076437150 Resilience success
+- 46076437214 Multi-arch image success
+- 46076437153 Security scans success
+- 46076437084 OpenSSF Scorecard success
+
+Gemeinsame Abnahme 46-07 Schritte 1 bis 3 ohne Einwand, Sichtprüfung der angeglichenen Meldungen in derselben Sitzung; Abnahmezeile in 46-FREIGABEN.md.
+
+audited_head: a3c94c1635b2fe13436394524ed3bb3aa05792b5
+ci_head: a3c94c1635b2fe13436394524ed3bb3aa05792b5
+status_46_07: passed
