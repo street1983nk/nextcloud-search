@@ -178,7 +178,7 @@ jobs:
 
       - name: Install the OCR engine for the backlog images
         run: |
-          bash findling-src/scripts/ci/apt_install.sh tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd fonts-dejavu-core
+          bash findling-harness/scripts/ci/apt_install.sh tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd fonts-dejavu-core
           tesseract --version | head -1
 
       - name: Build the topology, measure both phases against the truth

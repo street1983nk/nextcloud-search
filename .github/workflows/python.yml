@@ -227,7 +227,7 @@ jobs:
         run: |
           command -v shellcheck || sudo apt-get install -y shellcheck
           shellcheck --version
-          shellcheck docker/harp_connect.sh docker/init.sh scripts/ci/apt_install.sh scripts/ci/apt_install_selftest.sh
+          shellcheck docker/harp_connect.sh docker/init.sh ../scripts/ci/apt_install.sh ../scripts/ci/apt_install_selftest.sh
 
       # The probes of the launch audit 1.6.0 by name (plan 40-01). The tunnel
       # watcher probes need bash, a FIFO and POSIX signals and run here only;
