@@ -43,3 +43,7 @@ Freigabe Dispatch coverage-e2e 46-06 Fix: "Ok go mit den Empfehlungen" (2026-11-
 Hinweis: Zeit in UTC. Gedeckt: Push von e448e02b, 2fa545a9, 3b92228c und dieser Zeile auf main, ohne Tag und Store; ein CI-Warter; genau ein workflow_dispatch von coverage-e2e.yml danach. Kein Kommentar.
 
 Entscheid PHP-Baumhash 46-06: "Ja" (2026-11-27 10:41, Claude-Code-Chat) Entscheid: PHP_TREE_HASH_TODAY auf 7ce0ad5c nachziehen (Folge von 46-03), volle Python-Suite lokal vor dem Push
+
+Freigabe Push 46-06 Baumhash: "Ok" (2026-11-27 11:07, Claude-Code-Chat) Entscheid: ja
+Entscheid coverage-e2e Rücksprung 46-06: "Ok" (2026-11-27 11:07, Claude-Code-Chat) Entscheid: Befund rollback_1_6_2 drain_incomplete (Beine upgrade und upgrade-rc1, Lauf 45973279674; letzter grüner Lauf 43094681914 am 2026-11-11, vor Phase 45; Backend seit v1.7.0 unverändert) vor dem Tag untersuchen
+Hinweis: Zeit in UTC. Gedeckt: Push von f29fe8ae, ce8a5021 und dieser Zeile auf main, ohne Tag und Store; ein CI-Warter; kein Dispatch von coverage-e2e. Kein Kommentar.
