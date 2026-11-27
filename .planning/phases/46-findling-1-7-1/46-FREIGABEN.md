@@ -74,3 +74,5 @@ Abnahme Härtung 46-07: "Ja" (2026-11-27 23:19, Claude-Code-Chat; gemeinsame Pla
 
 Freigabe Push 46-08: "Ja" (2026-11-27 23:30, Claude-Code-Chat) Entscheid: ja
 Freigabe Signatur 46-09: "Ok" (2026-11-27 23:35, Claude-Code-Chat) Entscheid: ja
+Korrektur Freigabe Push #63 46-07: "Ja" (2026-11-27 23:48, Claude-Code-Chat) Entscheid: ja ("Go" kam vor dem Push um 22:24:16 UTC; die Zeit 22:40 in der Zeile Freigabe Push #63 46-07 wurde nachträglich geschätzt eingetragen und ist falsch)
+Freigabe Docker-Fenster T-46-17 46-10: "Ja" (2026-11-27 23:48, Claude-Code-Chat) Entscheid: ja (Testinstanz starten, SHA-256 der ausgelieferten admin.js und admin.css gegen a3c94c16; RAM mindestens 4 GiB, danach stoppen)
