@@ -803,6 +803,13 @@ Platzhalter der Regelfelder (ab 1.7.0): das Ordnerfeld zeigt "Sicherungen"
 Sprache dasselbe Beispiel wie das Feld ("Beispiel: Sicherungen", FR
 "Exemple : Sauvegardes"); bis 1.7.0 stand dort in jeder Sprache "Backups".
 
+Ab 1.7.1 fügt Enter im Ordner- und im Musterfeld den Eintrag hinzu wie der
+Knopf daneben, mit denselben Prüfungen und Meldungen; ein Enter, das ein Wort
+einer Eingabemethode bestätigt (etwa Zhuyin für Traditionelles Chinesisch),
+fügt nichts hinzu. Unter 360 px Breite steht in der Fehlerliste der Zustand als
+Chip unter dem Grund statt in einer eigenen Spalte, damit der Grund die ganze
+Breite hat und kein Wort mitten im Wort umbricht.
+
 Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
 Fix an einer vorhandenen Team-Folder-Datei war dieser Fehler, und es bleibt in
 der Tabelle der Nextcloud-Seite stehen. Die Quittung des Containers nimmt nur
