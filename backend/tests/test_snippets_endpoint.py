@@ -28,6 +28,7 @@ from findling.api import snippets as api_snippets
 from findling.config import settings
 from findling.embed import engine as engine_module
 from findling.embed.model import DIMENSIONS, EmbedOutcome
+from findling.index import search as index_search
 from findling.store.vectors import Chunk, open_vectors
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -257,7 +258,26 @@ def test_a_line_that_is_in_no_document_gets_no_fragment(
     # just mean that the line matched lexically after all.
     answer = _snippets(client, sign(indexed_volume.alice), query=PARAPHRASE)
 
-    assert answer[str(ALICE_FILE)]["text"] == ""
+    # Issue #63: an excerpt that came out empty is not sent at all. The cut
+    # found nothing to quote, and an entry with an empty text made the unified
+    # search show an empty line where the path belongs; a file without an entry
+    # gets its path on the PHP side. The positive control is the case above,
+    # where the term stands in the document and the fragment arrives.
+    assert str(ALICE_FILE) not in answer
+
+
+def test_only_excerpts_with_text_go_over_the_wire() -> None:
+    """Issue #63: an empty or blank cut stays out of the answer, a cut with text stays in."""
+    cut = [
+        index_search.SnippetText(file_id=1, text="", highlights=[]),
+        index_search.SnippetText(file_id=2, text=" \n\t ", highlights=[]),
+        index_search.SnippetText(file_id=3, text="der Quartalsbericht", highlights=[(4, 19)]),
+    ]
+
+    answer = api_snippets.wire_snippets(cut)
+
+    assert set(answer) == {"3"}
+    assert answer["3"].text == "der Quartalsbericht"
 
 
 def test_the_route_hands_the_raw_line_and_the_stock_to_the_second_path(

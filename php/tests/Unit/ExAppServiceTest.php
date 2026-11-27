@@ -585,6 +585,36 @@ final class ExAppServiceTest extends TestCase {
 		self::assertSame([11], array_keys($result));
 	}
 
+	public function testAnEmptyOrBlankExcerptCountsAsNoExcerptAndIsNoMalformedAnswer(): void {
+		// Issue #63: a container up to 1.7.1 sends an entry with an empty text when
+		// the cut found nothing to quote, and the unified search then showed an
+		// empty line where the path belongs, because the path only comes for a
+		// hit without an entry. An empty or blank text is no excerpt: the hit
+		// goes without one, the subline and the result page take the path. It is
+		// a normal answer and no malformed one, so nothing is logged. The excerpt
+		// with text next to them is the positive control.
+		$service = $this->service($this->loggerThatStaysQuiet());
+		$body = json_encode(['snippets' => [
+			11 => ['text' => '', 'highlights' => []],
+			22 => ['text' => " \r\n\t ", 'highlights' => []],
+			33 => ['text' => 'der Quartalsbericht', 'highlights' => [[4, 19]]],
+		]]);
+		self::assertIsString($body);
+		$service->method('proxyRequest')->willReturn($this->answer($body));
+
+		$result = $service->snippets('alice', 'quarterly report', [11, 22, 33], false, SearchFilters::none());
+
+		self::assertSame([33], array_keys($result));
+		self::assertSame('der Quartalsbericht', $result[33]['text']);
+	}
+
+	private function loggerThatStaysQuiet(): LoggerInterface {
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->expects(self::never())->method('warning');
+
+		return $logger;
+	}
+
 	public function testTheHighlightRangesOfATextTheCleaningShortenedAreDropped(): void {
 		$cap = $this->constantInt('MAX_SNIPPET_LENGTH');
 		$raw = str_repeat('a', $cap + 10);
