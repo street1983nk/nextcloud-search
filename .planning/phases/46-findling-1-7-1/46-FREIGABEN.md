@@ -61,3 +61,5 @@ Entscheid Name-Beispiel 46-07: "Ok" (2026-11-27 14:13, Claude-Code-Chat) Entsche
 Freigabe Changelog 46-07: "Ok" (2026-11-27 14:13, Claude-Code-Chat) Entscheid: vierter Punkt unter Fixed/Behoben/Corrigé: EN "The messages about * and ? in the fields of the excluded folders and patterns name their example in the language of the page." DE "Die Meldungen zu * und ? in den Feldern der ausgeschlossenen Ordner und Muster nennen ihr Beispiel in der Sprache der Seite." FR "Les messages sur * et ? dans les champs des dossiers et des motifs exclus donnent leur exemple dans la langue de la page."
 
 Freigabe Push 46-07: "Ja" (2026-11-27 14:53, Claude-Code-Chat) Entscheid: ja (Commits über 6003b353 bis einschließlich dieser Zeile auf main, ohne Tag und Store; ein CI-Warter)
+
+Entscheid #63 46-07: "Ja" (2026-11-27 15:56, Claude-Code-Chat) Entscheid: #63 (leere Unterzeile bei leerem Ausschnitt, Provider.php:546) in 1.7.1 beheben, Test zuerst, CHANGELOG-Punkt nach Freigabe des Wortlauts; PR #60 nach 1.7.1 prüfen, Merge als 1.8.0
