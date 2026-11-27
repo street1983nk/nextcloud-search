@@ -65,3 +65,6 @@ Freigabe Push 46-07: "Ja" (2026-11-27 14:53, Claude-Code-Chat) Entscheid: ja (Co
 Entscheid #63 46-07: "Ja" (2026-11-27 15:56, Claude-Code-Chat) Entscheid: #63 (leere Unterzeile bei leerem Ausschnitt, Provider.php:546) in 1.7.1 beheben, Test zuerst, CHANGELOG-Punkt nach Freigabe des Wortlauts; PR #60 nach 1.7.1 prüfen, Merge als 1.8.0
 
 Freigabe Kommentar PR60 und 63 46-07: "Ja" (2026-11-27 15:59, Claude-Code-Chat) Entscheid: ja (Entwürfe wortgleich gepostet, ohne @)
+
+Freigabe Docker-Fenster 46-07 #63: "Ok" (2026-11-27 16:05, Claude-Code-Chat) Entscheid: ja (PHPUnit RED an 7d365b34 und GREEN am Kopf, Mutation, Psalm-Taint, php-cs-fixer; RAM mindestens 4 GiB vorher, ein Container nach dem anderen, danach leer)
+Freigabe Changelog #63 46-07: "Ok" (2026-11-27 16:05, Claude-Code-Chat) Entscheid: fünfter Punkt ohne Issue-Nummer: EN "A hit whose excerpt came out empty shows its path below the title in the unified search instead of an empty line." DE "Ein Treffer mit leerem Ausschnitt zeigt in der Unified Search seinen Pfad unter dem Titel statt einer leeren Zeile." FR "Un résultat dont l'extrait est vide affiche son chemin sous le titre dans la recherche unifiée au lieu d'une ligne vide."
