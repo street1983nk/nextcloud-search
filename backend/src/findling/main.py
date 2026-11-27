@@ -53,7 +53,7 @@ from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.similar import ROUTER as SIMILAR_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
-from findling.config import TESSERACT_NAME, settings
+from findling.config import SCANNERLESS_LANGUAGES, TESSERACT_NAME, settings
 from findling.embed.engine import ENGINE_LOADED, engine_state, release_if_idle, warm, warm_wanted
 from findling.hardware import detect
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, recover_the_index_directories
@@ -1054,7 +1054,12 @@ def warn_on_uncovered_languages() -> None:
     configuration into every log this container writes.
     """
     covered = set(settings().ocr_languages)
-    uncovered = [code for code in settings().languages if TESSERACT_NAME[code] not in covered]
+    # A code without a model in this image is uncovered whatever the OCR list
+    # says (findling.config.SCANNERLESS_LANGUAGES), and it is asked first, so
+    # that TESSERACT_NAME is never asked for a code it has no entry for.
+    uncovered = [
+        code for code in settings().languages if code in SCANNERLESS_LANGUAGES or TESSERACT_NAME[code] not in covered
+    ]
     if uncovered:
         LOGGER.warning(
             "FINDLING_LANGUAGES carries %d language(s) that FINDLING_OCR_LANGUAGES does not cover; "

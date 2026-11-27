@@ -7838,12 +7838,15 @@ jobs:
           # alone now, because only stamp_after_swap writes the new set into
           # an existing directory; the schema mark cannot tell a rebuilt
           # directory from the untouched one while both generations are 3.
+          # Issue #53 raised SCHEMA_VERSION to 4 (body_zh), so the demand is 3
+          # before (the stamp of v1.5.0) and 4 after (the stamp of the rebuild
+          # of this code), and the schema mark tells the two apart again.
           was=$(jq -r '.marks.schemaVersion' "${before}")
           now=$(jq -r '.marks.schemaVersion' "${after}")
-          if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then
-            echo "the schema mark reads 3 before the rebuild and 3 after it, the schema of the start and of the running code"
+          if [ "${was}" = "3" ] && [ "${now}" = "4" ]; then
+            echo "the schema mark reads 3 before the rebuild and 4 after it, the schema of the start and of the running code"
           else
-            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 3 before the rebuild (the schema of the start) and 3 after it (the schema of this code)"
+            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 3 before the rebuild (the schema of the start) and 4 after it (the schema of this code)"
             fail=1
           fi
 
@@ -8060,8 +8063,8 @@ jobs:
           vectors_before=$(vectors_digest)
           echo "the vector stock before the way back: ${vectors_before}"
 
-          if ! jq -e --arg set "${REBUILD_LANGUAGES_NORMALISED}" '.marks.languages == $set and .marks.schemaVersion == "3"' "${before}" > /dev/null; then
-            echo "::error::the installation reports the languages mark '$(jq -r '.marks.languages' "${before}")' and the schema mark '$(jq -r '.marks.schemaVersion' "${before}")', and the way back has to start where \"Store upgrade 6\" ended, at ${REBUILD_LANGUAGES_NORMALISED} and 3"
+          if ! jq -e --arg set "${REBUILD_LANGUAGES_NORMALISED}" '.marks.languages == $set and .marks.schemaVersion == "4"' "${before}" > /dev/null; then
+            echo "::error::the installation reports the languages mark '$(jq -r '.marks.languages' "${before}")' and the schema mark '$(jq -r '.marks.schemaVersion' "${before}")', and the way back has to start where \"Store upgrade 6\" ended, at ${REBUILD_LANGUAGES_NORMALISED} and 4"
             exit 1
           fi
           if ! jq -e '.container.rebuildState == "idle"' "${before}" > /dev/null; then
@@ -8152,13 +8155,13 @@ jobs:
           # ---------------------------------------------------------------
           fail=0
 
-          echo "--- 1, the schema mark reads 3 before and after: the way back builds the schema of this code again ---"
+          echo "--- 1, the schema mark reads 4 before and after: the way back builds the schema of this code again ---"
           was=$(jq -r '.marks.schemaVersion' "${before}")
           now=$(jq -r '.marks.schemaVersion' "${after}")
-          if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then
-            echo "the schema mark reads 3 before the way back and 3 after it"
+          if [ "${was}" = "4" ] && [ "${now}" = "4" ]; then
+            echo "the schema mark reads 4 before the way back and 4 after it"
           else
-            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 3 on both sides of the way back"
+            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 4 on both sides of the way back"
             fail=1
           fi
 

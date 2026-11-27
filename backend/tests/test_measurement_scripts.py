@@ -3180,8 +3180,45 @@ PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda
 # tree: d031ba6c... both ways, and the recipe and the same pipeline over git
 # archive of 2a7befdc, the last commit before this change, gave 961cd6ae...
 # with 83 files (positive control).
+#
+# Moved on 2026-11-15 by issue #53, the Chinese chain and body_zh: config.py
+# raises SCHEMA_VERSION to 4 and adds zh to SUPPORTED_LANGUAGES,
+# STEMMERLESS_LANGUAGES and the new SCANNERLESS_LANGUAGES, main.py counts a
+# scannerless code as uncovered, index/analyzer.py brings chinese_analyzer,
+# index/schema.py and index/open.py the field and its registration,
+# store/repo.py and api/resources.py the steps and the generation of schema 4,
+# query/rewrite.py the weight of zh and index/rebuild.py the measured growth
+# beside GROWTH_PER_LANGUAGE. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 83. The PHP pair does not move. Recomputed independently with find,
+# sort, sed and sha256sum over the CRLF normalised tree: 2169b783... both ways,
+# and the same pipeline over git archive HEAD before the step gave d031ba6c...
+# (positive control).
+#
+# Moved on 2026-11-15 by the variants of 臺 and 台 (issue #53): query/rewrite.py
+# adds HAN_VARIANTS and han_variants to the token rewrite of the umlaut, and
+# index/analyzer.py names it in the docstring of chinese_analyzer. No file came
+# or went, so PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move.
+# Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: c024c9a4... both ways, and the same pipeline over the tree
+# of the step before gave 2169b783... (positive control).
+#
+# Moved on 2026-11-22 by the weight of zh (issue #53, the owner's answer in pull
+# request #60): query/rewrite.py lowers BODY_BOOST zh from 0.6 to 0.3 and says
+# why beside it. No file came or went, so PACKAGE_FILES_TODAY stays at 83. The
+# PHP pair does not move. Recomputed independently with find, sort, sed and
+# sha256sum over the CRLF normalised tree: 62a6d85c... both ways, and the same
+# pipeline over git archive HEAD before the step gave c024c9a4... (positive
+# control).
+#
+# Moved on 2026-11-23 by the repair of the Han variants (issue #53):
+# query/rewrite.py parses a line once more without them when the variants are
+# what makes the parser answer every document. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, sed and sha256sum over the CRLF normalised
+# tree: 65f6bc65... both ways, and the same pipeline over git archive HEAD
+# before the step gave 62a6d85c... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "d031ba6c76651582db17eb55754cece37426ed0062e7881955ae0c5f4bea6325"
+PACKAGE_TREE_HASH_TODAY = "65f6bc6565e0d9ab55071934729a08be98c11c6db8f58cabd11098e994d0fb82"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

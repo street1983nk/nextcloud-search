@@ -330,6 +330,14 @@ def test_czech_weighs_like_the_other_build_out_languages() -> None:
     assert BODY_BOOST["cs"] < BODY_BOOST["en"]
 
 
+def test_chinese_weighs_less_than_the_other_build_out_languages() -> None:
+    # The owner's answer in pull request #60: the Chinese chain keeps Latin words,
+    # so body_zh also scores on English ones, and 0.3 moves the order of English
+    # hits less than 0.6 does (docs/measurements/2026-11-zh-kette, section 2).
+    others = [code for code in BUILD_OUT if code != "zh"]
+    assert all(BODY_BOOST["zh"] < BODY_BOOST[code] for code in others)
+
+
 def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_index: Index) -> None:
     # The same promise over every plan a directory can ask for, and not only over
     # the one set that happens to be in the table. A weight that is right in the
@@ -346,11 +354,12 @@ def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_in
                 continue
             assert plan.boosts[field] < plan.boosts[FIELD_BODY_EN], f"{field} weighs at least as much as body_en"
             checked += 1
-    # Five build out languages since plan 30-04 (cs joined the four), each of
-    # them in half of the sets that carry en: 5 * 2 ** (7 - 2). Written out so
+    # Six build out languages since issue #53 (cs joined the four in plan 30-04,
+    # zh joined the five), each of them in half of the sets that carry en:
+    # 6 * 2 ** (8 - 2), and 5 * 2 ** (7 - 2) = 160 before zh. Written out so
     # that a loop which silently stopped looking cannot pass as a loop that
     # looked and found nothing wrong.
-    assert checked == 160
+    assert checked == 384
 
 
 def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_index: Index) -> None:
@@ -371,6 +380,10 @@ def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_ind
         # "documents" nor "documento" and stays out of the disagreement: the
         # three against three above is untouched by the seventh field.
         "cs": [],
+        # The Chinese chain keeps Latin words whole and unstemmed, so it reaches
+        # neither form either, and the eighth field leaves the three against
+        # three as untouched as the seventh does.
+        "zh": [],
     }
 
 

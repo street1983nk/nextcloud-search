@@ -1,0 +1,4 @@
+corpus statutes documents 152 characters 478164 text_bytes 1344202
+de,en        2615333 byte  1.946 of the text
+de,en,zh     3278208 byte  growth 0.253 of the directory, 0.493 of the text
+de,en,cs     3585050 byte  growth 0.371 of the directory, 0.721 of the text

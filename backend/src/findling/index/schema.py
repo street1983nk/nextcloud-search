@@ -1,9 +1,9 @@
-"""The fourteen fields of the index, with the reason for every column of the table.
+"""The fifteen fields of the index, with the reason for every column of the table.
 
 A tantivy schema is written once and read for the lifetime of the index: a field
 that is added later means a reindex, and a field that is stored without being
 needed is paid for on every disk of every installation. So this module is a table
-with fourteen rows and a line of reasoning per row, and nothing else.
+with fifteen rows and a line of reasoning per row, and nothing else.
 
 Four of the six body fields arrived on 2026-09-24 with the language build out of
 v1.3, under owner decision E-17-2 option a of 2026-09-23: the schema carries all
@@ -17,6 +17,20 @@ stemmer, and the same rule as above, so that switching cs on later is a filling
 question as well. Installations of schema 2 keep their thirteen fields until a
 rebuild runs anyway; the pair ("2", "3") of findling.store.repo.LEGACY_SCHEMA_STEPS
 is what keeps the step itself from forcing one.
+
+The eighth body field, body_zh, arrived with issue #53 and raised the schema from
+3 to 4: Chinese on a chain that cuts one token per Han character
+(findling.index.analyzer.chinese_analyzer), and the same rule again, so that
+switching zh on later is a filling question. Installations of schema 3, 2 and 1
+keep their fields until a rebuild runs anyway; the pairs ("3", "4"), ("2", "4")
+and ("1", "4") of findling.store.repo.LEGACY_SCHEMA_STEPS keep the step from
+forcing one. body_zh is not stored, like every body field but the German one:
+the snippet is cut out of body_de, and the owner's answer in issue #53 is that a
+second stored copy of the text is not paid for by default. It keeps positions,
+because a Chinese word is found as a phrase of its characters. What a filled
+body_zh costs on disk is measured by the measurement report of issue #53 and not
+estimated here; the 0.086 per filled chain named below was measured on German
+text, where a token is a word and not a character.
 
 Three decisions carry real cost and are therefore measured rather than argued.
 
@@ -63,6 +77,7 @@ from findling.index.analyzer import (
     TOKENIZER_NAME,
     TOKENIZER_NL,
     TOKENIZER_PT,
+    TOKENIZER_ZH,
 )
 
 FIELD_FILE_ID: Final = "file_id"
@@ -78,6 +93,7 @@ FIELD_BODY_IT: Final = "body_it"
 FIELD_BODY_NL: Final = "body_nl"
 FIELD_BODY_PT: Final = "body_pt"
 FIELD_BODY_CS: Final = "body_cs"
+FIELD_BODY_ZH: Final = "body_zh"
 FIELD_MTIME: Final = "mtime"
 
 # In schema order. Callers that build documents read the names from here, because
@@ -98,6 +114,7 @@ FIELDS: Final = (
     FIELD_BODY_NL,
     FIELD_BODY_PT,
     FIELD_BODY_CS,
+    FIELD_BODY_ZH,
     FIELD_MTIME,
 )
 
@@ -115,6 +132,7 @@ BODY_FIELD: Final = {
     "nl": FIELD_BODY_NL,
     "pt": FIELD_BODY_PT,
     "cs": FIELD_BODY_CS,
+    "zh": FIELD_BODY_ZH,
 }
 
 # Built into tantivy: one token, the whole field, unchanged. The right choice for
@@ -188,6 +206,12 @@ def build_schema() -> Schema:
     # findling.index.analyzer.czech_analyzer), and not stored like every body
     # field but the German one.
     builder.add_text_field(FIELD_BODY_CS, stored=False, tokenizer_name=TOKENIZER_CS)
+    # Chinese, the one field of schema 4 (issue #53). Not stored, like every
+    # body field but the German one. The index option is spelled out although
+    # it is the default: a Chinese word is found as a phrase of its characters,
+    # so a field without positions would find single characters and nothing
+    # else, and INDEX_OPTION_TERMS_ONLY above must never reach this line.
+    builder.add_text_field(FIELD_BODY_ZH, stored=False, tokenizer_name=TOKENIZER_ZH, index_option="position")
     # Display today, sorting and since/until later. Fast rather than indexed: a
     # range over a column is what a date filter needs, a term is not.
     builder.add_integer_field(FIELD_MTIME, stored=True, indexed=False, fast=True)

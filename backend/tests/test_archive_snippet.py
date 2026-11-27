@@ -252,8 +252,9 @@ def test_a_search_for_the_name_of_an_inner_file_finds_the_archive(index: Index) 
 
 def test_no_schema_field_and_no_schema_version_moved() -> None:
     # D-30-08: the inner file is read out of the stored text, never out of a
-    # field of its own.
-    assert SCHEMA_VERSION == 3
+    # field of its own. Schema 4 (issue #53) added body_zh and no field for the
+    # inner file either.
+    assert SCHEMA_VERSION == 4
     assert FIELDS == (
         "file_id",
         "storage_id",
@@ -268,5 +269,6 @@ def test_no_schema_field_and_no_schema_version_moved() -> None:
         "body_nl",
         "body_pt",
         "body_cs",
+        "body_zh",
         "mtime",
     )

@@ -60,6 +60,7 @@ from findling.index.schema import (
     FIELD_BODY_IT,
     FIELD_BODY_NL,
     FIELD_BODY_PT,
+    FIELD_BODY_ZH,
     FIELDS,
 )
 from findling.query.rewrite import LEGACY_PLAN
@@ -107,6 +108,27 @@ FIELDS_SCHEMA_2: tuple[str, ...] = (
     "mtime",
 )
 
+# The index schema of 1.5.0 and later, written out and frozen for the same
+# reason as the two tuples above. Frozen by issue #53 in the commit that grows
+# body_zh in build_schema(), and copied from build_schema() of commit e5c1da7,
+# the state every installation of those releases carries on disk.
+FIELDS_SCHEMA_3: tuple[str, ...] = (
+    "file_id",
+    "storage_id",
+    "name",
+    "title",
+    "path",
+    "ext",
+    "body_de",
+    "body_en",
+    "body_es",
+    "body_it",
+    "body_nl",
+    "body_pt",
+    "body_cs",
+    "mtime",
+)
+
 # The prefix that marks a body field. The four fields plan 18-01 added all carry
 # it, and so do the two that were there before, which is what makes it the right
 # thing to test a name against: a body field is the one kind of field a language
@@ -127,17 +149,36 @@ def test_the_frozen_list_of_schema_two_has_thirteen_names() -> None:
     assert len(set(FIELDS_SCHEMA_2)) == 13
 
 
-def test_the_three_generations_are_nested() -> None:
-    # The inclusion LEGACY_SCHEMA_STEPS rests on for its pairs ("1", "2"),
-    # ("2", "3") and ("1", "3"): no generation drops a field of the one before.
-    assert set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS)
+def test_the_frozen_list_of_schema_three_has_fourteen_names() -> None:
+    assert len(FIELDS_SCHEMA_3) == 14
+    assert len(set(FIELDS_SCHEMA_3)) == 14
+
+
+def test_the_four_generations_are_nested() -> None:
+    # The inclusion LEGACY_SCHEMA_STEPS rests on for every one of its pairs, the
+    # three to schema 3 and the three to schema 4 alike: no generation drops a
+    # field of the one before.
+    assert set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS_SCHEMA_3) <= set(FIELDS)
 
 
 def test_schema_three_adds_exactly_body_cs_to_schema_two() -> None:
     # The one schema step of milestone v1.5 (D-30-08): a true superset of the
     # thirteen names every 1.3 and 1.4 installation carries, by exactly one field.
-    assert set(FIELDS_SCHEMA_2) < set(FIELDS)
-    assert set(FIELDS) - set(FIELDS_SCHEMA_2) == {FIELD_BODY_CS}
+    # Read against the frozen schema 3 since issue #53, because FIELDS has grown
+    # body_zh on top of it.
+    assert set(FIELDS_SCHEMA_2) < set(FIELDS_SCHEMA_3)
+    assert set(FIELDS_SCHEMA_3) - set(FIELDS_SCHEMA_2) == {FIELD_BODY_CS}
+
+
+def test_schema_four_adds_exactly_body_zh_to_schema_three() -> None:
+    # The step of issue #53: a true superset of the fourteen names every
+    # installation of schema 3 carries, by exactly one field, which is the whole
+    # argument of the pair ("3", "4") in findling.store.repo.LEGACY_SCHEMA_STEPS.
+    assert set(FIELDS_SCHEMA_3) < set(FIELDS)
+    assert set(FIELDS) - set(FIELDS_SCHEMA_3) == {FIELD_BODY_ZH}
+    # The order of the old names is unchanged as well, with the new field put in
+    # where body_cs was put in, in front of mtime.
+    assert tuple(name for name in FIELDS if name != FIELD_BODY_ZH) == FIELDS_SCHEMA_3
 
 
 def test_the_legacy_plan_exists_in_schema_two() -> None:

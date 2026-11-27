@@ -146,6 +146,13 @@ LOGGER = logging.getLogger("findling.index.rebuild")
 # Measured for cs on 2026-10-10 (plan 30-05, 2000 documents, 9.88 MB of text):
 # filling the stemmerless Czech chain on top of de,en grows the directory by 0.358
 # of what it held, against 0.361 for es on the same text, so 0.40 holds for cs.
+# Measured for zh on 2026-11-15 (issue #53) through the real writer, de,en against
+# de,en,zh on the same documents: 0.253 over 152 documents of Taiwanese statutes
+# (478164 characters), where cs grows the same directory by 0.371, because one
+# posting per Han character compresses better than one term per clause; and
+# 0.280 for zh and for cs alike over 2000 documents of word list text. zh costs
+# no more than cs on either text, so 0.40 holds for zh as well. Method, corpora
+# and raw data: docs/measurements/2026-11-zh-kette/.
 GROWTH_PER_LANGUAGE: Final = 0.40
 
 # The two answers of the precheck, as text rather than as an enum, for the reason

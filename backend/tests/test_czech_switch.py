@@ -12,7 +12,8 @@ real Nextcloud):
   way they were found before the upgrade. The same holds for an extra language
   and for a 1.2.x directory of schema 1.
 * **Switching cs on and off is a re-analysis.** The band run carries the stored
-  body_de text into a fourteen field directory and lets the chain of every
+  body_de text into a directory of the running schema (fourteen fields when
+  this file was written, fifteen since issue #53) and lets the chain of every
   active language analyse it again, so cs arrives without a crawl and leaves
   without one, and the vector stock is not touched on either way.
 * **The Czech chain on field level.** Stop words in both spellings leave no
@@ -72,11 +73,13 @@ from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
 
 LUCENE_ORIGINAL = Path(__file__).resolve().parent / "fixtures" / "lucene_cz_stopwords_10_5_2.txt"
 
-# The field counts of the two layouts, written out rather than read from the
+# The field counts of the layouts, written out rather than read from the
 # schema module: the claim is about what lies on disk, and a count taken from
-# build_schema() would move with it.
+# build_schema() would move with it. A rebuild writes the layout of the running
+# code, which is schema 4 with body_zh since issue #53, so the directories this
+# file builds by switching cs carry fifteen fields and the mark "4" since then.
 FIELDS_OF_SCHEMA_2 = 13
-FIELDS_OF_SCHEMA_3 = 14
+FIELDS_OF_SCHEMA_4 = 15
 
 # The Czech document of the switch. The locative of smlouva, so the flat query
 # smlouve reaches it only through a chain that folds, and German does not.
@@ -314,7 +317,7 @@ def _switch_cs_on(volume: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Store,
     return store, _run(store)
 
 
-def test_switching_cs_on_builds_fourteen_fields_and_finds_the_czech_word(
+def test_switching_cs_on_builds_the_current_fields_and_finds_the_czech_word(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store, verdict = _switch_cs_on(volume, monkeypatch)
@@ -325,8 +328,8 @@ def test_switching_cs_on_builds_fourteen_fields_and_finds_the_czech_word(
 
     assert settings().languages == ("de", "cs")
     assert verdict == REBUILD_THROUGH
-    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_3
-    assert marks[SCHEMA_MARK] == "3"
+    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_4
+    assert marks[SCHEMA_MARK] == "4"
     assert marks[LANGUAGES_MARK] == "de,cs"
     assert FIELD_BODY_EN not in plan.fields
     assert FIELD_BODY_CS in plan.fields
@@ -361,8 +364,8 @@ def test_switching_cs_off_rebuilds_again_and_leaves_body_cs_empty(
 
     assert verdict_on == REBUILD_THROUGH
     assert verdict_off == REBUILD_THROUGH
-    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_3
-    assert marks[SCHEMA_MARK] == "3"
+    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_4
+    assert marks[SCHEMA_MARK] == "4"
     assert marks[LANGUAGES_MARK] == "de,en"
     assert index.searcher().terms_with_prefix(FIELD_BODY_CS, "", limit=1) == []
     assert FIELD_BODY_CS not in plan.fields
@@ -395,12 +398,13 @@ def test_no_switch_embeds_again_and_the_vector_stock_stays_as_it_was(
 def test_a_half_filled_target_of_the_schema_2_expectation_is_discarded(
     volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """T-30-22: a target filled by 1.4.2 code is not filled up by schema 3 code.
+    """T-30-22: a target filled by 1.4.2 code is not filled up by newer code.
 
     The fingerprint in the target is the one of the same marks with schema 2,
     which is what the code before the upgrade wrote into a target it left half
-    filled. Thirteen fields and two documents go in, fourteen fields and none
-    come out, and the run of the whole band starts again from there.
+    filled. Thirteen fields and two documents go in, the fields of the running
+    schema (fifteen since issue #53) and none come out, and the run of the whole
+    band starts again from there.
     """
     _languages(monkeypatch, "cs,de")
     digest = write_wordlist(volume)
@@ -424,13 +428,13 @@ def test_a_half_filled_target_of_the_schema_2_expectation_is_discarded(
     del fresh
     gc.collect()
 
-    assert _fields_on_disk(target) == FIELDS_OF_SCHEMA_3
+    assert _fields_on_disk(target) == FIELDS_OF_SCHEMA_4
     assert documents == 0
     assert (target / TARGET_MARK_FILE).read_text(encoding="utf-8") == wanted
     assert any("other version marks" in record.getMessage() for record in caplog.records)
 
 
-def test_a_run_over_a_half_filled_schema_2_target_carries_everything_into_fourteen_fields(
+def test_a_run_over_a_half_filled_schema_2_target_carries_everything_into_the_current_fields(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store, _unused = _switch_cs_on_over_a_stale_target(volume, monkeypatch)
@@ -438,8 +442,8 @@ def test_a_run_over_a_half_filled_schema_2_target_carries_everything_into_fourte
     store.close()
     index = _live()
 
-    assert marks[SCHEMA_MARK] == "3"
-    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_3
+    assert marks[SCHEMA_MARK] == "4"
+    assert _fields_on_disk(volume / "index") == FIELDS_OF_SCHEMA_4
     assert index.searcher().num_docs == 2
     assert _found_in(index, "smlouve", FIELD_BODY_CS) == {1}
 

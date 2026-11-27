@@ -399,6 +399,11 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
 # marks. _probed drops every name a directory does not carry, so a schema 2
 # directory asked under schema 3 code loses body_cs and nothing else.
 #
+# "4" joined with body_zh (issue #53). A schema 3 directory asked under schema 4
+# code loses body_zh and nothing else, a schema 2 directory loses body_cs and
+# body_zh, and neither of the two can be named by a plan before its language is
+# switched on, which is the rebuild that brings the field.
+#
 # "1" stays out: 1.2.x knew de and en only, and LEGACY_PLAN is exact there.
 #
 # Written out rather than derived from SCHEMA_VERSION, by the same pairs-not-
@@ -406,7 +411,7 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
 # this set on purpose. The literal comparison it replaces would have sent every
 # installation with es, it, nl or pt back to the legacy pair on the day the
 # schema became 3 (30-RESEARCH pitfall 1, 30-CONTEXT Pflicht-Fix, D-30-08).
-QUERYABLE_SCHEMA_GENERATIONS: Final = frozenset({"2", "3"})
+QUERYABLE_SCHEMA_GENERATIONS: Final = frozenset({"2", "3", "4"})
 
 
 def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
@@ -970,12 +975,12 @@ def filled_languages() -> tuple[str, ...]:
     otherwise. That is the whole probe: not how many terms there are, only
     whether there is one.
 
-    **Which chains are asked, and why not all seven** (audit finding M-18-08). The
+    **Which chains are asked, and why not all eight** (audit finding M-18-08). The
     ones the settings switch on, plus German, and nothing else. The probe walks
     the entire term dictionary of a field by tantivy's own documentation and the
     limit cuts only afterwards, so every field asked is a full walk over the
     dictionary of a directory that the projection of this project puts at 560 MB
-    for 100000 files. Seven of those every thirty seconds on a 4 GB box, for an
+    for 100000 files. Eight of those every thirty seconds on a 4 GB box, for an
     instance that runs German alone, is a cost that grows with the index and
     buys an answer nobody needs: a chain that is switched off is not filled and
     is not going to be. German is in whatever the settings say, because

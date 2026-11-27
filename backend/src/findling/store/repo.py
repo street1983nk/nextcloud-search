@@ -161,12 +161,31 @@ _SCHEMA_MARK: Final = "schema_version"
 # exactly the full rebuild that ("1", "2") prevents, for the same reason and with
 # the same inclusion behind it.
 #
+# Issue #53 raised the schema from 3 to 4 for body_zh, and wrote the three steps
+# to schema 4 down here in the same commit, as the line below asks.
+#
+# ("3", "4"): schema 4 adds the one field body_zh and drops none, so every field
+# the query builder names stands in both generations. The test file named above
+# holds that as set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS_SCHEMA_3)
+# <= set(FIELDS), with FIELDS_SCHEMA_3 frozen as the fourteen names since
+# 1.5.0, and asserts that the difference to FIELDS is body_zh alone. The empty
+# body_zh of a schema 3 directory is reached only once zh is switched on, which
+# is a drift of the language mark and starts the re-analysis rebuild on its own
+# (no crawl, no OCR, no new embedding); until then the field plan of
+# findling.api.resources leaves body_zh out, because the language mark does not
+# name zh, and _probed would drop it for a directory without the field anyway.
+#
+# ("2", "4") and ("1", "4"): a 1.3.x or 1.4.x installation, or a 1.2.x one, that
+# goes straight to the release with schema 4 would otherwise get exactly the
+# full rebuild that ("2", "3") and ("1", "3") prevent, with the same nested
+# inclusion behind it.
+#
 # Pairs and not a comparison of numbers, and that is the whole ratchet. A
 # schema 4 that drops a field would inherit nothing from this line: whoever
 # raises the mark again has to write the new pair down here and say in the same
 # commit why the older layout still answers. A rule of the shape
 # int(stored) < int(expected) would excuse that raise silently.
-LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2"), ("2", "3"), ("1", "3")})
+LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2"), ("2", "3"), ("1", "3"), ("3", "4"), ("2", "4"), ("1", "4")})
 
 # Where the redelivery of the vector stock has got to, or an empty value when no
 # redelivery is running.
