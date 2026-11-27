@@ -90,3 +90,36 @@ PHPUnit am Kopf ec1aa605c3575900c5a75f913c7fb50b7ffea541: grün (PHP 8.3.35, OK 
 php_gates all am Kopf ec1aa605c3575900c5a75f913c7fb50b7ffea541: grün (Psalm-Taint gegen nextcloud/ocp v33.0.9, v34.0.6, v35.0.3 je 0 Funde mit Probe 3; php-cs-fixer 0 Verstöße mit Probe; zizmor keine Funde ab medium mit Probe; actionlint keine Funde mit Probe)
 
 Seit ec1aa605 nur .planning geändert (dieses Dokument). shellcheck der zwei neuen Skripte läuft erst in CI ("Python gates"), lokal nicht installiert.
+
+## Nachtrag 46-06: erster Push
+
+Push durch den Koordinator nach `Freigabe Push 46-06`: origin/main = 0deaf620d8e2d08d94c655ee3c69679d4ce7a13e (ci_head des ersten Pushes; Code gleich ec1aa605). Dazu ein Dispatch von coverage-e2e.yml auf main nach `Freigabe Dispatch coverage-e2e 46-06`. Ein CI-Warter: `scripts/ci/head_green.sh 0deaf620... "Python gates" "PHP and store metadata gates" "HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans" "Workflow security lint"`, Exit 1:
+
+```
+45966198418 Coverage end to end failure
+45966177853 Security scans success
+45966177948 HaRP deploy success
+45966177862 Integration success
+45966177909 Multi-arch image success
+45966177681 Python gates failure
+45966177569 PHP and store metadata gates success
+45966177559 Resilience success
+45966177690 OpenSSF Scorecard success
+45966177574 Workflow security lint success
+```
+
+Kein Rerun: beide roten Läufe sind Fehler aus 46-04 und keine Netzhänger.
+
+| ID | Schwere | Befund | Beleg | Status |
+|---|---|---|---|---|
+| V-46-06-01 | MEDIUM (CI rot, blockiert den Kandidaten) | coverage-e2e.yml rief `bash findling-src/scripts/ci/apt_install.sh`, aber findling-src steht dort auf `matrix.src` (Bäume ab v1.6.2 ohne das Skript); alle vier Beine endeten mit exit 127 im Schritt "Install the OCR engine for the backlog images". Der Plan 46-04 verlangte, den Checkout-Pfad dort am Code zu prüfen; das ist unterblieben | Lauf 45966198418, `bash: findling-src/scripts/ci/apt_install.sh: No such file or directory` | behoben per TDD: RED e448e02b (`test_every_call_of_the_script_goes_through_the_head_of_the_repository`: jeder Aufruf des Skripts muss über einen Checkout ohne `ref` oder mit `github.sha` laufen; Positivkontrolle mit dem Text des ersten Pushes), GREEN 2fa545a9 (Aufruf über `findling-harness`, den Kopf-Checkout des Jobs) |
+| V-46-06-02 | MEDIUM (CI rot) | python.yml läuft mit `working-directory: backend`; die shellcheck-Zeile nannte `scripts/ci/apt_install.sh` relativ zur Wurzel, shellcheck fand die Dateien nicht (exit 2) | Lauf 45966177681, Schritt "Shell check of the tunnel scripts", `openBinaryFile: does not exist` | behoben per TDD: RED e448e02b (`test_shellcheck_reads_the_two_scripts_from_its_working_directory`, Positivkontrolle mit den Pfaden des ersten Pushes), GREEN 2fa545a9 (`../scripts/ci/...`). shellcheck selbst lief damit in CI noch nie über die zwei Skripte; der erste echte Lauf kommt mit dem nächsten Push |
+
+Belege aus den grünen Läufen am ersten ci_head (gelten weiter, der Fix ändert nur coverage-e2e.yml, python.yml und einen Test):
+
+- Update-Probe (php.yml, Lauf 45966177569): `== candidate: released v1.7.0 to php/ of this checkout, has to pass`, `UPDATE-PROOF ok findling 1.7.0 -> 1.7.1, migrations applied in this run: none, recorded backend version 1.7.0 kept`; `control 2 skipped: v1.7.0 and the candidate 1.7.1 share major and minor, a patch step may keep the recorded version` (erwartet).
+- HaRP deploy (Lauf 45966177948, vier Jobs stable33, stable34 amd64 und arm64, stable35 success): `installed_version went from 1.5.0 to 1.7.1`; Store upgrade 2b `step 5: the first delivery came back short, was fetched once more and accepted (POL-02), the row is out of the queue`. Eine Zeile `step 5: N queue row(s) of kind ...` erschien nicht: in diesem Lauf war die Zeile bei der ersten Abfrage schon weg, die Schleife endete sofort. Das Rennen von I-45-12-01 zeigte sich also nicht; die Absicherung liegt im Gate und in den Mutationen (46-04).
+- Integration (Lauf 45966177862, success): Wörterbuch über das Skript in allen Jobs mit setup-test-nc, z. B. `team-folder-acl (stable34, 8.2) | ... | apt_install: attempt 1 of 3 ended with exit 0 after 25s` (Spanne 14 s bis 25 s), tesseract `apt_install: attempt 1 of 3 ended with exit 0 after 9s` bis `11s`.
+- Lokal am Fix: test_ci_apt_timeouts und Workflow-Tests 77 passed; ruff, ruff format, vulture grün, pyright der Testdatei 0 Fehler; `php_gates_docker.sh workflows` (zizmor, actionlint) grün im Fenster `Freigabe Docker-Fenster 46-06`. Ein lokaler shellcheck-Lauf in einem eigenen Container wurde vom Auto-Modus abgelehnt (nicht freigegebenes Image); shellcheck prüft in CI nach dem nächsten Push.
+
+audited_head und ci_head folgen nach `Freigabe Push 46-06 Fix` und dem grünen Lauf.
