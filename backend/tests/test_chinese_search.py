@@ -211,9 +211,10 @@ def test_a_chinese_only_hit_gets_the_empty_excerpt_today(index: Index, store: St
     The generator reads body_de with the German chain, which knows 天氣 only as
     part of the run 今天台北的天氣很好, so it finds no match in the document and
     the excerpt is empty: no text, no highlight, and above all no text of
-    another document. The hit itself stays a hit, and the PHP side shows the
-    path instead. Which of the three snippet options replaces this is decided
-    by the measurement report.
+    another document. The hit itself stays a hit. The entry arrives with an
+    empty text, so the unified search shows it without a subline, and the
+    results page shows the path, as it does for every hit. Which of the three
+    snippet options replaces this is decided by the measurement report.
     """
     rewritten = build_query(index, "開會", plan=PLAN_DE_ZH)
     assert rewritten.query is not None
