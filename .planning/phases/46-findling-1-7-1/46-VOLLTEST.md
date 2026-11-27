@@ -67,3 +67,5 @@ Keine. Alle Proben grün, die Positivkontrollen rot wie verlangt.
 ## Owner-Abnahme
 
 Offen (46-07 Task 2, gemeinsame Abnahme per Playwright).
+
+Nachtrag nach der gemeinsamen Abnahme (Hauptsitzung, ohne Einwand): Owner-Entscheid, die Ablehnung eines `*` oder `?` im Ordnerfeld nennt ihr Muster-Beispiel in der Sprache des Katalogs. RED 85a12fab (`test_the_wildcard_refusal_names_the_example_of_its_own_placeholder`: der Teil vor dem `*` muss der Anfang des Platzhalters derselben Datei sein; 14 Funde, it und pt_BR tragen "Backup" schon), GREEN 056bba33: DE und de_DE "Sicherung*", FR "Sauvegarde*", ES "Copia*", NL "Back-up*", pt_PT "Cópia*", zh_TW "備份*", IT und pt_BR bleiben "Backup*", EN bleibt "Backup*"; msgid unverändert; Sprachtabellen in docs/l10n-*.md und zwei Zitate in docs/admin-page.md nachgezogen. Mutation fr.js zurück auf "Backup*" rot. Umlaut-Vorfilter über die hinzugefügten Zeilen: 1 Treffer ("neuer", richtig), Gedankenstriche 0. Gates grün, volle Python-Suite 7454 passed, 305 skipped (1009 s, allein).
