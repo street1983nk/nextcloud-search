@@ -123,6 +123,14 @@ Beleg-Konvention: Datei:Zeile am Kandidaten K; Lauf-IDs per `gh run view` am 26.
 | T-45-89 | Information Disclosure | warning-Zeile des Backstops | mitigate | BACKSTOP_LINE (poller.py Z. 181 an K) nur `%d` und file id; Namens-Gate im Test | closed |
 | T-45-90 | Repudiation | requeued-Zahl meldet Spurwechsel, die nicht stattfanden | mitigate | QueueMapper `$dirtyBefore` vor den Updates (Z. 636, 677 an K); M50, M51 rot | closed |
 | T-45-91 | Tampering | Deckungsgrad zählt abgeschriebene Datei doppelt | mitigate | judged schließt failed/repeatedly_stuck aus, coverage_truth.sh zieht nach; M58 rot (45-27) | closed |
+| T-45-47 | Tampering | Tag auf falschem Kopf | mitigate | Tag-Commit 22f98ef2 = Tag-Kopf; Diff bb4c0bc8..v1.7.0 nur die sieben erlaubten Dateien (45-AUDIT.md `## Nachtrag Release-Threats`) | closed |
+| T-45-48 | Spoofing | unsignierte Pakete im Store | mitigate | Release 45895635994 auf 22f98ef2, zweimal Verified OK, Release immutable, Fremdinstallation 45896004205 grün | closed |
+| T-45-49 | Information Disclosure | Store-Token | mitigate | nur Environment app-store (store-submit.yml Z. 68 am Tag), Lauf 45898491529 erst nach `Freigabe Store 45-14` | closed |
+| T-45-50 | Repudiation | Veröffentlichung ohne Owner | mitigate | getrennte Zeilen `Freigabe Tag 45-14` und `Freigabe Store 45-14` vor dem jeweiligen Schritt | closed |
+| T-45-51 | Denial of Service | Store-API-Sperre durch zu viele Abfragen | mitigate | Abfragen 27.11. 00:18:47 und 00:29:04 UTC, Abstand über 10 Minuten, beide Apps 1.7.0 | closed |
+| T-45-52 | Repudiation | Kommentar ohne Owner-Freigabe | mitigate | je Thread `Freigabe Kommentar <Nr> 45-15` (03:55), gepostet 03:56, URLs in 45-ANTWORTEN.md; Schließen: nein | closed |
+| T-45-53 | Information Disclosure | interne Details im Kommentar | mitigate | nur Release-, CHANGELOG- und README-Links, wortgleich zum Entwurf | closed |
+| T-45-54 | Spoofing | ungewollte Benachrichtigung durch @name | mitigate | kein @ in den sieben Kommentaren (grep je 0) | closed |
 
 *Status: open · closed*
 *Disposition: mitigate (implementation required) · accept (documented risk) · transfer (third-party)*
@@ -131,18 +139,7 @@ Beleg-Konvention: Datei:Zeile am Kandidaten K; Lauf-IDs per `gh run view` am 26.
 
 ## Nach dem Release nachzuprüfen
 
-Gegenstand existiert vor dem Tag nicht; nicht als offen gezählt. Nachprüfung im Nachtrag von 45-15 (Release-Threats) in diesem Dokument.
-
-| Threat ID | Category | Component | Disposition | Mitigation | Status |
-|-----------|----------|-----------|-------------|------------|--------|
-| T-45-47 | Tampering | Tag auf falschem Kopf | mitigate | Vorprüfung, verify Tag-Commit gleich Tag-Kopf K (45-14) | nach dem Release nachzuprüfen (45-15) |
-| T-45-48 | Spoofing | unsignierte Pakete im Store | mitigate | Verified OK, SHA-256, Fremdinstallation aus den Release-Assets (45-14) | nach dem Release nachzuprüfen (45-15) |
-| T-45-49 | Information Disclosure | Store-Token | mitigate | nur im Environment app-store, Dispatch nur nach Freigabe (45-14) | nach dem Release nachzuprüfen (45-15) |
-| T-45-50 | Repudiation | Veröffentlichung ohne Owner | mitigate | getrennte Freigabezeilen Tag und Store (45-14) | nach dem Release nachzuprüfen (45-15) |
-| T-45-51 | Denial of Service | Store-API-Sperre durch zu viele Abfragen | mitigate | B9, höchstens alle 10 Minuten, höchstens drei Versuche (45-14) | nach dem Release nachzuprüfen (45-15) |
-| T-45-52 | Repudiation | Kommentar ohne Owner-Freigabe | mitigate | B2, je Thread eigene Freigabezeile (45-15) | nach dem Release nachzuprüfen (45-15) |
-| T-45-53 | Information Disclosure | interne Details im Kommentar | mitigate | Entwürfe nur mit Release- und Doku-Links, Owner liest gegen (45-15) | nach dem Release nachzuprüfen (45-15) |
-| T-45-54 | Spoofing | ungewollte Benachrichtigung durch @name | mitigate | @ nur nach ausdrücklicher Owner-Entscheidung (45-15) | nach dem Release nachzuprüfen (45-15) |
+Erledigt am 2026-11-27 in 45-15: T-45-47 bis T-45-54 nachgeprüft und in das Threat Register oben übernommen (je closed), Belege in 45-AUDIT.md `## Nachtrag Release-Threats`. threats_open bleibt 0.
 
 ---
 

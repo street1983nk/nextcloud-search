@@ -9,7 +9,7 @@
 - [x] **v1.4 Leistungsprofile** -- Shipped 2026-10-06 (Phasen 24 bis 29, Archiv: .planning/milestones/v1.4-ROADMAP.md)
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
 - [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026, Archiv: .planning/milestones/v1.6-ROADMAP.md)
-- [ ] **v1.7 Findling 1.7.0** -- in Arbeit seit 2026-11-21 (Phasen 44 bis 45: PHP-Sicherheits-Gates, dann Release 1.7.0 mit #45, PRs #56/#57 und kurzen Store-Texten)
+- [x] **v1.7 Findling 1.7.0** -- fertig 2026-11-27 (Phasen 44 bis 45: PHP-Sicherheits-Gates, dann Release 1.7.0 mit #45, PRs #56/#57 und kurzen Store-Texten)
 
 ## Phases
 
@@ -108,10 +108,10 @@ Details im Archiv: .planning/milestones/v1.6-ROADMAP.md
 
 </details>
 
-### v1.7 Findling 1.7.0 (aktiv, Phasen 44-45)
+### v1.7 Findling 1.7.0 (fertig 2026-11-27, Phasen 44-45)
 
 - [x] **Phase 44: PHP-Sicherheits-Gates** - Psalm mit Taint-Analyse, php-cs-fixer und zizmor/actionlint als rote CI-Gates (Kriterium 3 aus Phase 42)
-- [ ] **Phase 45: Findling 1.7.0** - Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57), kurze Store-Texte, Launch-Härtung und Store-Release beider Apps
+- [x] **Phase 45: Findling 1.7.0** - Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57), kurze Store-Texte, Launch-Härtung und Store-Release beider Apps -- completed 2026-11-27
 
 ## Phase Details
 
@@ -182,9 +182,9 @@ Plans:
   2. Admin und Nutzer sehen Findling auf Traditional Chinese (zh_TW aus PR #56); die Admin-Seite funktioniert unter der dreiteiligen Locale zh_Hant_TW auch im Rückfall auf root.lang (PR #57); PRODUCT.md und CHANGELOG nennen die Sprache. Beleg: 45-01 (PRs #56 und #57 gemergt), Volltest 45-10, mit 1.7.0 im Store; erledigt.
   3. Die Store-Beschreibungen beider Apps sind in DE, EN und FR kurz (Datenschutz-Satz, Connector-Satz, Umstiegs-Link, Link auf die GitHub-Doku) und wurden erst nach Owner-Freigabe des Entwurfs eingebaut; die verlagerten Pflichtinhalte (Messzahl, bekannte Grenzen, Formatliste, Share-Satz, "Similar documents") stehen in README bzw. Doku aller drei Sprachen, die bisherigen Gates prüfen sie dort, und die READMEs aller Sprachen sind auf aktuelle Fakten geprüft. Beleg: 45-07, 45-11 (Freigabe Storetext 45-11 "Ok"), Links blob/v1.7.0 in beiden info.xml je HTTP 200 (45-14); erledigt.
   4. Beide Apps tragen Version 1.7.0; Launch-Härtung (Fehler- und Randpfade, Rechte-Grenzen, Upgrade ab 1.6.5, frische Installation, Audits erneut) und der Volltest in DE, EN und FR sind ohne offene Befunde und ohne Sprachfehler abgeschlossen (Umlaut-Audit aller sichtbaren Texte inklusive), die secure-phase schließt ohne offene Threats, und der Owner hat die Härtung abgenommen. Beleg: 45-SECURITY.md (status verified, threats_open 0 am Tag-Kandidaten 22f98ef2, Owner "Ja" 26.11.); Tag erst nach 45-16, erledigt. Release-Lauf 45895635994 (zweimal Verified OK, Release immutable), Store-Einreichung 45898491529 (45-14).
-  5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56, #57 und #59. Stand 45-14: Freigaben Tag, Signatur und Store liegen vor (45-FREIGABEN.md), zweimal HTTP 201 (Lauf 45898491529); Store-API 26.11.: findling_backend 1.7.0, findling nach drei Abfragen noch 1.6.5 (Zwischenspeicher der Liste, Owner-Blick offen); Antworten offen bis 45-15.
+  5. Tag, Signatur und Store-Abgabe sind je einzeln vom Owner freigegeben; die Store-API nennt 1.7.0 für beide Apps, und erst danach stehen die Antworten in #45, #56, #57 und #59. Stand 45-14: Freigaben Tag, Signatur und Store liegen vor (45-FREIGABEN.md), zweimal HTTP 201 (Lauf 45898491529); Store-API 27.11. 00:18:47 und 00:29:04 UTC: beide Apps 1.7.0 (45-ANTWORTEN.md); danach Antworten in #45, #56, #57, #59, #25, #53 und PR #60 gepostet 2026-11-27 03:56 UTC mit Freigabe je Thread (45-15); erledigt.
   6. COMP-05 (#59): Eine Datei unter dem Wasserzeichen von Nextcloud Office wird als ihr Besitzer oder als andere berechtigte Person gelesen (erneutes Öffnen in actAs nur bei Secure-View-Ablehnung, E1), Findling umgeht keine Sperre (E2, eigener Grund policy_blocked), Treffer unter Secure View zeigen keinen Textausschnitt (E3); vorher und nachher auf echter Instanz über den Update-Weg 1.6.5 -> 1.7.0 belegt, der ganze Release-Diff unabhängig geprüft. Beleg: 45-17, 45-18, 45-20, 45-21, 45-22, mit 1.7.0 im Store; erledigt.
-  7. IDX-09 und IDX-10 (#25): Eine Nachzählung des Nenners hält den Abgleich nicht mehr auf (nur ein echter Crawl zählt als unfertig), Nachzählungen haben einen Mindestabstand von etwa sechs Stunden, und eine lange Warteschlange hält den Abgleich höchstens zweimal sein Intervall auf, nie läuft er neben einem Crawl; die Admin-Seite zeigt die Wartezeit; beides auf echter Instanz mit Gegenkontrollen belegt. IDX-11 (F3-Eindämmung): keine Datei kreist endlos zwischen den Warteschlangen, nach drei Übergaben derselben Bytes an die OCR-Spur endet sie sichtbar als failed(repeatedly_stuck), und die requeued-Zahl des Passes zählt nur echte Spurwechsel.
+  7. IDX-09 und IDX-10 (#25): Eine Nachzählung des Nenners hält den Abgleich nicht mehr auf (nur ein echter Crawl zählt als unfertig), Nachzählungen haben einen Mindestabstand von etwa sechs Stunden, und eine lange Warteschlange hält den Abgleich höchstens zweimal sein Intervall auf, nie läuft er neben einem Crawl; die Admin-Seite zeigt die Wartezeit; beides auf echter Instanz mit Gegenkontrollen belegt. IDX-11 (F3-Eindämmung): keine Datei kreist endlos zwischen den Warteschlangen, nach drei Übergaben derselben Bytes an die OCR-Spur endet sie sichtbar als failed(repeatedly_stuck), und die requeued-Zahl des Passes zählt nur echte Spurwechsel. Beleg: 45-23 bis 45-27, Live-Proben #25 in 45-AUDIT.md, mit 1.7.0 im Store, Antwort in #25 (45-15); erledigt.
 
 **Plans**: 27 plans
 
@@ -203,7 +203,7 @@ Plans:
 - [x] 45-12-PLAN.md: Push der Store-Texte mit Freigabe, Tag-Kopf
 - [x] 45-13-PLAN.md: Signatur-Probe mit eigener Owner-Freigabe
 - [x] 45-14-PLAN.md: Tag und Store-Einreichung je mit eigener Owner-Freigabe, Belegkette (erst nach 45-16, E4)
-- [ ] 45-15-PLAN.md: Antworten in #45, #56, #57, #59, #25 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
+- [x] 45-15-PLAN.md: Antworten in #45, #56, #57, #59, #25 und Bitte in #53 nach dem Store-Release, Nachtrag der Release-Threats, Phasenabschluss
 - [x] 45-16-PLAN.md: secure-phase 45 VOR dem Tag (E4) mit allen Threats bis zum Kandidaten inklusive 45-17 bis 45-27 (T-45-01 bis T-45-91); Release-Threats im Nachtrag von 45-15 (REL-07)
 - [x] 45-17-PLAN.md: #59 Freigaben, Nachbau der Wasserzeichen-Modi M1 bis M5 auf v1.6.5, Owner-Checkpoint, PHP-Lesepfad (Besitzer zuerst, erneutes Öffnen in actAs nur bei Secure View, 403 policy) (COMP-05, REL-07)
 - [x] 45-18-PLAN.md: #59 Vokabular und Admin-Texte policy_blocked in 18 Katalogen, Generation 4, dann Urteil im Container, Serie, einmalige Erneuerung (COMP-05, REL-07)
@@ -231,7 +231,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44. PHP-Sicherheits-Gates | v1.7 | 10/10 | Complete | 2026-11-21 |
-| 45. Findling 1.7.0 | v1.7 | 26/27 | In Progress | - |
+| 45. Findling 1.7.0 | v1.7 | 27/27 | Complete | 2026-11-27 |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -250,4 +250,4 @@ Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter
 Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
 
 ---
-*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21.*
+*Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28. v1.6 bereit für complete-milestone: 2026-11-21. v1.6 archiviert: 2026-11-21. v1.7-Roadmap: 2026-11-21. v1.7 bereit für complete-milestone: 2026-11-27.*

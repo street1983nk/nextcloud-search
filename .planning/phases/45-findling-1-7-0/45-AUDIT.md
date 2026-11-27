@@ -1058,7 +1058,7 @@ APCu als `memcache.locking` (lib/private/Memcache/Factory.php und APCu.php):
 
 Einrichtungsprüfungen von Nextcloud: apps/settings/lib/SetupChecks/FileLocking.php meldet den NoopLockingProvider als Fehler ("Transactional File Locking is disabled. ...", stable33 Z. 47, stable34 Z. 50, stable35 Z. 50; Bedingung `instanceof NoopLockingProvider` Z. 37 / 39 / 39); MemcacheConfigured.php liest `memcache.locking` nur für das Memcached-Modul (Z. 38 / 41 / 42). Für APCu als Locking-Cache gibt es keine Prüfung.
 
-I-45-23-01 (offen, kein Threat dieses Plans): F3 aus #25 ("JPG-Schleife") ist nicht belegt; Kandidat backend/src/findling/worker/poller.py (ein Zeitüberschreiten einer Datei erstattet den ganzen Stapel zurück). Wartet auf Logs des Melders; belegen sie ihn, eigener Plan.
+I-45-23-01 (geschlossen 2026-11-27 in 45-15: Logs liegen vor, kein Schleifen-Auslöser, Rückfallsicherung in 1.7.0; kein Threat dieses Plans): F3 aus #25 ("JPG-Schleife") ist nicht belegt; Kandidat backend/src/findling/worker/poller.py (ein Zeitüberschreiten einer Datei erstattet den ganzen Stapel zurück). Wartet auf Logs des Melders; belegen sie ihn, eigener Plan.
 
 I-45-23-02 (INFO, vorbestehend seit 1.4.0, kein Fix): Bei `filelocking.enabled = false` liefert Server.php den NoopLockingProvider (Tabelle oben). Dann antwortet `isLocked()` immer false, crawling() sieht die zeilenlosen Sekunden einer Crawl-Scheibe nicht, und der Slice-Lock serialisiert nicht. Nextcloud meldet diese Einstellung selbst als Fehler (FileLocking.php); nach `Entscheid Locking 45-23` (l1) verweist die Doku in 45-25 darauf, ohne eigenen Hinweis.
 
@@ -2543,7 +2543,7 @@ Alle Befunde der Gegenprobe 45-20 und des Reviews 45-21 mit Status; die vollstä
 | R-45-21-19 (CONTROL 2 meldet "passed the probe" bei anderem Fehlschlag) | LOW | behoben 306a727d/131b4536; rc 0 und anderer Fehlschlag getrennt gemeldet, Gate mit Fehl-Samples |
 | R-45-21-06 bis -11, -16 bis -18 | INFO | geschlossen bzw. an 45-10 (R-45-21-08 erster CI-Lauf) und 45-16 (R-45-21-06 unter T-45-74) übergeben |
 
-Stand F3 (I-45-23-01): offen, wartet auf Logs des Melders
+Stand F3 (I-45-23-01): geschlossen 2026-11-27 (45-15). Logs liegen vor (mbozem 2026-11-24 14:25 und 23:01), kein Schleifen-Auslöser: alle Zeilen kind=ocr, keine Überlappung der Proben, echter OCR-Rückstand; Rückfallsicherung OCR_HANDOVER_LIMIT 3 in 1.7.0 (45-27, CHANGELOG 1.7.0 #25).
 
 ## Nachtrag 45-10 (Volltest DE/EN/FR auf dem finalen Kopf)
 
@@ -2727,3 +2727,18 @@ T-45-47, T-45-48, T-45-49, T-45-50, T-45-51 (Tag und Store, 45-14) und T-45-52, 
 ### Ergebnis
 
 Keine ID offen. T-45-55 schließt erst mit 45-SECURITY.md (threats_open 0) und der Owner-Zeile `Abschluss Security 45-16` (Task 2). Hinweise ohne Threat-Bezug, nach 1.7.0: I-45-12-01 (LOW, HaRP Schritt 2b wartet nicht auf die leere Queue), I-45-10-07 (LOW, Wörterbuch-Download ohne Zeitlimit), F3 I-45-23-01 wartet auf Logs des Melders.
+
+## Nachtrag Release-Threats
+
+Stand: 2026-11-27 04:00 UTC (45-15). Tag v1.7.0 = 22f98ef260fb12f8b55844b76d8070e64f441a4d. Belege unabhängig vom Muster der Umsetzung (B8): aus git am Tag, aus der GitHub-API und aus den Store-Abfragen, nicht aus den Skripten von 45-14.
+
+- T-45-47 (Tag auf falschem Kopf): closed. `git rev-parse v1.7.0^{commit}` = 22f98ef2 = Tag-Kopf aus 45-ABNAHME.md. `git diff --name-only bb4c0bc8 v1.7.0 -- . ':!.planning'` nennt genau die sieben in 45-12 erlaubten Dateien (CHANGELOG.de.md, CHANGELOG.fr.md, CHANGELOG.md, backend/appinfo/info.xml, backend/tests/test_store_metadata.py, docs/store-listing.md, php/appinfo/info.xml); Code c1cb767c und v1.7.0 außerhalb .planning identisch (`git diff --quiet`). Abweichung vom Planwortlaut: ein `git diff --quiet audited_head v1.7.0` wäre wegen dieser sieben erlaubten Dateien nicht leer, deshalb Namensliste statt Leerprobe.
+- T-45-48 (unsignierte Pakete): closed. Release-Lauf 45895635994 success, headSha 22f98ef2, event push; zweimal `Verified OK` (45-ABNAHME.md "## Release-Lauf"); `gh release view v1.7.0`: immutable=true, Assets findling.tar.gz(.sig) und findling_backend.tar.gz(.sig) neben den Quellarchiven; Fremdinstallation aus den Release-Assets 45896004205 grün.
+- T-45-49 (Store-Token): closed. `gh api .../environments` nennt app-store, app-store-delete, notify, release (nur Namen); store-submit.yml am Tag Z. 68 `environment: app-store`, Token nur als `secrets.APPSTORE_TOKEN` in diesem Job. Lauf 45898491529 success auf 22f98ef2, gestartet erst nach `Freigabe Store 45-14`.
+- T-45-50 (Veröffentlichung ohne Owner): closed. Getrennte Zeilen `Freigabe Tag 45-14` (21:05) und `Freigabe Store 45-14` (21:10) in 45-FREIGABEN.md, beide vor dem jeweiligen Schritt.
+- T-45-51 (Store-API-Sperre): closed. Abfragen nach der Einreichung: 26.11. drei in 45-14, 27.11. 00:18:47 und 00:29:04 UTC (mehr als 10 Minuten Abstand), keine Wiederholung darüber hinaus; beide Apps nennen 1.7.0.
+- T-45-52 (Kommentar ohne Freigabe): closed. Je Thread eine Zeile `Freigabe Kommentar <Nr> 45-15` (2026-11-27 03:55), Posten danach 03:56; URLs in 45-ANTWORTEN.md "## Gepostet"; #59 mit bestehender Freigabe nach bestandenem Abgleich. Schließen: Entscheid nein, nichts geschlossen.
+- T-45-53 (interne Details): closed. Die sieben Kommentare enthalten nur Release-, CHANGELOG- und README-Links, Dateinamen aus dem öffentlichen Repo und Zahlen ohne Instanzdaten; wortgleich zum Entwurf (Body-Dateien per sed aus 45-ANTWORTEN.md, keine Nachbearbeitung).
+- T-45-54 (@name): closed. `grep -c @` über alle sieben Body-Dateien je 0; Owner-Empfehlung "ohne @-Erwähnungen" angenommen.
+
+Ergebnis: alle acht Release-Threats geschlossen, threats_open bleibt 0.
