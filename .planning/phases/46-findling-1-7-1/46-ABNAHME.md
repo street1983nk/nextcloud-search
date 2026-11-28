@@ -46,3 +46,17 @@ Probe-headSha: 7806e83a7f92369fccac3bbf8affba396b032a28
 - `dist/findling.tar.gz: carries appinfo/signature.json, as the integrity check of the instance requires`
 - `dist/findling_backend.tar.gz: carries no code signature, which is correct for a container half`
 - Kein Release v1.7.1 (`gh release view v1.7.1` ohne Treffer), kein Tag v1.7.1 auf origin (`git ls-remote --tags origin v1.7.1` leer)
+
+## Vorprüfung Tag
+
+Stand 2026-11-28 00:11 UTC, Tag-Kopf K = a3c94c1635b2fe13436394524ed3bb3aa05792b5, origin/main = a64fdbaa.
+
+- Code von origin/main gleich K: `git diff --quiet K origin/main -- . ':!.planning'` rc 0.
+- Workflows am K alle grün (push): HaRP deploy, Integration, Multi-arch image, OpenSSF Scorecard, PHP and store metadata gates, Python gates, Resilience, Security scans; `scripts/ci/head_green.sh` mit vollem Hash grün.
+- Signatur-Probe grün: Lauf 46083361339 success auf 7806e83a (Code gleich K, T-46-22).
+- threats_open 0 (46-SECURITY.md status verified, d22d47bb; Abschluss Security 46-10).
+- Kein Tag v1.7.1 lokal und auf origin (`git ls-remote --tags origin v1.7.1` leer).
+- Versionen am K: php/appinfo/info.xml 1.7.1, backend/appinfo/info.xml 1.7.1, image-tag 1.7.1.
+- blob/v1.7.1-Pfade: 6 verschiedene, alle mit `git cat-file -e K:<pfad>` vorhanden.
+- CHANGELOG `## [1.7.1] - 2026-11-28` gleich heute.
+- Befehle: `git tag -a v1.7.1 -m "Findling 1.7.1" a3c94c1635b2fe13436394524ed3bb3aa05792b5` und `git push origin v1.7.1`.
