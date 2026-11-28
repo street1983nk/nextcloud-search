@@ -3567,6 +3567,64 @@ der Anforderungszeile (Wortlaut aus den READMEs) und die Zeile
 "Dokumentation" mit dem README-Link. Der Datenschutz-Satz steht als eigene
 Zeile statt als Listenpunkt, Wortlaut unverändert.
 
+# Release 1.7.1 (28.11.2026)
+
+Patch-Release ohne neue Funktion: Hilfesatz der ausgeschlossenen Ordner mit
+dem Beispiel des Feldes in jeder Sprache, Enter in beiden Regel-Feldern,
+Fehlerliste unter 360 px, Meldungen zu * und ? in der Sprache der Seite, Pfad
+statt leerer Zeile bei leerem Ausschnitt (#63). Store-Texte unverändert bis
+auf die Links blob/v1.7.1 (E-46-06). Owner-Worte vom 28.11.2026 in der
+Claude-Code-Sitzung, je eigene Freigabezeile in
+`.planning/phases/46-findling-1-7-1/46-FREIGABEN.md`: Tag "Ja" (00:09),
+Store-Einreichung, Release-Notiz und Dispatch "Go" (00:18). Tag-Push,
+Release-Notiz, Dispatch und Einreichung hat Claude im Auftrag des Owners
+ausgeführt.
+
+Belegkette:
+
+1. `git rev-list -n 1 v1.7.1` = `a3c94c1635b2fe13436394524ed3bb3aa05792b5`
+   (Tag-Kopf, auf dem die Branch-CI grün war und 46-SECURITY.md
+   threats_open 0 meldet), `git cat-file -t v1.7.1` = tag (annotiert),
+   Nachricht "Findling 1.7.1", Tagger street1983nk, gepusht 2026-11-28
+   00:10:58 UTC.
+2. Tag-Läufe auf a3c94c16: Release-Workflow (release.yml) 46086508768,
+   PHP and store metadata gates 46086508834, Python gates 46086508804,
+   Integration 46086508749, Resilience 46086508785, Multi-arch image
+   46086508788, Workflow security lint 46086508778, HaRP deploy 46086508783,
+   alle success.
+3. Aus dem Log des Release-Laufs 46086508768: zweimal `Verified OK`
+   (00:11:59Z); findling.tar.gz 811833 Bytes, findling_backend.tar.gz 53307
+   Bytes, beide unter dem Store-Limit 20971520.
+4. `gh release view v1.7.1`: `isImmutable` true, veröffentlicht
+   2026-11-28T00:12:13Z, neun Assets. SHA-256 findling.tar.gz
+   77bbf272716bfe818011385c76dad59c63cc3d5b3337618ce13e7ec630bf2ba4,
+   findling_backend.tar.gz
+   84c5bc33f8e1ad8d011abc90d7b6016abe634ab510a4713319da4c1a910bf487.
+   Release-Notiz (englische Faktenliste plus "Full Changelog") per
+   `gh release edit`, Assets unverändert.
+5. Image ghcr.io/street1983nk/findling_backend:1.7.1, Digest
+   sha256:d8be49cee64630f9dff4af07b06215b09eda7f50ad009323277fc53d195721f6
+   (per `gh api`, ohne Docker-Pull), gebaut für linux/amd64 und linux/arm64
+   im Lauf 46086508788.
+6. blob/v1.7.1-Links: README.md, README.en.md, README.fr.md und
+   docs/migrate-from-fulltextsearch.md/.en.md/.fr.md liefern je 200.
+7. Fremdinstallation: deploy-harp 46089036633 mit release_tag=v1.7.1
+   success, "Store install 1 from the release" und "Store install 1 content
+   proof" grün auf stable33, stable34, stable34 arm und stable35.
+8. store-submit.yml 46089033695 success, Antwortcodes aus dem Log:
+   - release findling v1.7.1: HTTP 201, 00:39:36Z
+   - release findling_backend v1.7.1: HTTP 201, 00:39:37Z
+9. Gegenprobe Store-API (B9):
+   - 01:01:32Z und 01:11:51Z: `api/v1/apps.json` ohne `-L` nur 302
+     (Weiterleitung auf garm2.nextcloud.com), keine Aussage.
+   - 01:22:09Z: `api/v1/apps.json` mit `-L` (HTTP 200 von
+     garm3.nextcloud.com) führt für id `findling` 1.7.1.
+   - 01:22:29Z: `api/v1/appapi_apps.json` führt für id `findling_backend`
+     1.7.1.
+
+Store-API findling: 1.7.1 (2026-11-28 01:22:09 UTC)
+Store-API findling_backend: 1.7.1 (2026-11-28 01:22:29 UTC)
+
 # Release 1.7.0 (26.11.2026)
 
 Ausschluss je externem Speicher (#45), Traditional Chinese (#56/#57),

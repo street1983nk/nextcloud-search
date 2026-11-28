@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Findling 1.7.1
 status: planning
-stopped_at: "46-10 fertig: secure-phase vor dem Tag erledigt (threats_open 0), nächster Schritt 46-11 Tag und Store mit eigenen Freigaben"
+stopped_at: "46-11 fertig: Findling 1.7.1 im Store (beide Apps); offen 46-12"
 last_updated: "2026-11-27T06:00:00.000Z"
-last_activity: "2026-11-28, 46-10 secure-phase 46 vor dem Tag abgeschlossen, Abschluss Security 46-10 vom Owner"
+last_activity: "2026-11-28, Tag v1.7.1, Store-Einreichung beider Apps, Store-API nennt 1.7.1"
 progress:
   total_phases: 1
   completed_phases: 0
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.7, 27.11.2026, Current Milestone v1.8)
 ## Current Position
 
 Phase: 46 (Findling 1.7.1), einzige Phase des Milestones v1.8
-Plan: 10 von 12 fertig (46-01 bis 46-10); offen 46-11 und 46-12
-Status: secure-phase vor dem Tag erledigt (46-SECURITY.md verified, threats_open 0); nächster Schritt 46-11 (Tag v1.7.1 auf a3c94c1635b2fe13436394524ed3bb3aa05792b5 und Store, je eigene Freigabe); kein Tag gesetzt
-Last activity: 2026-11-28, 46-10 abgeschlossen (Docker-Fenster T-46-17, Korrektur T-46-18, unabhängiger Auditor)
+Plan: 11 von 12 fertig (46-01 bis 46-11); offen 46-12
+Status: 1.7.1 im Store für findling und findling_backend (Store-API 2026-11-28 01:22 UTC); nächster Schritt 46-12 (Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss)
+Last activity: 2026-11-28, 46-11 abgeschlossen (Tag v1.7.1, Store, Fremdinstallation, Belegkette)
 
 ## Performance Metrics
 
@@ -339,7 +339,7 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 ## Session Continuity
 
 Last session: 2026-11-28T00:10:00.000Z
-Stopped at: 46-10 fertig, Tag-Schritt sicherheitsseitig frei; als Nächstes 46-11 (Tag und Store je mit eigener Freigabe)
+Stopped at: 46-11 fertig, 1.7.1 im Store; Belege lokal, Push nur mit "Freigabe Push 46-11"; als Nächstes 46-12
 Resume file: None
 
 ## Operator Next Steps

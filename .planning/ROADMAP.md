@@ -138,7 +138,7 @@ Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
   2. Die Fehlerliste der Admin-Seite zeigt bei 320 px hell und dunkel in DE, EN und FR kein mitten im Wort umbrochenes Wort und keine waagerechte Scrollleiste; 375 und 1280 px wie in 1.7.0.
   3. Der Wörterbuch-Download der Test-Jobs gibt nach einem Zeitlimit auf und versucht es erneut (I-45-10-07 aus 45-AUDIT.md; die gleichnamige ID aus 45-VOLLTEST.md ist kein Befund), und "Store upgrade 2b" urteilt erst nach der leeren Queue (I-45-12-01); beides mit Gate und Positivkontrolle und am Kandidaten in echter CI grün.
   4. Beide Apps tragen 1.7.1, Upgrade ab 1.7.0 ohne Migration belegt, CHANGELOG EN/DE/FR und README-Faktencheck aller Sprachen freigegeben, Umlaut-Audit und Volltest ohne offenen Befund, secure-phase vor dem Tag mit threats_open 0, Owner-Abnahme per Playwright. Beleg secure-phase: 46-SECURITY.md status verified, threats_open 0 (d22d47bb, unabhängiger Auditor 2026-11-28), Abschluss Security 46-10 vom Owner 2026-11-28 00:08 UTC.
-  5. Push, Signatur, Tag, Store und jeder Kommentar sind je einzeln vom Owner freigegeben; der Tag sitzt auf dem CI-geprüften Tag-Kopf, die Store-API nennt 1.7.1 für beide Apps.
+  5. Push, Signatur, Tag, Store und jeder Kommentar sind je einzeln vom Owner freigegeben; der Tag sitzt auf dem CI-geprüften Tag-Kopf, die Store-API nennt 1.7.1 für beide Apps. Beleg: Tag v1.7.1 auf a3c94c16 (00:10:58 UTC), store-submit 46089033695 zweimal HTTP 201, Store-API 1.7.1 für findling (01:22:09 UTC) und findling_backend (01:22:29 UTC), docs/store-listing.md "# Release 1.7.1 (28.11.2026)".
 
 **Plans**: 12 plans
 
@@ -153,7 +153,7 @@ Plans:
 - [x] 46-08-PLAN.md: Push der Belege mit Freigabe, CI-geprüfter Tag-Kopf
 - [x] 46-09-PLAN.md: Signatur-Probe mit eigener Freigabe
 - [x] 46-10-PLAN.md: secure-phase 46 VOR dem Tag, threats_open 0
-- [ ] 46-11-PLAN.md: Tag und Store-Einreichung je mit eigener Freigabe, Belegkette
+- [x] 46-11-PLAN.md: Tag und Store-Einreichung je mit eigener Freigabe, Belegkette
 - [ ] 46-12-PLAN.md: Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss
   Reihenfolge: streng 46-01 bis 46-12, jeder Plan einzeln (ein Executor, B4); Docker-Schritte nur im bestätigten Fenster (E-46-08).
 **UI hint**: yes
