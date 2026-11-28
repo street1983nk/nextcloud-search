@@ -256,3 +256,14 @@ Nach dem Release nachzuprüfen (entstehen in 46-11 und 46-12, Prüfung im Nachtr
 - `php/l10n/*` (14 Dateien, 28 Zeilen geändert): Q1 an K und eigener Filter über die 28 hinzugefügten Zeilen von `git diff -U0 1a0abda0 K -- 'php/l10n/*'`: 0 Zeilen mit `<`, `>`, `{`, `}`, `%`, `&`, `$`; nur die Beispielwörter vor `*` geändert (Sicherung*, Copia*, Nombre*, Nom*, Sauvegarde*, Nome*, Naam*, Back-up*, Cópia*, 名稱*, 備份*). Ausgabe in admin.js über `refusalSentence` -> `fieldError` -> `textContent`; `refusalSentence` ersetzt `%s` nur bei too_long/too_many, die geänderten Meldungen (wildcard, no_wildcard) tragen keinen Platzhalter. Kein Threat.
 
 Ergebnis: kein neuer Threat (keine Zeile T-46-30). 20 von 22 closed, offen T-46-17 und T-46-18. Der Tag bleibt gesperrt, bis beide geschlossen oder per `Akzeptanz Threat T-46-xx 46-10: ...` akzeptiert sind.
+
+## Nachtrag Docker-Fenster T-46-17 (2026-11-28, Freigabe `Freigabe Docker-Fenster T-46-17 46-10` 23:48 UTC)
+
+- RAM nach Neustart 8,49 GiB frei, nach Start Docker Desktop 6,28 GiB frei (Schwelle 4 GiB eingehalten).
+- Arbeitsbaum: `git diff --stat a3c94c16 HEAD -- php/` leer, `git status --short php/` leer (HEAD 4b6cda07, nur .planning nach K).
+- Stack findling-vt per `docker start findling-vt-backend findling-vt` (gleiche Container wie in der Abnahme). Mount laut `docker inspect`: `C:\Users\Student\nextcloud-search\php` -> `/var/www/html/custom_apps/findling`. `status.php` 200, Nextcloud 34.0.3, `occ app:list`: findling 1.7.1.
+- Ausgeliefert per HTTP (`curl http://localhost:8090/custom_apps/findling/...`, Code 200) gegen `git show a3c94c16:...`:
+  - js/admin.js 88b23b75d8b79d5365033068de194120fce6d7dc0dee0ef45d2cbf912fecab58 = K
+  - css/admin.css be22a5a0b36e5250bea8c08df6749e3c14ab99bfc732c372b63f4f544d44ec78 = K
+- Kataloge: 18 Dateien unter `l10n/` (9 .js, 9 .json) per `docker exec sha256sum` im Container gegen K: 0 Abweichungen. Die 9 .js zusätzlich per HTTP: alle gleich K. Die .json liefert Nextcloud per HTTP nicht aus (404-Seite); ein erster Vergleich über HTTP zeigte darum 9 Scheinabweichungen, Ursache geklärt (Hash der 404-Seite), Gegenprobe im Container sauber. Schlüsselzahl de 387, fr 387.
+- Stack um 2026-11-28T00:01:07Z gestoppt (`docker stop`, kein down, Volumes bleiben).
