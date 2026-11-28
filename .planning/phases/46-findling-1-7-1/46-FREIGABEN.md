@@ -79,3 +79,6 @@ Freigabe Docker-Fenster T-46-17 46-10: "Ja" (2026-11-27 23:48, Claude-Code-Chat)
 Abschluss Security 46-10: "Ja" (2026-11-28 00:08, Claude-Code-Chat) Entscheid: ja (46-SECURITY.md status verified, threats_open 0, d22d47bb)
 Freigabe Push 46-10: "Ja" (2026-11-28 00:09, Claude-Code-Chat) Entscheid: ja (6 Belegcommits 9499a0b2 bis 790ceb25, nur .planning)
 Freigabe Tag 46-11: "Ja" (2026-11-28 00:09, Claude-Code-Chat) Entscheid: ja (Tag v1.7.1 auf a3c94c1635b2fe13436394524ed3bb3aa05792b5, Claude führt aus, nur bei grüner Vorprüfung Tag)
+Freigabe Store 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
+Freigabe ReleaseEdit 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
+Freigabe Dispatch 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
