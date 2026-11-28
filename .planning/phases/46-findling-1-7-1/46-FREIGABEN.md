@@ -82,3 +82,5 @@ Freigabe Tag 46-11: "Ja" (2026-11-28 00:09, Claude-Code-Chat) Entscheid: ja (Tag
 Freigabe Store 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
 Freigabe ReleaseEdit 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
 Freigabe Dispatch 46-11: "Go" (2026-11-28 00:18, Claude-Code-Chat) Entscheid: ja
+Freigabe Push 46-11: "Ok" (2026-11-28 01:24, Claude-Code-Chat) Entscheid: ja
+Store-Sichtung 46-11: "Ich sehe es im AppStore schon" (2026-11-28 01:24, Claude-Code-Chat, Owner sieht 1.7.1 im App Store)
