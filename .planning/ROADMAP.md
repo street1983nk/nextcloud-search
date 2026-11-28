@@ -10,7 +10,7 @@
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
 - [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026, Archiv: .planning/milestones/v1.6-ROADMAP.md)
 - [x] **v1.7 Findling 1.7.0** -- Shipped 2026-11-26 (Phasen 44 bis 45; 1.7.0 eingereicht 26.11., im Store 27.11. bestätigt, Archiv: .planning/milestones/v1.7-ROADMAP.md)
-- [x] **v1.8 Findling 1.7.1** -- Shipped 2026-11-28 (Phase 46; Tag v1.7.1 auf a3c94c16, store-submit 46089033695 zweimal HTTP 201, Store-API 28.11. 01:22 UTC beide Apps 1.7.1; Abschluss per /gsd:complete-milestone v1.8 offen)
+- [x] **v1.8 Findling 1.7.1** -- Shipped 2026-11-28 (Phase 46; Tag v1.7.1 auf a3c94c16, store-submit 46089033695 zweimal HTTP 201, Store-API 28.11. 01:22 UTC beide Apps 1.7.1, Archiv: .planning/milestones/v1.8-ROADMAP.md)
 
 ## Phases
 
@@ -121,42 +121,16 @@ Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
 
 </details>
 
-### v1.8 Findling 1.7.1 (Phase 46) -- Shipped 2026-11-28
+<details>
+<summary>v1.8 Findling 1.7.1 (Phase 46) -- SHIPPED 2026-11-28</summary>
 
-- [x] Phase 46: Findling 1.7.1 (12/12 Pläne, 46-SECURITY.md threats_open 0, Belege 46-ABNAHME.md und docs/store-listing.md)
+- [x] Phase 46: Findling 1.7.1 (12/12 Pläne) -- completed 2026-11-28, Tag v1.7.1 auf a3c94c16, Store-Einreichung 46089033695 (2x HTTP 201), Store-API beide Apps 1.7.1, 46-SECURITY.md threats_open 0 (29 IDs)
 
-## Phase Details
+Kein v1.8-MILESTONE-AUDIT; Nachweise: 46-SECURITY.md, 46-AUDIT.md, 46-ABNAHME.md, 46-VOLLTEST.md, Store-Belege docs/store-listing.md. Phasenordner 46 bleibt unter .planning/phases/.
 
-### Phase 46: Findling 1.7.1
+Details im Archiv: .planning/milestones/v1.8-ROADMAP.md
 
-**Goal**: Findling 1.7.1 (findling und findling_backend in gleicher Version) steht im Store: der Hilfesatz der Ordnerliste nennt in jeder Sprache das Beispiel seines Feldes, Enter fügt in beiden Regel-Listen einen Eintrag hinzu, die Fehlerliste bricht bei 320 px kein Wort mitten im Wort um, und zwei CI-Schritte werden nicht mehr durch Netzhänger oder ein Rennen rot; das Release ist nach Volltest DE/EN/FR, secure-phase und je eigener Owner-Freigabe draußen.
-**Depends on**: Phase 45 (Findling 1.7.0 im Store)
-**Requirements**: EXCL-07, EXCL-08, ADM-05, PRUEF-05, PRUEF-06, REL-08
-**Success Criteria** (what must be TRUE):
-
-  1. Admin liest im Hilfesatz der Ordnerliste in allen neun Sprachen dasselbe Beispiel wie im Feld (DE "Sicherungen", FR "Sauvegardes"), und Enter im Ordner- und im Musterfeld fügt den Eintrag hinzu wie der Knopf, ohne eine IME-Eingabe zu stören; im Volltest in DE, EN, FR und zh_TW belegt.
-  2. Die Fehlerliste der Admin-Seite zeigt bei 320 px hell und dunkel in DE, EN und FR kein mitten im Wort umbrochenes Wort und keine waagerechte Scrollleiste; 375 und 1280 px wie in 1.7.0.
-  3. Der Wörterbuch-Download der Test-Jobs gibt nach einem Zeitlimit auf und versucht es erneut (I-45-10-07 aus 45-AUDIT.md; die gleichnamige ID aus 45-VOLLTEST.md ist kein Befund), und "Store upgrade 2b" urteilt erst nach der leeren Queue (I-45-12-01); beides mit Gate und Positivkontrolle und am Kandidaten in echter CI grün.
-  4. Beide Apps tragen 1.7.1, Upgrade ab 1.7.0 ohne Migration belegt, CHANGELOG EN/DE/FR und README-Faktencheck aller Sprachen freigegeben, Umlaut-Audit und Volltest ohne offenen Befund, secure-phase vor dem Tag mit threats_open 0, Owner-Abnahme per Playwright. Beleg secure-phase: 46-SECURITY.md status verified, threats_open 0 (d22d47bb, unabhängiger Auditor 2026-11-28), Abschluss Security 46-10 vom Owner 2026-11-28 00:08 UTC.
-  5. Push, Signatur, Tag, Store und jeder Kommentar sind je einzeln vom Owner freigegeben; der Tag sitzt auf dem CI-geprüften Tag-Kopf, die Store-API nennt 1.7.1 für beide Apps. Beleg: Tag v1.7.1 auf a3c94c16 (00:10:58 UTC), store-submit 46089033695 zweimal HTTP 201, Store-API 1.7.1 für findling (01:22:09 UTC) und findling_backend (01:22:29 UTC), docs/store-listing.md "# Release 1.7.1 (28.11.2026)".
-
-**Plans**: 12 plans
-
-Plans:
-- [x] 46-01-PLAN.md: Owner-Entscheide E-46-01 bis E-46-08, Hilfesatz gleich Platzhalter in 18 Katalogen, Doku-Tabellen, Gate (EXCL-07)
-- [x] 46-02-PLAN.md: Enter in Ordner- und Musterfeld über den Weg des Knopfs, IME-Schutz, Gate (EXCL-08)
-- [x] 46-03-PLAN.md: Fehlerliste unter 360 px, zwei Varianten mit Playwright-Bildern, Owner-Wahl, Gate und Messung (ADM-05)
-- [x] 46-04-PLAN.md: apt_install.sh mit Zeitlimit und Wiederholung, Store upgrade 2b wartet auf die leere Queue, Gates (PRUEF-05, PRUEF-06)
-- [x] 46-05-PLAN.md: Version 1.7.1, Update-Probe ab 1.7.0, CHANGELOG EN/DE/FR, Store-Links, README-Faktencheck, je eigene Freigabe (REL-08)
-- [x] 46-06-PLAN.md: Delta-Audit, Push mit Freigabe, sieben Workflows grün, CI-Belege, audited_head
-- [x] 46-07-PLAN.md: Volltest DE/EN/FR, Playwright 1280/375/320 hell und dunkel, impeccable, Umlaut-Audit, gemeinsame Owner-Abnahme
-- [x] 46-08-PLAN.md: Push der Belege mit Freigabe, CI-geprüfter Tag-Kopf
-- [x] 46-09-PLAN.md: Signatur-Probe mit eigener Freigabe
-- [x] 46-10-PLAN.md: secure-phase 46 VOR dem Tag, threats_open 0
-- [x] 46-11-PLAN.md: Tag und Store-Einreichung je mit eigener Freigabe, Belegkette
-- [x] 46-12-PLAN.md: Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss
-  Reihenfolge: streng 46-01 bis 46-12, jeder Plan einzeln (ein Executor, B4); Docker-Schritte nur im bestätigten Fenster (E-46-08).
-**UI hint**: yes
+</details>
 
 ## Progress
 
@@ -170,7 +144,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44-45 (Archiv) | v1.7 | 37/37 | Complete | 2026-11-26 |
-| 46 | v1.8 | 12/12 | Complete | 2026-11-28 |
+| 46 (Archiv) | v1.8 | 12/12 | Complete | 2026-11-28 |
 
 ## Nach v1.3 (Wiedervorlage)
 

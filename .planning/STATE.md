@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Findling 1.7.1
-status: complete
-stopped_at: "Phase 46 fertig, Findling 1.7.1 im Store; nächster Schritt /gsd:complete-milestone v1.8 (Owner)"
+status: archived
+stopped_at: "v1.8 archiviert 2026-11-28 (.planning/milestones/v1.8-*); nächster Milestone offen für den Owner (/gsd:new-milestone, Kandidat Findling 1.8.0 mit PR #60)"
 last_updated: "2026-11-28T01:45:00.000Z"
 last_activity: "2026-11-28, 46-12 Nachtrag Release-Threats, Phase 46 abgeschlossen"
 progress:
@@ -27,7 +27,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.7, 27.11.2026, Current Milestone v1.8)
 
 Phase: 46 (Findling 1.7.1), einzige Phase des Milestones v1.8
 Plan: 12 von 12 fertig
-Status: Phase 46 fertig, 1.7.1 im Store für beide Apps, threats_open 0; nächster Schritt /gsd:complete-milestone v1.8 (Owner)
+Status: Milestone v1.8 fertig und archiviert 2026-11-28 (milestones/v1.8-ROADMAP.md, v1.8-REQUIREMENTS.md; REQUIREMENTS.md entfällt bis zum nächsten Milestone). 1.7.1 im Store (Store-API 28.11. 01:22 UTC: beide Apps 1.7.1); nächster Schritt offen für den Owner (/gsd:new-milestone; Kandidat 1.8.0 mit PR #60, Schema 3 auf 4)
 Last activity: 2026-11-28, 46-12 abgeschlossen (Release-Threats, Phasenabschluss)
 
 ## Performance Metrics
@@ -301,7 +301,7 @@ Last activity: 2026-11-28, 46-12 abgeschlossen (Release-Threats, Phasenabschluss
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervorlage); bei den Closes v1.6 (2026-11-21) und v1.7 (2026-11-27) unverändert 13 Einträge, erneut zur Kenntnis genommen:
+Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervorlage); bei den Closes v1.6 (2026-11-21), v1.7 (2026-11-27) und v1.8 (2026-11-28) unverändert 13 Einträge, erneut zur Kenntnis genommen:
 
 | Category | Item | Status |
 |----------|------|--------|
@@ -339,7 +339,7 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 ## Session Continuity
 
 Last session: 2026-11-28T00:10:00.000Z
-Stopped at: Phase 46 fertig; als Nächstes /gsd:complete-milestone v1.8 (Owner)
+Stopped at: v1.8 archiviert; als Nächstes /gsd:new-milestone (Owner)
 Resume file: None
 
 ## Operator Next Steps

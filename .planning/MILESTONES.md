@@ -1,5 +1,29 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.8 Findling 1.7.1 (Shipped: 2026-11-28)
+
+**Delivered:** Findling 1.7.1 im Nextcloud App Store (beide Apps; Tag v1.7.1 auf a3c94c16, Release 46086508768 immutable mit zweimal Verified OK, store-submit 46089033695 mit 2x HTTP 201, Store-API beide Apps 1.7.1 am 28.11. 01:22 UTC): Patch-Release mit den fünf LOW/INFO-Punkten aus Phase 45 und #63, ohne neue Funktion und ohne Migration.
+
+**Phases completed:** 46 (1 Phase, 12 Pläne)
+
+**Timeline:** 27.11. bis 28.11.2026 (82 Commits, 204 Dateien, +4.387 / -141 Zeilen)
+
+**Key accomplishments:**
+
+- Hilfesatz der ausgeschlossenen Ordner nennt in allen neun Sprachen das Beispiel seines Feldes (EXCL-07); Enter in Ordner- und Musterfeld fügt wie der Knopf hinzu, ohne eine IME-Eingabe zu stören (EXCL-08)
+- Fehlerliste unter 360 px mit dem Zustand unter dem Grund, kein Umbruch mitten im Wort bei 320 px hell und dunkel (ADM-05)
+- Meldungen zu * und ? nennen ihr Beispiel in der Sprache der Seite; Pfad statt leerer Zeile bei leerem Ausschnitt in der Unified Search (#63)
+- CI: Wörterbuch-Download mit Zeitlimit und Wiederholung (PRUEF-05), "Store upgrade 2b" urteilt erst nach der leeren Queue (PRUEF-06)
+- Volltest DE/EN/FR, gemeinsame Abnahme, Signatur-Probe, secure-phase vor dem Tag (22 IDs, zwei Beleglücken per Docker-Fenster und Owner-Korrektur geschlossen, unabhängig nachgeprüft), Release-Threats nach dem Tag (29 IDs, threats_open 0) (REL-08)
+
+**Nachweise:** kein v1.8-MILESTONE-AUDIT; Nachweise: 46-SECURITY.md, 46-AUDIT.md, 46-ABNAHME.md, 46-VOLLTEST.md, docs/store-listing.md "# Release 1.7.1 (28.11.2026)".
+
+**Vorbehalte:** Phase 46 ohne VERIFICATION-Datei (Abnahme über SECURITY, AUDIT, ABNAHME und VOLLTEST); die automatische Prüfung von 46-12 Task 1 ist wegen dreier Planfehler rot (46-12-SUMMARY.md); PR #60 (body_zh, Schema 3 auf 4) wartet auf das Review für 1.8.0; #63 offen bis zur Rückmeldung des Melders.
+
+Known deferred items at close: 13 (see STATE.md Deferred Items, unverändert seit v1.6)
+
+---
+
 ## v1.7 Findling 1.7.0 (Shipped: 2026-11-26)
 
 **Delivered:** Findling 1.7.0 im Nextcloud App Store (beide Apps; Tag v1.7.0 auf 22f98ef2, Release 45895635994 immutable mit zweimal Verified OK, store-submit 45898491529 mit 2x HTTP 201, Store-API beide Apps 1.7.0 am 27.11. 00:18 und 00:29 UTC): Ausschluss je externem Speicher mit Anzeige freier Plätze (#45), Traditional Chinese (PRs #56, #57 von foolfitz), Lesen unter dem Wasserzeichen von Nextcloud Office als Besitzer ohne Umgehung der Sperre (#59), Abgleich ohne Bremse durch Nachzählung und lange Warteschlange plus Rückfallsicherung für kreisende Dateien (#25), kurze Store-Texte mit Link auf die Doku; vorher die PHP-Sicherheits-Gates aus Phase 42 Kriterium 3.
