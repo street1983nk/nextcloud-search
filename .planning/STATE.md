@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Findling 1.7.1
 status: planning
-stopped_at: "Phase 46 geplant (12 Pläne), Ausführung wartet auf die Owner-Entscheide E-46-01 bis E-46-08 (46-01 Task 1)"
+stopped_at: "46-10 fertig: secure-phase vor dem Tag erledigt (threats_open 0), nächster Schritt 46-11 Tag und Store mit eigenen Freigaben"
 last_updated: "2026-11-27T06:00:00.000Z"
-last_activity: "2026-11-27, Milestone v1.8 Findling 1.7.1 angelegt (REQUIREMENTS.md, ROADMAP Phase 46), Phase 46 geplant"
+last_activity: "2026-11-28, 46-10 secure-phase 46 vor dem Tag abgeschlossen, Abschluss Security 46-10 vom Owner"
 progress:
   total_phases: 1
   completed_phases: 0
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.7, 27.11.2026, Current Milestone v1.8)
 ## Current Position
 
 Phase: 46 (Findling 1.7.1), einzige Phase des Milestones v1.8
-Plan: 0 von 12 fertig; 46-01-PLAN.md bis 46-12-PLAN.md geplant am 2026-11-27
-Status: Bereit zur Ausführung, sobald der Owner E-46-01 bis E-46-08 bestätigt hat (46-CONTEXT.md, 46-01 Task 1); Docker-Schritte nur im bestätigten Fenster (E-46-08)
-Last activity: 2026-11-27, Milestone v1.8 gestartet und Phase 46 geplant
+Plan: 10 von 12 fertig (46-01 bis 46-10); offen 46-11 und 46-12
+Status: secure-phase vor dem Tag erledigt (46-SECURITY.md verified, threats_open 0); nächster Schritt 46-11 (Tag v1.7.1 auf a3c94c1635b2fe13436394524ed3bb3aa05792b5 und Store, je eigene Freigabe); kein Tag gesetzt
+Last activity: 2026-11-28, 46-10 abgeschlossen (Docker-Fenster T-46-17, Korrektur T-46-18, unabhängiger Auditor)
 
 ## Performance Metrics
 
@@ -338,8 +338,8 @@ Items acknowledged and deferred at milestone close on 2026-11-21 (Owner-Auftrag 
 
 ## Session Continuity
 
-Last session: 2026-11-26T21:45:00.000Z
-Stopped at: 45-14 fertig, 1.7.0 im Store; Belegdokumente lokal, Push nur mit "Freigabe Push 45-14"; als Nächstes 45-15
+Last session: 2026-11-28T00:10:00.000Z
+Stopped at: 46-10 fertig, Tag-Schritt sicherheitsseitig frei; als Nächstes 46-11 (Tag und Store je mit eigener Freigabe)
 Resume file: None
 
 ## Operator Next Steps
