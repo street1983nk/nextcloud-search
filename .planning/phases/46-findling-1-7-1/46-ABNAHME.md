@@ -60,3 +60,24 @@ Stand 2026-11-28 00:11 UTC, Tag-Kopf K = a3c94c1635b2fe13436394524ed3bb3aa05792b
 - blob/v1.7.1-Pfade: 6 verschiedene, alle mit `git cat-file -e K:<pfad>` vorhanden.
 - CHANGELOG `## [1.7.1] - 2026-11-28` gleich heute.
 - Befehle: `git tag -a v1.7.1 -m "Findling 1.7.1" a3c94c1635b2fe13436394524ed3bb3aa05792b5` und `git push origin v1.7.1`.
+
+## Release-Lauf
+
+- Tag v1.7.1 annotiert auf a3c94c1635b2fe13436394524ed3bb3aa05792b5, gepusht 2026-11-28 00:10:58 UTC (Freigabe Tag 46-11).
+- Release archives for the app store 46086508768 success; "Verified OK" für das Begleit- und das Backend-Archiv (00:11:59Z).
+- Größen: findling.tar.gz 811 833 Byte, findling_backend.tar.gz 53 307 Byte (beide unter 20 971 520).
+- SHA-256: findling.tar.gz 77bbf272716bfe818011385c76dad59c63cc3d5b3337618ce13e7ec630bf2ba4, findling_backend.tar.gz 84c5bc33f8e1ad8d011abc90d7b6016abe634ab510a4713319da4c1a910bf487.
+- Release immutable true, kein Entwurf; Notiz per `gh release edit` gesetzt (Freigabe ReleaseEdit 46-11), Assets unverändert.
+- Image ghcr.io/street1983nk/findling_backend:1.7.1 Digest sha256:d8be49cee64630f9dff4af07b06215b09eda7f50ad009323277fc53d195721f6 (Tags 1.7.1, a3c94c16..., dev; per `gh api`, ohne Docker-Pull), Lauf Multi-arch image 46086508788 success für linux/amd64 und linux/arm64.
+- Tag-Läufe alle success: Workflow security lint 46086508778, PHP and store metadata gates 46086508834, Python gates 46086508804, Integration 46086508749, Resilience 46086508785, HaRP deploy 46086508783, Multi-arch image 46086508788.
+- blob/v1.7.1-Links: 6 von 6 liefern 200 (README.md, README.en.md, README.fr.md, docs/migrate-from-fulltextsearch.md/.en.md/.fr.md).
+
+## Store-Einreichung
+
+- store-submit.yml 46089033695 (Dispatch 00:39 UTC, Freigabe Store 46-11) success.
+- release findling v1.7.1: HTTP 201
+- release findling_backend v1.7.1: HTTP 201
+
+## Fremdinstallation
+
+- deploy-harp 46089036633 mit release_tag=v1.7.1 (Freigabe Dispatch 46-11) success; Schritt "Store install 1 from the release, load both archives instead of building them" und "Store install 1 content proof" grün auf stable33/8.2, stable34/8.2, stable34/8.2 arm, stable35/8.3; das Bauen der Archive übersprungen.
