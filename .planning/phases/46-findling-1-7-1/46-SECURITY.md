@@ -1,8 +1,8 @@
 ---
 phase: 46
 slug: findling-1-7-1
-status: open
-threats_open: 2
+status: verified
+threats_open: 0
 asvs_level: 1
 created: 2026-11-28
 ---
@@ -54,8 +54,8 @@ Beleg-Konvention: Datei:Zeile am Kandidaten K; Lauf-IDs per `gh run view --json 
 | T-46-14 | Repudiation | Push ohne Freigabe (46-06) | mitigate | Q6: vier Pushes 46-06 je nach ihrer Zeile, Zeile im gepushten Commit | closed |
 | T-46-15 | Tampering | Rerun verdeckt einen CI-Fehler | mitigate | rote Läufe 45966198418, 45966177681: attempt 1, kein Rerun; Fix per TDD | closed |
 | T-46-16 | Information Disclosure | Volltest-Bilder zeigen echte Daten | mitigate | eigene Sichtprüfung bilder/volltest: nur Saat (Fuellordner45, P46Ordner) | closed |
-| T-46-17 | Tampering | Volltest prüft einen anderen Stand als den Kandidaten | mitigate | Verlangt: SHA-256 der ausgelieferten admin.js und admin.css gegen audited_head im Bericht. Fehlt in 46-VOLLTEST.md (0 Treffer). Repo-Blobs an 029d7307, 1a0abda0 und K gleich, ausgelieferter Stand nicht belegt; Katalogänderungen nach 1a0abda0 ohne Stand-Nachweis gesichtet | open |
-| T-46-18 | Repudiation | Fix-Push ohne Freigabe | mitigate | Verlangt: eigene Zeile vor dem Push. Push a3c94c16 um 22:24:16 UTC (reflog, Lauf createdAt 22:24:19Z), Zeile `Freigabe Push #63 46-07` nennt 22:40 UTC und kam erst mit b2fd6518 ins Repo; Zeitfolge nicht schlüssig | open |
+| T-46-17 | Tampering | Volltest prüft einen anderen Stand als den Kandidaten | mitigate | Docker-Fenster nach `Freigabe Docker-Fenster T-46-17 46-10` (23:48:17 UTC, Chatprotokoll), Start 23:48:38 und nach Neustart 00:00:01 UTC: per HTTP ausgeliefert admin.js 88b23b75...ab58 und admin.css be22a5a0...ec78 = K, 18 Kataloge im Container = K, Mount = php/ des Arbeitsbaums, `git diff a3c94c16 HEAD -- php/` leer (46-AUDIT.md `## Nachtrag Docker-Fenster T-46-17`, Rohausgaben im Chatprotokoll gegengeprüft) | closed |
+| T-46-18 | Repudiation | Fix-Push ohne Freigabe | mitigate | `Korrektur Freigabe Push #63 46-07` (4b6cda07): "Go" vor dem Push, 22:40 war geschätzt; unabhängig im Chatprotokoll: Frage "Darf ich die 8 Commits pushen?", Owner-"Go" 22:24:08.578Z, `git push` 22:24:11Z, Push 22:24:16 UTC | closed |
 | T-46-19 | Tampering | ungeprüfter Code zwischen Härtung und Tag | mitigate | Tag-Kopf = audited_head = ci_head = K, acht Läufe success an K, Code K gleich origin/main | closed |
 | T-46-20 | Repudiation | Push oder Dispatch ohne Freigabe (46-08, 46-09) | mitigate | Q6: Push 7806e83a nach `Freigabe Push 46-08`, Dispatch 46083361339 nach `Freigabe Signatur 46-09` | closed |
 | T-46-21 | Information Disclosure | Signaturschlüssel im Log | mitigate | release.yml seit v1.7.0 ohne Diff; `environment: release`, Schlüssel nur über env aus secrets | closed |
@@ -110,13 +110,24 @@ Hinweise ohne Threat-Bezug: I-46-04-01 (LOW, Backlog per Owner-Entscheid); der B
 - Proben am Kandidaten K: 46-AUDIT.md `## Nachtrag Threats vor dem Tag` (Q1 bis Q6), unabhängig vom Muster der Umsetzung, mit Positivkontrollen (Q1, Q3).
 - Implementierungsdateien nicht verändert.
 
+### Security Audit 2026-11-28 (Nachprüfung T-46-17, T-46-18)
+
+| Audit Date | Threats Total | Closed | Open | Run By |
+|------------|---------------|--------|------|--------|
+| 2026-11-28 | 22 vor dem Tag (T-46-01 bis T-46-22) + 7 nach dem Release | 22 | 0 | secure-phase Nachprüfung, ohne Docker, Belege selbst gegengeprüft |
+
+- T-46-18 closed: Korrekturzeile des Owners in 4b6cda07. Unabhängig belegt im Chatprotokoll der Sitzung: Frage "Darf ich die 8 Commits pushen?", Owner-"Go" 2026-11-27T22:24:08.578Z, danach `git push` (22:24:11Z), Push 22:24:16 UTC, Lauf createdAt 22:24:19Z. Die Korrekturzeile nennt keine Minute, nur "vor dem Push"; das Protokoll schließt diese Lücke. Der Wortlaut der Korrektur stammt aus dem Vorschlag des Ausführers, der Owner bestätigte mit "Ja" (23:48:17Z).
+- T-46-17 closed: `Freigabe Docker-Fenster T-46-17 46-10` (Owner-"Ja" 23:48:17Z, Zeile in 4b6cda07 um 23:49:18 UTC) liegt vor jedem Docker-Befehl (erster Start 23:48:38Z, nach RAM-Abbruch und Neustart `docker start` 00:00:01Z, `docker stop` 00:01:07Z) und vor dem Nachtrag 0a0f8dfa (00:01:28 UTC). Rohausgaben im Protokoll gegengeprüft: HTTP 200, admin.js 88b23b75d8b79d5365033068de194120fce6d7dc0dee0ef45d2cbf912fecab58 und admin.css be22a5a0b36e5250bea8c08df6749e3c14ab99bfc732c372b63f4f544d44ec78 gleich `git show a3c94c16:...` (selbst nachgerechnet), 18 Kataloge im Container 0 Abweichungen, die 9 .js auch per HTTP gleich; die 9 .json-Scheinabweichungen sind die 404-Seite (4932 Byte, Code 404). Mount laut `docker inspect` = php/ des Arbeitsbaums; selbst geprüft: `git diff --stat a3c94c16 HEAD -- php/` leer, `git status --short php/` leer, Diff a3c94c16..HEAD nur fünf Dateien unter .planning.
+- Rest ohne Einfluss auf das Urteil: der Hash gilt für den Stand jetzt, nicht für den Zeitpunkt des Volltests; die Brücke sind die gleichen Repo-Blobs an 029d7307, 1a0abda0 und K sowie der Mount des Arbeitsbaums. Der Katalogvergleich ging über den Wortlaut der Freigabe (nur admin.js, admin.css) hinaus, nur lesend im selben Fenster.
+- Kein neuer Threat, keine unregistrierten Flags. Implementierungsdateien nicht verändert.
+
 ---
 
 ## Sign-Off
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log (keine)
-- [ ] `threats_open: 0` confirmed
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed
+- [x] `status: verified` set in frontmatter
 
-**Approval:** offen; zwei Threats ohne Beleg. Owner-Zeile `Abschluss Security 46-10` erst nach dem Schließen.
+**Approval:** offen; alle 22 Threats vor dem Tag belegt geschlossen (2026-11-28). Es fehlt nur die Owner-Zeile `Abschluss Security 46-10`.
