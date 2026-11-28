@@ -8,7 +8,11 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach v1.7, 2026-11-27)
+## Current State (nach v1.8, 2026-11-28)
+
+**Shipped:** Findling 1.7.1 im Nextcloud App Store (beide Apps, 28.11.2026, store-submit 46089033695, 2x HTTP 201, Tag v1.7.1 auf a3c94c16, Store-API 28.11. 01:22 UTC beide Apps 1.7.1). Patch-Release ohne neue Funktion: Hilfesatz der Ordnerliste mit dem Beispiel des Feldes in jeder Sprache, Enter in beiden Regel-Feldern, Fehlerliste unter 360 px, Pfad statt leerer Zeile bei leerem Ausschnitt (#63), CI-Härtung Wörterbuch-Download und Store upgrade 2b. Phase 46, 12 Pläne, alle 6 Anforderungen erfüllt; 46-SECURITY.md (29 IDs, threats_open 0). Nächster Schritt: /gsd:complete-milestone v1.8, danach Review von PR #60 als 1.8.0 (Schema 3 auf 4).
+
+## Vorheriger Stand (nach v1.7, 2026-11-27)
 
 **Shipped:** Findling 1.7.0 im Nextcloud App Store (beide Apps, eingereicht 26.11.2026, store-submit 45898491529, 2x HTTP 201, Tag v1.7.0 auf 22f98ef2, Store-API 27.11. beide Apps 1.7.0). Milestone v1.7 am 27.11.2026 geschlossen und archiviert (.planning/milestones/v1.7-*): Phasen 44 und 45, 37 Pläne, alle 15 Anforderungen erfüllt. Antworten in #45, #53, #59, #25 und PRs #56, #57, #60 gepostet 27.11. Kein v1.7-MILESTONE-AUDIT; Nachweise: 44-SECURITY.md, 45-SECURITY.md (91 IDs, threats_open 0), 45-AUDIT.md, 45-ABNAHME.md, 45-VOLLTEST.md, docs/store-listing.md. Nächster Schritt: /gsd:new-milestone (Owner-Entscheid offen).
 

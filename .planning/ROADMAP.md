@@ -10,7 +10,7 @@
 - [x] **v1.5 Umsteiger-Release** -- Shipped 2026-10-28 (Phasen 30 bis 36, 1.5.0 eingereicht 21.10., Archiv: .planning/milestones/v1.5-ROADMAP.md)
 - [x] **v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff** -- Shipped 2026-11-16 (Phasen 37 bis 43; 1.6.0 eingereicht 29.10., danach 1.6.1 bis 1.6.5, zuletzt 1.6.5 am 16.11.2026, Archiv: .planning/milestones/v1.6-ROADMAP.md)
 - [x] **v1.7 Findling 1.7.0** -- Shipped 2026-11-26 (Phasen 44 bis 45; 1.7.0 eingereicht 26.11., im Store 27.11. bestätigt, Archiv: .planning/milestones/v1.7-ROADMAP.md)
-- [ ] **v1.8 Findling 1.7.1** -- in Planung seit 2026-11-27 (Phase 46; Patch-Release mit den fünf Befunden aus Phase 45)
+- [x] **v1.8 Findling 1.7.1** -- Shipped 2026-11-28 (Phase 46; Tag v1.7.1 auf a3c94c16, store-submit 46089033695 zweimal HTTP 201, Store-API 28.11. 01:22 UTC beide Apps 1.7.1; Abschluss per /gsd:complete-milestone v1.8 offen)
 
 ## Phases
 
@@ -121,9 +121,9 @@ Details im Archiv: .planning/milestones/v1.7-ROADMAP.md
 
 </details>
 
-### v1.8 Findling 1.7.1 (Phase 46) -- in Planung
+### v1.8 Findling 1.7.1 (Phase 46) -- Shipped 2026-11-28
 
-- [ ] Phase 46: Findling 1.7.1 (0/12 Pläne)
+- [x] Phase 46: Findling 1.7.1 (12/12 Pläne, 46-SECURITY.md threats_open 0, Belege 46-ABNAHME.md und docs/store-listing.md)
 
 ## Phase Details
 
@@ -154,7 +154,7 @@ Plans:
 - [x] 46-09-PLAN.md: Signatur-Probe mit eigener Freigabe
 - [x] 46-10-PLAN.md: secure-phase 46 VOR dem Tag, threats_open 0
 - [x] 46-11-PLAN.md: Tag und Store-Einreichung je mit eigener Freigabe, Belegkette
-- [ ] 46-12-PLAN.md: Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss
+- [x] 46-12-PLAN.md: Kommentare nur nach E-46-07, Nachtrag Release-Threats, Phasenabschluss
   Reihenfolge: streng 46-01 bis 46-12, jeder Plan einzeln (ein Executor, B4); Docker-Schritte nur im bestätigten Fenster (E-46-08).
 **UI hint**: yes
 
@@ -170,7 +170,7 @@ Plans:
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37-43 (Archiv) | v1.6 | 63/63 | Complete | 2026-11-16 |
 | 44-45 (Archiv) | v1.7 | 37/37 | Complete | 2026-11-26 |
-| 46 | v1.8 | 0/12 | Planned | - |
+| 46 | v1.8 | 12/12 | Complete | 2026-11-28 |
 
 ## Nach v1.3 (Wiedervorlage)
 

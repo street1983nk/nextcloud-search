@@ -11,21 +11,21 @@
 
 ### Ausschlüsse (EXCL)
 
-- [ ] **EXCL-07**: Admin liest im Hilfesatz der Ordnerliste in jeder Sprache dasselbe Beispiel, das der Platzhalter des Ordnerfelds zeigt (DE "Sicherungen", FR "Sauvegardes", EN "Backups", ebenso ES, IT, NL, pt_BR, pt_PT, zh_TW), in allen 18 Katalogdateien (I-45-10-04)
-- [ ] **EXCL-08**: Admin fügt einen Eintrag der Ordnerliste und der Musterliste auch mit Enter im Eingabefeld hinzu, mit derselben Prüfung und denselben Meldungen wie beim Knopf; Enter während einer Eingabe mit Eingabemethode (IME, etwa für zh_TW) fügt nichts hinzu (I-45-10-06)
+- [x] **EXCL-07**: Admin liest im Hilfesatz der Ordnerliste in jeder Sprache dasselbe Beispiel, das der Platzhalter des Ordnerfelds zeigt (DE "Sicherungen", FR "Sauvegardes", EN "Backups", ebenso ES, IT, NL, pt_BR, pt_PT, zh_TW), in allen 18 Katalogdateien (I-45-10-04)
+- [x] **EXCL-08**: Admin fügt einen Eintrag der Ordnerliste und der Musterliste auch mit Enter im Eingabefeld hinzu, mit derselben Prüfung und denselben Meldungen wie beim Knopf; Enter während einer Eingabe mit Eingabemethode (IME, etwa für zh_TW) fügt nichts hinzu (I-45-10-06)
 
 ### Admin-Seite (ADM)
 
-- [ ] **ADM-05**: Admin sieht die Fehlerliste "Dateien, die nicht indexiert wurden" auch bei 320 px Breite ohne Wort, das mitten im Wort umbricht, und ohne waagerechtes Scrollen, in DE, EN und FR, hell und dunkel; 375 px und 1280 px bleiben wie in 1.7.0 abgenommen (I-45-10-08)
+- [x] **ADM-05**: Admin sieht die Fehlerliste "Dateien, die nicht indexiert wurden" auch bei 320 px Breite ohne Wort, das mitten im Wort umbricht, und ohne waagerechtes Scrollen, in DE, EN und FR, hell und dunkel; 375 px und 1280 px bleiben wie in 1.7.0 abgenommen (I-45-10-08)
 
 ### CI-Robustheit (PRUEF)
 
-- [ ] **PRUEF-05**: Der Schritt "Install the German dictionary the analyzer reads" in .github/actions/setup-test-nc/action.yml hat ein eigenes Zeitlimit und Wiederholversuche; ein Netzhänger beim Download kostet höchstens dieses Zeitlimit und nicht das ganze Job-Limit (I-45-10-07 aus 45-AUDIT.md)
-- [ ] **PRUEF-06**: Die Annahme von "Store upgrade 2b" in .github/workflows/deploy-harp.yml urteilt über die Logzeilen und die Queue erst, wenn die Queue-Zeile der veralteten Datei innerhalb des Budgets verschwunden ist (die Übergabe an die Embed-Spur nach dem Indexieren gilt nicht als Fehler); bleibt die Zeile bis zum Budgetende, ist der Schritt weiter rot (I-45-12-01)
+- [x] **PRUEF-05**: Der Schritt "Install the German dictionary the analyzer reads" in .github/actions/setup-test-nc/action.yml hat ein eigenes Zeitlimit und Wiederholversuche; ein Netzhänger beim Download kostet höchstens dieses Zeitlimit und nicht das ganze Job-Limit (I-45-10-07 aus 45-AUDIT.md)
+- [x] **PRUEF-06**: Die Annahme von "Store upgrade 2b" in .github/workflows/deploy-harp.yml urteilt über die Logzeilen und die Queue erst, wenn die Queue-Zeile der veralteten Datei innerhalb des Budgets verschwunden ist (die Übergabe an die Embed-Spur nach dem Indexieren gilt nicht als Fehler); bleibt die Zeile bis zum Budgetende, ist der Schritt weiter rot (I-45-12-01)
 
 ### Release (REL)
 
-- [ ] **REL-08**: Findling 1.7.1 (beide Apps) steht im Store nach Volltest DE/EN/FR (Playwright 1280, 375 und 320 px, hell und dunkel), Umlaut-Audit, README-Faktencheck aller Sprachen, CHANGELOG EN/DE/FR, Upgrade ab 1.7.0 und secure-phase vor dem Tag; Push, Signatur, Tag, Store und jeder Kommentar je mit eigener Owner-Freigabe; der Tag sitzt auf dem CI-geprüften Kopf
+- [x] **REL-08**: Findling 1.7.1 (beide Apps) steht im Store nach Volltest DE/EN/FR (Playwright 1280, 375 und 320 px, hell und dunkel), Umlaut-Audit, README-Faktencheck aller Sprachen, CHANGELOG EN/DE/FR, Upgrade ab 1.7.0 und secure-phase vor dem Tag; Push, Signatur, Tag, Store und jeder Kommentar je mit eigener Owner-Freigabe; der Tag sitzt auf dem CI-geprüften Kopf
 
 ## Future Requirements
 
@@ -44,9 +44,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXCL-07 | Phase 46 | Pending |
-| EXCL-08 | Phase 46 | Pending |
-| ADM-05 | Phase 46 | Pending |
-| PRUEF-05 | Phase 46 | Pending |
-| PRUEF-06 | Phase 46 | Pending |
-| REL-08 | Phase 46 | Pending |
+| EXCL-07 | Phase 46 | Complete |
+| EXCL-08 | Phase 46 | Complete |
+| ADM-05 | Phase 46 | Complete |
+| PRUEF-05 | Phase 46 | Complete |
+| PRUEF-06 | Phase 46 | Complete |
+| REL-08 | Phase 46 | Complete |

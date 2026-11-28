@@ -72,13 +72,13 @@ Entstehen in 46-11 und 46-12, Prüfung im Nachtrag von 46-12; zählen nicht in t
 
 | Threat ID | Category | Component | Disposition | Mitigation | Status |
 |-----------|----------|-----------|-------------|------------|--------|
-| T-46-23 | Tampering | Tag auf falschem Kopf | mitigate | Vorprüfung, verify Tag-Commit gleich Tag-Kopf | nach dem Release |
-| T-46-24 | Spoofing | unsignierte Pakete im Store | mitigate | Verified OK, SHA-256, Fremdinstallation aus den Release-Assets | nach dem Release |
-| T-46-25 | Information Disclosure | Store-Token | mitigate | nur im Environment app-store, Dispatch nur nach Freigabe | nach dem Release |
-| T-46-26 | Repudiation | Veröffentlichung ohne Owner | mitigate | getrennte Freigabezeilen Tag und Store | nach dem Release |
-| T-46-27 | Denial of Service | Store-API-Sperre | mitigate | B9, höchstens alle 10 Minuten, höchstens drei Versuche | nach dem Release |
-| T-46-28 | Repudiation | Kommentar ohne Freigabe | mitigate | E-46-07; je Thread eine Freigabezeile vor dem Posten | nach dem Release |
-| T-46-29 | Information Disclosure | interne Details oder @-Erwähnung im Kommentar | mitigate | nur öffentliche Links, `grep -c @` je Body 0, wortgleich zum Entwurf | nach dem Release |
+| T-46-23 | Tampering | Tag auf falschem Kopf | mitigate | Vorprüfung, verify Tag-Commit gleich Tag-Kopf | closed |
+| T-46-24 | Spoofing | unsignierte Pakete im Store | mitigate | Verified OK, SHA-256, Fremdinstallation aus den Release-Assets | closed |
+| T-46-25 | Information Disclosure | Store-Token | mitigate | nur im Environment app-store, Dispatch nur nach Freigabe | closed |
+| T-46-26 | Repudiation | Veröffentlichung ohne Owner | mitigate | getrennte Freigabezeilen Tag und Store | closed |
+| T-46-27 | Denial of Service | Store-API-Sperre | mitigate | B9, höchstens alle 10 Minuten, höchstens drei Versuche | closed |
+| T-46-28 | Repudiation | Kommentar ohne Freigabe | mitigate | E-46-07; je Thread eine Freigabezeile vor dem Posten | closed |
+| T-46-29 | Information Disclosure | interne Details oder @-Erwähnung im Kommentar | mitigate | nur öffentliche Links, `grep -c @` je Body 0, wortgleich zum Entwurf | closed |
 
 ---
 
@@ -131,3 +131,17 @@ Hinweise ohne Threat-Bezug: I-46-04-01 (LOW, Backlog per Owner-Entscheid); der B
 - [x] `status: verified` set in frontmatter
 
 **Approval:** offen; alle 22 Threats vor dem Tag belegt geschlossen (2026-11-28). Es fehlt nur die Owner-Zeile `Abschluss Security 46-10`.
+
+## Nachtrag Release-Threats
+
+Stand 2026-11-28, nach 46-11 (Belege 46-ABNAHME.md `## Vorprüfung Tag`, `## Release-Lauf`, `## Store-Einreichung`, `## Fremdinstallation`; docs/store-listing.md `# Release 1.7.1 (28.11.2026)`).
+
+- T-46-23 (Tag auf falschem Kopf): closed. `git rev-list -n 1 v1.7.1` = a3c94c1635b2fe13436394524ed3bb3aa05792b5 = Tag-Kopf K aus 46-ABNAHME.md; `git cat-file -t v1.7.1` = tag; Vorprüfung Tag vor dem Tag-Push (00:10:58 UTC) grün, Code von origin/main gleich K.
+- T-46-24 (unsignierte Pakete im Store): closed. Release-Lauf 46086508768 zweimal "Verified OK"; SHA-256 beider Archive in der Belegkette; Release immutable true; deploy-harp 46089036633 installiert aus den Release-Assets ("Store install 1 from the release", Archive nicht gebaut) auf vier Beinen grün.
+- T-46-25 (Store-Token): closed. `gh api repos/.../environments` (nur Namen): app-store, app-store-delete, notify, release; store-submit.yml Job mit `environment: app-store`; Dispatch 46089033695 erst nach `Freigabe Store 46-11` (00:18 UTC, Dispatch 00:39 UTC).
+- T-46-26 (Veröffentlichung ohne Owner): closed. Getrennte Zeilen `Freigabe Tag 46-11` (00:09) vor dem Tag-Push 00:10:58 und `Freigabe Store 46-11` (00:18) vor der Einreichung 00:39; `Freigabe ReleaseEdit 46-11` und `Freigabe Dispatch 46-11` ebenso vor ihrer Aktion. Owner sieht 1.7.1 im App Store (Zeile `Store-Sichtung 46-11`).
+- T-46-27 (Store-API-Sperre): closed. `api/v1/apps.json` dreimal mit mindestens 10 Minuten Abstand (01:01:32Z, 01:11:51Z, 01:22:09Z; die ersten beiden ohne `-L` nur 302), `api/v1/appapi_apps.json` einmal (01:22:29Z). Keine weiteren Abfragen.
+- T-46-28 (Kommentar ohne Freigabe): closed. Eine API-Abfrage `issues/comments?since=2026-11-27T00:00:00Z` (Konto street1983nk): seit Phasenstart (erster Commit 46-01 2026-11-27T06:17:10Z) genau zwei Kommentare, PR #60 issuecomment-7222717268 und #63 issuecomment-7222717644 (beide 2026-11-27T15:59Z), gedeckt durch `Freigabe Kommentar PR60 und 63 46-07` (15:59). Die sieben Kommentare um 03:56Z gehören zu 45-15 (vor Phasenstart). Review-Kommentare seit dem 27.11.: 0. In 46-12 kein Kommentar (E-46-07 a).
+- T-46-29 (interne Details oder @-Erwähnung): closed. Beide Bodys ohne `@`; Inhalt nur öffentliche Fakten (Fix in 1.7.1, Review von #60 danach, Schema 3 auf 4 als 1.8.0), keine Pfade, Tokens oder internen Belegnamen.
+
+Ergebnis: T-46-01 bis T-46-29 closed, threats_open 0.
